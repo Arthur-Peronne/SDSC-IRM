@@ -1,0 +1,13 @@
+# configs/registration.yaml
+# Parameters for run_registration.py
+# Modify this file, then run: python scripts/run_registration.py
+# No MLflow tracking for preprocessing — outputs go to processed_images/.
+
+# ── Steps to run ──────────────────────────────────────────────────────────────
+resample_all: false
+crop_all: false
+register_all: true
+
+# ── Options ───────────────────────────────────────────────────────────────────
+only_01: false                   # true = process only patients 01 and 02 (debug)
+target_spacing: [1.5, 1.5, 3.15]

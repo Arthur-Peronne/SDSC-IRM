@@ -1,0 +1,25 @@
+# configs/ae_hyperparam.yaml
+# Parameters for run_ae_hyperparam.py (Optuna hyperparameter search)
+# Modify this file, then run: python scripts/run_ae_hyperparam.py
+# MLflow archives this file as artifact at each run.
+
+# ── Mode ──────────────────────────────────────────────────────────────────────
+replot_only: true                # true = load existing study and plot; false = run optimisation
+
+# ── Optuna study ──────────────────────────────────────────────────────────────
+study_name: "AE3dFCDeep_regularisation_v1"
+n_trials: 40
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+use_both_frames: true
+n_development: 120
+n_validation: 20
+splitname: "split0"
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+model_name: "AE3dFCDeep"
+latent_dim: 120
+
+# ── Training bounds (Optuna searches within these) ────────────────────────────
+n_epochs: 500
+batch_size: 1

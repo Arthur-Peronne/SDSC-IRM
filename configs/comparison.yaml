@@ -1,0 +1,35 @@
+# configs/comparison.yaml
+# Parameters for run_comparison_aepca.py
+# Modify this file, then run: python scripts/run_comparison_aepca.py
+# No MLflow tracking — output is plots in results/.
+
+# ── Plots to produce ──────────────────────────────────────────────────────────
+run_plot1_ae_comparison: false   # AE vs AE (validation set) — use to select best architecture
+run_plot2_ae_vs_pca: false       # AE vs PCA (test set, informative only)
+run_plot3_npatients: false       # AE trained on different n_patients
+run_plot4_hyper_comparison: false  # baseline vs optuna
+run_stats_nepochs: false         # early stopping epoch statistics
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+splitname: "split0"
+
+# ── AE (shared) ───────────────────────────────────────────────────────────────
+model_names: ["AE3dFCDeep"]      # ["AE3dCurrent", "AE3dFCDeep", "AE3dConv"]
+experiment_tag: "optuna"
+
+# ── Plot 1 & 2 ────────────────────────────────────────────────────────────────
+frame_tag: "ED+ES"               # "ED" or "ED+ES"
+n_patients: 240                  # n_train_images used for this study
+latdim_list_ae: [1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 40, 60, 80, 100, 130, 160, 200, 240]
+
+# ── Plot 3 — n_patients comparison ────────────────────────────────────────────
+n_patients_list: [100, 200]
+plot3_metrics_dataset: "validation"   # "train", "validation", or "test"
+
+# ── Plot 4 — hyperparameter comparison ────────────────────────────────────────
+experiment_tags_comparison: ["baseline", "optuna"]
+plot4_n_patients: 200
+
+# ── Shared plot options ───────────────────────────────────────────────────────
+metric: "R2"
+xscale: "log"

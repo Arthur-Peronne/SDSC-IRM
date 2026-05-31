@@ -1,0 +1,26 @@
+# configs/pca_temporal.yaml
+# Parameters for run_pca_temporal.py
+# Modify this file, then run: python scripts/run_pca_temporal.py
+# MLflow archives this file as artifact at each run.
+
+# ── Tracking ──────────────────────────────────────────────────────────────────
+experiment_tag: "baseline"
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+datatype: "training/"            # "training/" or "testing/"
+patient_name: "patient099"
+
+# ── PCA ───────────────────────────────────────────────────────────────────────
+max_pc_calc: 5
+
+# ── Plots ─────────────────────────────────────────────────────────────────────
+do_explained_variance: false
+do_pc_in_eigenbase: false
+pc_n1: 0
+pc_n2: 1
+do_eigenvec_plot: true
+
+# ── Reconstruction ────────────────────────────────────────────────────────────
+do_reconstruction: false
+n_pc_to_reconstruct: 5
+epochs_to_plot: 2

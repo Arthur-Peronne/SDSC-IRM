@@ -1,0 +1,24 @@
+# configs/regression.yaml
+# Parameters for run_regression.py
+# Modify this file, then run: python scripts/run_regression.py
+# MLflow archives this file as artifact at each run.
+
+# ── Tracking ──────────────────────────────────────────────────────────────────
+experiment_tag: "baseline"
+
+# ── Target variable ───────────────────────────────────────────────────────────
+y_name: "group"                  # "group", "height", "weight"
+group_binary: false              # true = binary classification (one class vs rest)
+group_bin_value: "RV"            # used only if group_binary = true; "DCM", "HCM", "MINF", "NOR", "RV"
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+source_folder: "registered_frames"
+pca_folder: "pca_allpatients_res"
+image_roi_only: true
+mask_ys: false
+mask_bin: false
+splitname: "split0"
+
+# ── PCA dimensionality selection ──────────────────────────────────────────────
+cumvar_threshold: 1.0            # variance threshold for selecting n_components
+n_idealpc_confusion: 12          # n_components for confusion matrix plot

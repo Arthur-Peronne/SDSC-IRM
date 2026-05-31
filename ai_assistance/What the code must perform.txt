@@ -1,0 +1,438 @@
+# SDSC - MRI images analysis
+## What the code needs to do
+
+---
+
+## 1. PLOT MRIs (+ masks)
+*Currently: `run_visualize.py` (obsolete!!)*
+
+### 1.1 Preliminary → Find nii file from user indications
+**Inputs:**
+- Parameter: type of data → original patient, or processed (resampled, cropped, registered)
+- Parameter: patient number *(NB: careful with testing/training subfolders in ACDC folder)*
+- Parameter: file type (4d, frame ED or frame ES) *(NB: frame ED or ES to be recognized with framenumber auto. No 4d in processed data yet but possibly in the future)*
+
+**Actions:**
+- Recover path from these parameters
+- Load nii_file from this path
+
+**Returns:**
+- image nii_file
+
+### 1.2 Plot from nii image
+**Inputs:**
+- File: nii_file
+- Option: plot 1 timeframe (default: 1st) or all timeframes
+- For ED/ES nii file (by definition one frame), choose:
+  - Image only
+  - Mask only (various colors for various mask values)
+  - Superposition image + mask (various colors for various mask values)
+
+**Returns:**
+- Plot `.pdf`, saved in `/results`
+
+---
+
+## 2. PCA temporal
+*Currently: `run_pca_spatial.py`*
+
+### 2.1 Preliminary: patient voxel extraction
+**Inputs:**
+- Patient number
+
+**Actions:**
+- Get corresponding nii (4d), extract corresponding dataarray and affine/header
+- Transpose and reshape data array to get a n × n_vox array
+
+**Returns:**
+- Reshaped dataarray and img affine/header
+
+*Pre-processing: none. No image pre-processing, no resampling (all same resolution) nor cropping/ROI/registration (all already aligned)*
+
+### 2.2 PCA calculation
+**Inputs:**
+- Data: reshaped nparray with voxels from the 4d nii file
+- Param: ndims max to calculate
+- Experiment name
+- Option: load previous PCA (CALC/LOAD option)
+
+**Actions:**
+- Global mean subtraction? Or already done in sklearn PCA? → **TO DISCUSS**
+- Calculate PCA
+- Save PCA in `processed_data/pca_temporal`
+
+**Returns:**
+- pca
+
+### 2.3 Plot explained variance
+**Parameters:** none
+
+**Actions:** Plot explained variance
+
+**Returns:** Plot `.pdf` saved in `/results`
+
+### 2.4 Plot 2D PCA values in eigenbase
+**Parameters:**
+- Plot YES/NO
+- Base(s) in which to plot. Default → (1,2), (3,4)..., and (9,10)
+- pca
+
+**Actions:** Plot 2D PCA values in eigenbase from PCA temporal
+
+**Returns:** Plot `.pdf` saved in `/results`
+
+### 2.5 Plot of eigenvectors
+**Parameters:**
+- Plot YES/NO
+- List of eigenvectors to plot. Default: (1)
+- pca
+
+**Actions:**
+- Transform eigenvectors into nii_file with original affine/header
+- Then plot as a "regular" image from the MRI plotting function
+
+**Returns:** One or several plots `.pdf` saved in `/results`
+
+### 2.6 Plot image reconstruction from n first principal components
+**Parameters:**
+- Plot YES/NO
+- Select timeframe to reconstruct (either list or "all", default frame 01)
+- Choose how many principal components to use for reconstruction
+- pca
+
+**Actions:**
+- Calculate reconstructed image numpy array
+- Transform array into nii file with original affine/header
+- Plot it as a "regular" image from the MRI plotting function
+
+**Returns:**
+- Plot of patient reconstructed, `.pdf`, saved in `/results`
+- Plot of original patient same timeframe(s), `.pdf`, saved in `/results`
+
+---
+
+## 3. Image registration
+*Currently: `run_registration.py`*
+
+### 3.1 Resampling (all patients and corresponding masks)
+**Parameters:**
+- Option: only ED, or ED+ES files (default ED+ES)
+- Option: resampling target_spacing *(IN MM?)*
+
+**Actions:**
+- Load nii from original patients
+- Resample patient image and corresponding mask(s) with SimpleITK
+- Convert resampled patient and corresponding mask(s) as nii file
+- Save resampled nii files
+
+**Returns:** Each resampled nii (image and mask) saved in `processed_images/resampled_files`
+
+### 3.2 Cropping
+**Parameters:**
+- Option: only ED, or ED+ES files (default ED+ES)
+- Option: cropping window (default (128, 128, 32))
+
+**Actions:**
+- Take each resampled nii file in `processed_images/resampled` folder
+- Find centroid from mask
+- Crop around centroid (nii → fdata → nii) for image and corresponding mask
+- Save cropped nii files
+
+**Returns:** Each cropped nii (image and mask) saved in `processed_images/cropped_files`
+
+### 3.3 Registration
+*Uses both cropped frames (for registration calculation) and resampled frames (to perform registration on them and then crop them, to keep corners)*
+
+**Parameters:**
+- Reference patient and frame: default 001 and ED
+- Option: only ED or ED+ES files *(currently no option, everything in cropped frames folder)*
+- Uses cropping window (same as cropping function) to re-crop
+
+**Actions:**
+- Load image and mask, resampled and cropped frames
+- Calculate the rigid transformation from the binary cropped mask, compared to the reference
+- Perform rigid registration of the resampled image and mask
+- Crop registered image and mask to reference window
+- Save registered+cropped image and mask nii files
+
+**Returns:** Each registered+cropped nii (image and mask) saved in `processed_images/registered_files`
+
+### 3.4 Checks registration
+*Currently: `run_registration_pipelinechecks.py`*
+
+**Parameters:**
+- ED or ED+ES files
+- Checks on resampling/cropping/registering ON/OFF for each
+- Option to do DICE checks
+- Option to identify the n worst DICE variations
+
+**Actions:**
+- For every patient, check shape and spacing for resampled, cropped, and registered images and masks
+- For every patient, calculate DICE for registered images (compared to ref)
+- Stats: find patients with worst DICE. Calculate DICE stats (before/after registration, etc.)
+
+**Returns:**
+- Console prints of checks for every patient (shape, etc.)
+- `.txt` file of DICE stats before/after registration
+
+---
+
+## 4. PCA spatial
+*Currently: `run_pca_spatial.py`*
+
+### 4.1 Preliminary: select patients and type of images
+**Inputs:**
+- Option: Process level → resampled, cropped, or registered
+- Option: Image type → full image, image ROIonly, mask, binarymask
+- Option: ED frames only or ED+ES
+- Option: recalculate X vector YES/NO
+
+**Actions:**
+- Load nii files corresponding to the process level and ED/ES option
+- Do the masking/binary reduction if image type requires
+- Transpose and reshape data arrays to get a n × n_vox array
+
+**Returns:** Reshaped dataarray X vector
+
+### 4.2 Train/val/test sets
+**Inputs:**
+- Option: patients in train, validation, and test sets *(default split_default: train → patients 1 to n_train, validation → n_train+1 to n_train+n_validation, test → the rest up to 150)*
+
+**Actions:** Create X_train, X_val, X_test arrays given the sets asked
+
+**Returns:** X_train, X_val, X_test arrays
+
+### 4.3 PCA calculation
+**Inputs:**
+- Data: reshaped nparray with voxels
+- Param: ndims max to calculate
+- Experiment name
+- Option: load previous PCA (CALC/LOAD option)
+
+**Actions:**
+- Mean subtraction? Already done in sklearn PCA? → **TO DISCUSS**
+- Calculate PCA
+- Save PCA via MLflow
+
+**Returns:** pca
+
+### 4.4 Calculate metrics
+**Inputs:** X test/val/train sets *(automatically discard if len(set)=0)*
+
+**Actions:**
+- Calculate X_pca for test/val/train
+- Compare X_pca with original X, calculate metrics (R², etc.) for each patient
+- Calculate average, std, min, max, median across all patients in the set
+
+**Returns:** Summary metrics logged in MLflow
+
+### 4.5 Plot explained variance
+**Parameters:** none
+
+**Actions:** Plot explained variance
+
+**Returns:** Plot `.pdf` saved in `/results`
+
+### 4.6 Plot 2D PCA values in eigenbase
+**Parameters:**
+- Plot YES/NO
+- Base(s) in which to plot. Default → (1,2), (3,4)..., and (9,10)
+- pca
+
+**Actions:** Plot 2D PCA values in eigenbase
+
+**Returns:** Plot `.pdf` saved in `/results`
+
+### 4.7 Plot of eigenvectors
+**Parameters:**
+- Plot YES/NO
+- List of eigenvectors to plot. Default: (1)
+- pca
+
+**Actions:**
+- Transform eigenvectors into nii_file *(with which affine/header? The one from the reference? → **TO DISCUSS**)*
+- Plot as a "regular" image from the MRI plotting function
+
+**Returns:** One or several plots `.pdf` saved in `/results`
+
+### 4.8 Plot image reconstruction from n first principal components
+**Parameters:**
+- Plot YES/NO
+- Select patient to reconstruct (manual or automatic)
+- Choose how many principal components to use
+- pca
+
+**Actions:**
+- Calculate reconstructed image numpy array
+- Transform array into nii file with original affine/header
+- Plot as a "regular" image from the MRI plotting function
+
+**Returns:**
+- Plot of patient reconstructed, `.pdf`, saved in `/results`
+- Plot of original patient, `.pdf`, saved in `/results`
+
+---
+
+## 5. AE training
+*Currently: `run_autoencoder.py`*
+
+### 5.1 Preliminary: select patients and type of images
+**Inputs:**
+- Option: Process level → resampled, cropped, or registered *(not there yet, should be similar to PCA)*
+- Option: Image type → full image, image ROIonly, mask, binarymask *(not there yet, should be similar to PCA)*
+- Option: ED frames only or ED+ES
+- Option: recalculate X4d vector YES/NO
+
+**Actions:**
+- Load nii files corresponding to the process level and ED/ES option
+- Do the masking/binary reduction if image type requires
+- Get data arrays → 4d np array → tensor
+
+**Returns:** X tensor
+
+### 5.2 Train/val/test sets
+**Inputs:**
+- Option: patients in train, validation, and test sets *(default split_default, same as PCA)*
+
+**Actions:** Create X_train, X_val, X_test arrays
+
+**Returns:** X_train, X_val, X_test tensors
+
+### 5.3 AE calculation
+**Inputs:**
+- Data: reshaped nparray
+- Model architecture (4 different so far)
+- Param: latent ndims
+- Hyperparameters:
+  - nepochs fixed or not (validation set = 0 or not)
+  - epochs max
+  - patience
+  - patience scheduler
+  - learning rate
+  - weight decay
+  - dropout rate
+  - noise std
+- Experiment name
+- Option: loop over list of architectures and latent dims
+- Option: load already calculated AE
+
+**Actions:**
+- Train AE
+- Save AE via MLflow
+- Plot loss history (only if recalculate, not load)
+
+**Returns:** AE model
+
+### 5.4 Calculate metrics
+**Inputs:** X test/val/train sets *(automatically discard if len(set)=0)*
+
+**Actions:**
+- Calculate X_ae for test/val/train
+- Compare X_ae with original X, calculate metrics (R², etc.) for each patient
+- Calculate average, std, min, max, median across all patients in the set
+
+**Returns:** Summary metrics logged in MLflow
+
+### 5.5 Plot image reconstruction
+**Parameters:**
+- Plot YES/NO
+- Select patient to reconstruct (manual or automatic → automatic selects from val/test, not train)
+- AE model (and params it was made with)
+- X_train, X_val, X_test tensors
+
+**Actions:**
+- Calculate reconstructed image numpy array for the requested patient
+- Transform array into nii file with original affine/header
+- Plot as a "regular" image from the MRI plotting function
+
+**Returns:**
+- Plot of patient reconstructed, `.pdf`, saved in `/results`
+- Plot of original patient, `.pdf`, saved in `/results`
+
+### 5.6 Optuna (hyperparameter optimization)
+*Currently: `run_ae_hyperparam.py`*
+
+**Parameters:**
+- Data (same as AE: ED or ED+ES, train/val/test splits, etc.)
+- Hyperparameters fixed: architecture, latent dimensions, etc.
+- Hyperparameters to optimize:
+  - List of hyperparameters to optimize (learning rate, patience, weight decay, noise std, dropout)
+  - List of initial values
+  - List of ranges to explore
+- Number of trials
+- Optimization name
+- Option: Plot only (load results and plot hyperparameters journey)
+
+**Actions:**
+- Optimize hyperparameters with Optuna
+- Save hyperparameters database and results via MLflow
+- Plot hyperparameters journey
+
+**Returns:** Results and plots saved via MLflow
+
+---
+
+## 6. AE comparisons, AE vs PCA comparisons
+*Currently: `run_comparison_aepca.py`*
+
+### 6.1 AE-AE comparisons
+**Parameters:**
+- Data: ED or ED+ES, splitname, number of patients, experiment name
+- AE model names (to plot), latdim list (for x-axis)
+- AE hyperparameters fixed *(if models have different values, must be transparent through experiment name)*
+- Plots to plot ON/OFF:
+  - AE comparison between model architectures on val set
+  - AE comparison between ED and ED+ES on val set
+  - AE comparison between experiment names (e.g. baseline vs Optuna) on val set
+  - Stats on AE n_epochs early stopping for a model/latdim list → **TO PUT IN `run_autoencoder.py`?**
+
+**Actions:**
+- Recover data results from MLflow via `search_runs()`
+- Plot comparisons
+
+**Returns:** Results and plots saved in `results/`
+
+### 6.2 AE-PCA comparisons
+**Parameters:**
+- Data: ED or ED+ES, splitname, number of patients, experiment name
+- AE model names (to plot), latdim list (for x-axis)
+- AE hyperparameters fixed *(PCA doesn't have a name → should we add one?)*
+- Plots to plot ON/OFF:
+  - AE vs PCA comparison on test set
+
+**Actions:**
+- Recover data results from MLflow via `search_runs()`
+- Plot comparisons
+
+**Returns:** Plot saved in `results/`
+
+---
+
+## 7. Regression
+*Currently: `run_regression.py`*
+
+### 7.1 From PCA results
+**Parameters:**
+- Y_name: for logistic (group, binary or not) or linear (height or weight) regression
+- Source:
+  - Image folder (for X data)
+  - pca_folder (to load PCA results, create Y_pca)
+  - Type of image (image, mask, bin or not) → *partially redundant?*
+  - cumvar_threshold (how many dimensions to keep for this cumulative variance). Possibility to add a cumvar_threshold_list to run the pipeline for various values
+  - splitname *(for now test_size=50 and train_size=100, hardcoded → to change?)*
+
+**Actions:**
+- Load X and Y files (train and test)
+- Load PCA, calculate X_pca (dimension reduced) train and test based on n_pca from cumulative variance wanted
+- Do logistic/linear regression on X_pca and Y, calculate metrics
+- Plot regression results:
+  - Metrics (precision, recall, accuracy for binary/multiclass; R² for linear) as a function of n_pca
+  - Confusion matrix for multiclass regression
+  - Scatter plot true/predicted for linear regression
+
+**Returns:**
+- Metric results logged in MLflow
+- Plots in `results/`
+
+### 7.2 From AE results
+*→ to do soon*

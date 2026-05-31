@@ -39,6 +39,7 @@ src/models/pca.py
 src/models/pca_spatial.py
 src/models/regression.py
 src/training/__init__.py
+src/training/ae_optuna.py
 src/training/ae_training.py
 src/visualization/__init__.py
 src/visualization/ae_plots.py
