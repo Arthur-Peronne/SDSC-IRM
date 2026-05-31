@@ -1,4 +1,4 @@
-# scripts/pca_logistic_script.py
+# scripts/run_regression.py
 """
 Script for the functions for the PCA "each patient" and followed by the logistic regression with patient metadata
 """
