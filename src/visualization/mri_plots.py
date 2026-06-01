@@ -108,49 +108,6 @@ def voxels_coordinates(nii_obj):
     print("Unique y positions:", unique_y)
     print("Unique z positions:", unique_z)
 
-def plot_masks(path_img, path_mask, patient_name, file_name_img, plot_ref=True, plot_refandmask=True, plot_onlymasked=True):
-    """
-    """
-    # Extract nii object and reference
-    nii_obj_img, nii_obj_mask = nib.load(path_img), nib.load(path_mask) 
-    # nii_obj_img = ipd.extract_nii_file(datatype_tochoose, patient_name, file_name_img)
-    # file_name_mask = file_name_img + "_gt" # "4d" or "frame01_gt" or "frame_1" or "frameXX_gt" or "frame_XX"
-    # nii_obj_mask = ipd.extract_nii_file(datatype_tochoose, patient_name, file_name_mask, print_infos=True)
-
-    # Plot img for reference 
-    # Scale
-    if plot_ref or plot_refandmask:
-        img_data = nii_obj_img.get_fdata()
-        finite = np.isfinite(img_data)
-        vmin, vmax = np.percentile(img_data[finite], (2, 98))  
-        # Plot and save 
-        display = plotting.plot_anat(
-            nii_obj_img,
-            title= file_name_img + " and mask",
-            vmin=vmin, vmax=vmax,
-        )
-        if plot_ref:
-            display.savefig(RESULTS_FOLDER / f"{patient_name}_{file_name_img}_raw.png")
-    # Plot img + mask 
-        if plot_refandmask:
-            mask_r = resample_to_img(nii_obj_mask, nii_obj_img, interpolation="nearest")
-            display.add_overlay(mask_r, transparency=0.5)
-            display.savefig(RESULTS_FOLDER / f"{patient_name}_{file_name_img}_superposition.png")
-        display.close()
-    # Plot only elements in mask 
-    if plot_onlymasked:
-        mask_data = nii_obj_mask.get_fdata()   # returns a float64 numpy array (X,Y,Z) or (X,Y,Z,T)
-        region = (mask_data != 0)
-        filtered_nan = img_data.copy()
-        filtered_nan[~region] = np.nan
-        filtered_img = nib.Nifti1Image(filtered_nan, affine=nii_obj_img.affine)
-        display_masked = plotting.plot_anat(
-            filtered_img,
-            title= file_name_img + " region of interest (heart) only",
-            vmin=vmin, vmax=vmax)
-        display_masked.savefig(RESULTS_FOLDER / f"{patient_name}_{file_name_img}_onlymasked.png")
-        display_masked.close()
-
 
 def plot_oneimg(nii_img_1t, cmapYN = False, cmap = "", patient_str ="", file_str = "", details_str=""):
     """

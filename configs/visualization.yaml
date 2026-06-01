@@ -1,0 +1,43 @@
+# configs/visualization.yaml
+# Configuration for run_visualize.py
+
+# Patient ID (1-150)
+patient_id: 1
+
+# ── Source ───────────────────────────────────────────────────────────────────
+# "raw"       → original ACDC file from DATADIR
+# "processed" → file from PROCESSED_IMAGES_FOLDER
+source: "raw"
+
+# For source=raw only:
+#   "frame" → single frame (ED or ES, controlled by frame_type below)
+#   "4d"    → full cine volume (patientXXX_4d.nii.gz) — frame_type ignored
+raw_file_type: "frame"
+
+# For source=processed only:
+#   Subfolder in PROCESSED_IMAGES_FOLDER.
+#   File suffix is derived from the folder name:
+#     registered_frames → _registered
+#     resampled_frames  → _resampled
+#     cropped_frames    → _cropped
+folder: "registered_frames"
+
+# Frame to visualize — applies to both raw and processed.
+# The exact frame number is read from the patient's Info.cfg (DATADIR).
+# "ED" | "ES" | "both"
+# Ignored when source=raw and raw_file_type=4d.
+frame_type: "ED"
+
+# ── Plot modes ────────────────────────────────────────────────────────────────
+# Combinable:
+#   image      → 3D image alone
+#   mask       → GT mask alone (skipped silently if no mask file found)
+#   overlay    → image + mask superimposed + masked region only
+#   all_epochs → all timeframes (source=raw, raw_file_type=4d only)
+plot_modes:
+  - image
+  - mask
+  - overlay
+
+# Max epochs to plot in all_epochs mode
+epoch_limit: 5

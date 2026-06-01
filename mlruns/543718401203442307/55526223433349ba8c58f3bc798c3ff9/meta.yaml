@@ -1,0 +1,14 @@
+artifact_uri: file:///Users/arthurperonne/Documents/Pro_SDSC/2_code/SDSC-arthur-project-1-LOCAL/mlruns/543718401203442307/55526223433349ba8c58f3bc798c3ff9/artifacts
+end_time: 1779808215797
+entry_point_name: ''
+experiment_id: '543718401203442307'
+lifecycle_stage: active
+run_id: 55526223433349ba8c58f3bc798c3ff9
+run_name: mon_premier_run
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1779808215789
+status: 3
+tags: []
+user_id: arthurperonne

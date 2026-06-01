@@ -5,6 +5,17 @@ Analyse de données IRM cardiaques 3D. Le pipeline va du preprocessing des image
 
 Les données médicales brutes sont sur S3 (AWS) et accessibles uniquement via Renku. Le développement se fait en local, les tests sur données réelles se font sur Renku après commit/push.
 
+## Commandes utiles
+
+```bash
+# MLflow UI en local (depuis la racine du projet, venv activé)
+mlflow ui --backend-store-uri mlruns/
+# → http://127.0.0.1:5000
+
+# MLflow UI sur Renku : ne fonctionne pas (VSCode Server, pas JupyterLab)
+# Fallback : search_runs() dans un terminal Python
+```
+
 ## Règles de travail
 - **Langue** : discussions en français, code en anglais
 - **Priorité absolue** : reproductibilité des résultats passés — ne jamais casser ce qui fonctionne
@@ -114,7 +125,7 @@ SDSC-arthur-project-1/
 **Étape 5 : Image registration** — `run_registration.py` + `run_registration_pipelinechecks.py`
 - Resampling → Cropping → Registration
 - Checks : shape/spacing, DICE avant/après registration
-- Outputs dans `processed_images/`
+- Outputs dans `processed_images/registered_frames/` uniquement (`registered_framesBIS` obsolète → supprimer toutes les références)
 
 **Étape 6 : PCA temporelle** — `run_pca_temporal.py`
 - Extraction voxels depuis 4D nii par patient
@@ -123,6 +134,7 @@ SDSC-arthur-project-1/
 
 **Étape 7 : PCA spatiale** — `run_pca_spatial.py`
 - Utilise `loader.py` unifié
+- Migrer `pca_spatial.py` de `TEMPODATA_FOLDER` vers `PROCESSED_IMAGES_FOLDER` (migration tempodata → processed_images)
 - Calcul PCA + métriques (R², etc.) sur train/val/test
 - Plots (variance expliquée, eigenbase 2D, eigenvectors, reconstruction)
 - Outputs dans MLflow
@@ -146,6 +158,14 @@ SDSC-arthur-project-1/
 - Comparaisons AE-AE (architectures, ED vs ED+ES, baseline vs Optuna)
 - Comparaisons AE vs PCA sur test set
 - Outputs : plots dans `results/`
+
+---
+
+### Pan 2b — Migration tempodata → MLflow (après Pan 2)
+
+Migrer les runs déjà entraînés depuis `tempodata/` vers `mlruns/` via un script de migration (pas de réentraînement).
+Structure source : `tempodata/autoencoder/{run_name}/{tag}/` contient `.pth`, `.png`, et `.txt` de métriques.
+Écrire un script qui parse les noms de dossiers (params), lit les `.txt` (métriques), et crée des runs MLflow rétrospectivement.
 
 ---
 
