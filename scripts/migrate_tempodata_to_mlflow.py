@@ -18,7 +18,7 @@ MLFLOW_URI = "mlruns"
 EXPERIMENT_NAME = "autoencoder"
 
 RUN_FOLDER_RE = re.compile(
-    r"^(?P<model>[A-Za-z0-9]+)_(?P<n_patients>\d+)patients"
+    r"^(?P<model>.+)_(?P<n_patients>\d+)patients"
     r"_split(?P<split_id>\d+)_(?P<latent_dim>\d+)dims$"
 )
 
@@ -61,7 +61,15 @@ def parse_loss_file(path: Path) -> tuple:
     return best_epoch, best_val_loss, history
 
 
-def migrate_tag_dir(tag_dir: Path, run_params: dict, tag: str, dry_run: bool) -> bool:
+def migrate_tag_dir(tag_dir: Path, run_params: dict, tag: str, dry_run: bool, existing_names: set) -> bool:
+    run_name = (
+        f"{run_params['model_name']}_{run_params['n_patients']}patients"
+        f"_split{run_params['split_id']}_{run_params['latent_dim']}dims_{tag}"
+    )
+    if run_name in existing_names:
+        print(f"    SKIP {tag} — already in MLflow")
+        return False
+
     # Need at least a validation or test summarymetrics
     has_metrics = (
         list(tag_dir.glob("*_summarymetrics_validation.txt"))
@@ -79,10 +87,6 @@ def migrate_tag_dir(tag_dir: Path, run_params: dict, tag: str, dry_run: bool) ->
 
     best_epoch, best_val_loss, history = parse_loss_file(sorted(loss_files)[-1])
 
-    run_name = (
-        f"{run_params['model_name']}_{run_params['n_patients']}patients"
-        f"_split{run_params['split_id']}_{run_params['latent_dim']}dims_{tag}"
-    )
     val_loss_str = f"{best_val_loss:.6f}" if best_val_loss is not None else "N/A"
     print(f"    LOG  {run_name}  ({len(history)} epochs, best_val_loss={val_loss_str})")
 
@@ -129,6 +133,9 @@ def main():
     mlflow.set_tracking_uri(MLFLOW_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
 
+    existing = mlflow.search_runs(experiment_names=[EXPERIMENT_NAME])
+    existing_names = set(existing["tags.mlflow.runName"].dropna())
+
     migrated, skipped = 0, 0
 
     for run_dir in sorted(TEMPODATA_DIR.iterdir()):
@@ -150,7 +157,7 @@ def main():
         for tag_dir in sorted(run_dir.iterdir()):
             if not tag_dir.is_dir():
                 continue
-            ok = migrate_tag_dir(tag_dir, run_params, tag_dir.name, args.dry_run)
+            ok = migrate_tag_dir(tag_dir, run_params, tag_dir.name, args.dry_run, existing_names)
             if ok:
                 migrated += 1
             else:
