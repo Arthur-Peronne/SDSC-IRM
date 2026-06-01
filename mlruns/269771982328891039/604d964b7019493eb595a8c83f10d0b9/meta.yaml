@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-arthur-project-1/mlruns/269771982328891039/604d964b7019493eb595a8c83f10d0b9/artifacts
+end_time: 1780314190707
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: 604d964b7019493eb595a8c83f10d0b9
+run_name: AE3dFCDeep_200patients_split0_200dims_noise_0.05
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1780314190287
+status: 3
+tags: []
+user_id: renku

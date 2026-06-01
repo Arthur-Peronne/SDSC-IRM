@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-arthur-project-1/mlruns/269771982328891039/b5c39a2f22094abc9c0396698fa4c604/artifacts
+end_time: 1780314200095
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: b5c39a2f22094abc9c0396698fa4c604
+run_name: AE3dFCDeep_240patients_split0_15dims_optuna
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1780314199847
+status: 3
+tags: []
+user_id: renku

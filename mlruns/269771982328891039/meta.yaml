@@ -1,0 +1,8 @@
+artifact_location: /home/renku/work/SDSC-arthur-project-1/mlruns/269771982328891039
+creation_time: 1780312701970
+experiment_id: '269771982328891039'
+last_update_time: 1780312701970
+lifecycle_stage: active
+name: autoencoder
+trace_location: null
+workspace: default
