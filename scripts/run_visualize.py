@@ -19,7 +19,7 @@ from src.config import DATADIR, PROCESSED_IMAGES_FOLDER
 from src.data.importdata import read_info_cfg
 from src.visualization import mri_plots as mrp
 
-CONFIG_PATH = Path("configs/visualization.yaml")
+CONFIG_PATH = Path(__file__).parent.parent / "configs" / "visualization.yaml"
 
 # Maps processed subfolder name to file suffix
 _FOLDER_TO_SUFFIX = {
@@ -65,7 +65,6 @@ def _plot_frame(patient_id: int, frame_type: str, frame_num: int, cfg: dict) -> 
     source = cfg["source"]
     plot_modes = set(cfg.get("plot_modes", ["image"]))
     patient_str = f"patient{patient_id:03d}"
-    details = f"{source}_{frame_type}"
 
     if source == "raw":
         path_img, path_mask = _build_raw_paths(patient_id, cfg["raw_file_type"], frame_num)
@@ -78,7 +77,15 @@ def _plot_frame(patient_id: int, frame_type: str, frame_num: int, cfg: dict) -> 
         print(f"  [SKIP] {path_img.name} not found")
         return
 
-    file_str = path_img.name.replace(".nii.gz", "")
+    frame_str = f"frame{frame_num:02d}"
+    if source == "raw":
+        file_str = frame_str
+        details = f"raw_{frame_type}"
+    else:
+        suffix_clean = suffix.lstrip("_")  # "registered", "resampled", "cropped"
+        file_str = frame_str
+        details = f"processed_{suffix_clean}_{frame_type}"
+    
     nii_img = nib.load(path_img)
 
     if "image" in plot_modes:
@@ -89,8 +96,7 @@ def _plot_frame(patient_id: int, frame_type: str, frame_num: int, cfg: dict) -> 
         if path_mask.exists():
             nii_mask = nib.load(path_mask)
             if "mask" in plot_modes:
-                mask_str = path_mask.name.replace(".nii.gz", "")
-                mrp.plot_onemask(nii_mask, patient_str=patient_str, file_str=mask_str, details_str=details)
+                mrp.plot_onemask(nii_mask, patient_str=patient_str, file_str=file_str, details_str=f"{details}_mask")
                 print(f"  [OK] mask ({frame_type})")
             if "overlay" in plot_modes:
                 mrp.plot_oneimagemask(nii_img, nii_mask, patient_str=patient_str, file_str=file_str, details_str=details)
@@ -118,8 +124,9 @@ def main():
     else:
         print(f" | folder={cfg['folder']} | frame_type={frame_type}")
 
-    # 4D raw: no frame number needed
+    # 4D raw: no frame number needed and only all_epochs plot_mode possible
     if source == "raw" and raw_file_type == "4d":
+        cfg["plot_modes"] = ["all_epochs"]
         _plot_frame(patient_id, "4d", 0, cfg)
         return
 

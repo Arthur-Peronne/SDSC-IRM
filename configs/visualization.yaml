@@ -7,7 +7,7 @@ patient_id: 1
 # ── Source ───────────────────────────────────────────────────────────────────
 # "raw"       → original ACDC file from DATADIR
 # "processed" → file from PROCESSED_IMAGES_FOLDER
-source: "raw"
+source: "processed"
 
 # For source=raw only:
 #   "frame" → single frame (ED or ES, controlled by frame_type below)
@@ -26,7 +26,7 @@ folder: "registered_frames"
 # The exact frame number is read from the patient's Info.cfg (DATADIR).
 # "ED" | "ES" | "both"
 # Ignored when source=raw and raw_file_type=4d.
-frame_type: "ED"
+frame_type: "both"
 
 # ── Plot modes ────────────────────────────────────────────────────────────────
 # Combinable:
@@ -36,7 +36,7 @@ frame_type: "ED"
 #   all_epochs → all timeframes (source=raw, raw_file_type=4d only)
 plot_modes:
   - image
-  - mask
+  - mask 
   - overlay
 
 # Max epochs to plot in all_epochs mode

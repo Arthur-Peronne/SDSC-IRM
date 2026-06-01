@@ -63,19 +63,22 @@ def plot_oneepoch(nii_obj_1t, patient_str, oldstyle=True, print_infos=False, epo
         print("Saved epoch "+ repr(epoch_number))
 
 # Plot all epochs t
-def plot_allepochs(nii_obj, patient_name,  print_infos=True, epoch_limit=1000, suffix=""):
-    """
-    """
-    # Get number of epochs
+def plot_allepochs(nii_obj, patient_name, print_infos=True, epoch_limit=1000, suffix=""):
     n_epochs = nii_obj.shape[3]
-    # Plot 3D image (x,y,z,) for every epoch
     for t in range(min(n_epochs, epoch_limit)):
         vol = image.index_img(nii_obj, t)
-        plot_stat_map(
+        data = vol.get_fdata()
+        finite = np.isfinite(data)
+        vmin, vmax = np.percentile(data[finite], (2, 98))
+        display = plotting.plot_anat(
             vol,
+            black_bg=True,
+            vmin=vmin,
+            vmax=vmax,
             title=patient_name + f" – epoch {t}",
-            output_file=RESULTS_FOLDER / f"{patient_name}_epoch_{t}{suffix}.png"
         )
+        display.savefig(RESULTS_FOLDER / f"{patient_name}_epoch_{t}{suffix}.png")
+        display.close()
         if print_infos:
             print(f"Saved epoch {t}")
 
