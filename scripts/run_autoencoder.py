@@ -11,13 +11,13 @@ from src.visualization import ae_plots as aep
 # ── User choices : DATA ───────────────────────────────────────────────────────
 use_both_frames = True
 n_development = 120
-n_validation = 0
+n_validation = 20
 splitname = "split0"
 recalculateX = False
 
 # ── User choices : MODEL ──────────────────────────────────────────────────────
-model_name = "AE3dFCDeep"         # "AE3dCurrent", "AE3dFCDeep", "AE3dConv", "AE3dLinear"
-latent_dimensions = 240
+model_name = "AE3dFCDeep_VAE"         # "AE3dCurrent", "AE3dFCDeep", "AE3dConv", "AE3dLinear", "AE3dFCDeep_VAE"
+latent_dimensions = 200
 multiple_modelsanddims = False 
 # models_list = ["AE3dCurrent", "AE3dFCDeep", "AE3dConv"]
 # latdim_list = [4, 8, 12, 20, 28, 40, 60, 88, 120, 160, 200] if use_both_frames else [4, 8, 12, 20, 28, 40, 60, 80, 100]
@@ -25,20 +25,24 @@ models_list = ["AE3dFCDeep"]
 latdim_list = [1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 40, 60, 80, 100, 130, 160, 200, 240] if use_both_frames else [4, 8, 12, 20, 28, 40, 60, 80, 100]
 
 # ── User choices : TRAINING ───────────────────────────────────────────────────
-recalculateAE = False
+recalculateAE = True
 load_epoch = None                       # required if a specific model result among the model/experiment_name has to be loaded
-experiment_name = "optuna"  # "baseline" or other
-n_epochs = 75                               # maximum epochs (early stopping will likely trigger before), baseline 300
+experiment_name = "optuna_beta01warm10"  # "baseline" or other
+n_epochs = 300                               # maximum epochs (early stopping will likely trigger before), baseline 300
 batch_size = 1                              # baseline: 1
 patience = 45                                # baseline: 40, optuna: 45
 patience_scheduler = None    # baseline : None (before 8, by default patience//5)
 lr = 4.24e-5                                     # baseline: 1e-5 (1e-6 for Linear), optuna: 4.24e-5
+# Regularization
 weight_decay = 6.47e-6              # baseline: 0.0, optuna: 6.47e-6
-dropout_rate = 0.221                 # baseline: 0.0, optuna: 0.221 (NB: NO DROPOUT for AE3dConv nor AE3dLinear)
+dropout_rate = 0.221                # baseline: 0.0, optuna: 0.221 (NB: NO DROPOUT for AE3dConv nor AE3dLinear)
 noise_std = 0.002                        # baseline: 0.0, optuna 0.002
+# VAE
+beta               = 0.1    # target value
+beta_warmup_epochs = 20     # epochs to reach target beta
 
 # ── User choices : RECONSTRUCTION ───────────────────────────────────────────────────
-plot_reconstruction = True 
+plot_reconstruction = False 
 recons_auto = False            # Automatically choose 3 patients good/medium/bad reconstruct
 patients_torecons_manual = [(1, "ED"), (30,"ES"), (110, "ED"),(130, "ES"), (145, "ED")] # else manual choice
 
@@ -90,6 +94,8 @@ if not multiple_modelsanddims:
             weight_decay=weight_decay,
             dropout_rate=dropout_rate,
             noise_std=noise_std,
+            beta=beta,
+            beta_warmup_epochs=beta_warmup_epochs,
             recalculateAE=recalculateAE,
             load_epoch=load_epoch,
             experiment_name=experiment_name,
@@ -171,6 +177,8 @@ else:
                     weight_decay=weight_decay,
                     dropout_rate=dropout_rate,
                     noise_std=noise_std,
+                    beta=beta,
+                    beta_warmup_epochs=beta_warmup_epochs,
                     recalculateAE=recalculateAE,
                     load_epoch=load_epoch,
                     experiment_name=experiment_name,

@@ -429,7 +429,11 @@ def ae_reconstructX(patient_tensor, X_maxnorm, model):
     model.eval()
 
     with torch.no_grad():
-        x_recon, z = model(x_patient)
+        output = model(x_patient)
+        if len(output) == 4:   # VAE
+            x_recon, _, _, _ = output
+        else:                  # AE classique
+            x_recon, _ = output
 
     # move back to CPU for numpy conversion
     x_patient_3d = x_patient.squeeze(0).squeeze(0).detach().cpu().numpy()   # (32, 128, 128)
@@ -545,7 +549,7 @@ def ae_aggregate_metrics(all_metrics, simulation_name, n_epochs, metrics_dataset
     return summary
 
 
-def _compute_validation_loss(model, validation_dataset, batch_size, device, criterion):
+def _compute_validation_loss(model, validation_dataset, batch_size, device, criterion, beta=1.0):
     """
     Compute mean reconstruction loss on the validation set.
     No gradient computation — fast forward pass only.
@@ -563,27 +567,47 @@ def _compute_validation_loss(model, validation_dataset, batch_size, device, crit
     with torch.no_grad():
         for (x_batch,) in val_loader:
             x_batch = x_batch.to(device, non_blocking=(device.type == "cuda"))
-            x_recon, _ = model(x_batch)
-            loss = criterion(x_recon, x_batch)
+            output = model(x_batch)
+            if len(output) == 4:   # VAE
+                x_recon, _, mu, logvar = output
+                loss, _, _ = _vae_loss(x_recon, x_batch, mu, logvar, beta)
+            else:                  # AE classique
+                x_recon, _ = output
+                loss = criterion(x_recon, x_batch)
             total_loss += loss.item()
  
     return total_loss / len(val_loader)
  
  
+def _vae_loss(x_recon, x_target, mu, logvar, beta):
+    """
+    VAE loss = MSE reconstruction + beta * KL divergence.
+    KL(N(mu, sigma²) || N(0,1)) = -0.5 * mean(1 + logvar - mu² - exp(logvar))
+    """
+    mse = nn.functional.mse_loss(x_recon, x_target)
+    kl  = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+    return mse + beta * kl, mse, kl
+
 def ae_training_early_stopping(
     train_dataset,
     validation_dataset,
     simulation_name,
     model_name,
     latent_dimensions,
+    # Training parameters
     n_epochs=300,
     batch_size=1,
     lr=1e-3,
     patience=40,
     patience_scheduler=None,  
+    # Regularization parameters
     weight_decay=0.0,           # L2 regularisation
     dropout_rate=0.0,           
     noise_std=0.0,              # denoising AE    
+    # Variational parameters 
+    beta=1.0,                  
+    beta_warmup_epochs=20,     
+    # Loading parameters
     recalculateAE=True,
     load_epoch=None,
     experiment_name="baseline",  
@@ -736,6 +760,12 @@ def ae_training_early_stopping(
  
     for epoch in range(n_epochs):
  
+        # ── Beta warmup ───────────────────────────────────────────────
+        if beta_warmup_epochs > 0:
+            beta_current = min(beta, beta * (epoch + 1) / beta_warmup_epochs)
+        else:
+            beta_current = beta
+
         # Training pass
         model.train()
         epoch_train_loss = 0.0
@@ -751,8 +781,16 @@ def ae_training_early_stopping(
                 x_noisy = x_batch
 
             optimizer.zero_grad()
-            x_recon, _ = model(x_noisy)
-            loss = criterion(x_recon, x_batch)
+
+             # ── Forward pass : VAE or AE classic ───────────────────
+            output = model(x_noisy)
+            if len(output) == 4:   # VAE : (x_recon, z, mu, logvar)
+                x_recon, _, mu, logvar = output
+                loss, mse, kl = _vae_loss(x_recon, x_batch, mu, logvar, beta_current)
+            else:                  # AE classic : (x_recon, z)
+                x_recon, _ = output
+                loss = criterion(x_recon, x_batch)
+
             loss.backward()
             optimizer.step()
             epoch_train_loss += loss.item()
@@ -762,7 +800,7 @@ def ae_training_early_stopping(
  
         # Validation pass
         avg_val_loss = _compute_validation_loss(
-            model, validation_dataset, batch_size, device, criterion
+            model, validation_dataset, batch_size, device, criterion, beta=beta_current
         )
         scheduler.step(avg_val_loss)
         current_lr = optimizer.param_groups[0]["lr"]
