@@ -8,7 +8,7 @@ import nibabel as nib
 import SimpleITK as sitk
 from pathlib import Path
 
-from src.config import TEMPODATA_FOLDER
+from src.config import PROCESSED_IMAGES_FOLDER
 from src.data import importdata as ipd
 
 def _axis_signs_from_affine(affine: np.ndarray) -> tuple[float, float, float]:
@@ -137,6 +137,8 @@ def phys_size(img):
 def resample_all(target_spacing, only01 = True, limit = 1000):
     # Load all images and gt paths
     all_img, all_gt = ipd.load_allframes(only01=only01)
+    out_folder = PROCESSED_IMAGES_FOLDER / "resampled_frames"
+    out_folder.mkdir(parents=True, exist_ok=True)
     for i in range(min(len(all_img), limit)):
         # Load nii from paths, and crop images from gt masks
         nii_img= nib.load(all_img[i])
@@ -145,7 +147,7 @@ def resample_all(target_spacing, only01 = True, limit = 1000):
         path = Path(all_img[i])
         patient_id = path.parent.name
         frame_id = path.stem.split("_")[1].split(".")[0]
-        save_path = TEMPODATA_FOLDER / "resampled_frames" / f"{patient_id}_{frame_id}_resampled"
+        save_path = PROCESSED_IMAGES_FOLDER / "resampled_frames" / f"{patient_id}_{frame_id}_resampled"
         # Resample and save in tempo data
         nii_img_res = resample_nifti_file(all_img[i], save_path.with_suffix(".nii.gz"), target_spacing, is_label=False, preserve_axis_signs=True)
         nii_mask_res = resample_nifti_file(all_gt[i], Path(str(save_path) + "_gt.nii.gz"), target_spacing, is_label=True, preserve_axis_signs=True)

@@ -19,7 +19,7 @@ import nibabel as nib
 import numpy as np
 from pathlib import Path
 
-from src.config import TEMPODATA_FOLDER, RESULTS_FOLDER
+from src.config import PROCESSED_IMAGES_FOLDER, RESULTS_FOLDER
 from src.visualization import mri_plots as mrp
 from src.data import registration as rgt
 
@@ -57,9 +57,9 @@ registered_OLD      = None  # set to None to skip OLD comparison
 n_worst_to_print    = 5
 
 # ── Folder paths ──────────────────────────────────────────────────────────────
-resampled_folder_path  = TEMPODATA_FOLDER / "resampled_frames"
-cropped_folder_path    = TEMPODATA_FOLDER / "cropped_frames"
-registered_folder_path = TEMPODATA_FOLDER / registered_folder
+resampled_folder_path  = PROCESSED_IMAGES_FOLDER / "resampled_frames"
+cropped_folder_path    = PROCESSED_IMAGES_FOLDER / "cropped_frames"
+registered_folder_path = PROCESSED_IMAGES_FOLDER / registered_folder
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 def _load(path, label):
@@ -179,34 +179,53 @@ if do_dice_checks:
 
     # OLD registration comparison
     if registered_OLD is not None:
+        new_reg_names = {
+            Path(p).name.replace("_registered_gt.nii.gz", "")
+            for p in glob.glob(str(PROCESSED_IMAGES_FOLDER / registered_folder / "patient*_frame*_registered_gt.nii.gz"))
+        }
         old_reg_paths = sorted(glob.glob(
-            str(TEMPODATA_FOLDER / registered_OLD / "patient*_frame*_registered_gt.nii.gz")
+            str(PROCESSED_IMAGES_FOLDER / registered_OLD / "patient*_frame*_registered_gt.nii.gz")
         ))
-        cropped_ED_paths = sorted([
-            p for p in glob.glob(str(TEMPODATA_FOLDER / "cropped_frames/patient*_frame*_cropped_gt.nii.gz"))
-            if "_frame01_" in p or "_frame04_" in p
-        ])
-        print(f"\nOLD registered : {len(old_reg_paths)} | Cropped ED : {len(cropped_ED_paths)}")
+        old_reg_names = {Path(p).name.replace("_registered_gt.nii.gz", "") for p in old_reg_paths}
 
-        if len(old_reg_paths) == len(cropped_ED_paths):
-            ref_mask = nib.load(
-                [p for p in cropped_ED_paths if "patient001_frame01" in p][0]
-            ).get_fdata()
-
-            results_old = []
-            for crop_path, reg_path in zip(cropped_ED_paths, old_reg_paths):
-                crop_mask = nib.load(crop_path).get_fdata()
-                reg_mask  = nib.load(reg_path).get_fdata()
-                patient_id, frame_id = Path(crop_path).name.replace("_cropped_gt.nii.gz", "").split("_")[:2]
-                d_before = float(rgt.dice_score(ref_mask, crop_mask))
-                d_after  = float(rgt.dice_score(ref_mask, reg_mask))
-                results_old.append({
-                    "patient_id":  patient_id,
-                    "frame_id":    frame_id,
-                    "dice_before": d_before,
-                    "dice_after":  d_after,
-                    "dice_gain":   d_after - d_before,
-                })
-            _print_dice_stats("OLD registration (ED only)", results_old)
+        # Coverage check: same frames in both folders?
+        only_in_new = new_reg_names - old_reg_names
+        only_in_old = old_reg_names - new_reg_names
+        if only_in_new or only_in_old:
+            print(f"\nWARNING: coverage mismatch between '{registered_folder}' and '{registered_OLD}'")
+            if only_in_new:
+                print(f"  Only in new ({len(only_in_new)}): {sorted(only_in_new)[:5]}")
+            if only_in_old:
+                print(f"  Only in old ({len(only_in_old)}): {sorted(only_in_old)[:5]}")
         else:
-            print("  Skipping OLD comparison — file count mismatch.")
+            print(f"\nCoverage OK: both folders have {len(new_reg_names)} frames.")
+
+        # Build lookup: stem -> cropped mask path (all frames)
+        all_cropped = {
+            Path(p).name.replace("_cropped_gt.nii.gz", ""): p
+            for p in glob.glob(str(PROCESSED_IMAGES_FOLDER / "cropped_frames/patient*_frame*_cropped_gt.nii.gz"))
+        }
+        ref_mask = nib.load(all_cropped["patient001_frame01"]).get_fdata()
+
+        results_old = []
+        for reg_path in old_reg_paths:
+            key = Path(reg_path).name.replace("_registered_gt.nii.gz", "")
+            if key not in all_cropped:
+                print(f"  [MISSING cropped] {key} — skipping")
+                continue
+            patient_id, frame_id = key.split("_")[:2]
+            crop_mask = nib.load(all_cropped[key]).get_fdata()
+            reg_mask  = nib.load(reg_path).get_fdata()
+            d_before  = float(rgt.dice_score(ref_mask, crop_mask))
+            d_after   = float(rgt.dice_score(ref_mask, reg_mask))
+            results_old.append({
+                "patient_id":  patient_id,
+                "frame_id":    frame_id,
+                "dice_before": d_before,
+                "dice_after":  d_after,
+                "dice_gain":   d_after - d_before,
+            })
+        if results_old:
+            _print_dice_stats(f"OLD registration ({len(results_old)} frames)", results_old)
+        else:
+            print("  No paired frames found for OLD comparison.")

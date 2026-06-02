@@ -8,6 +8,18 @@ resample_all: false
 crop_all: false
 register_all: true
 
-# ── Options ───────────────────────────────────────────────────────────────────
-only_01: false                   # true = process only patients 01 and 02 (debug)
-target_spacing: [1.5, 1.5, 3.15]
+# ── Shared options ────────────────────────────────────────────────────────────
+only_01: false                   # true = process only frame01/frame04 (ED frames, debug)
+limit: 1000                      # max number of frames to process (set to 2 for quick debug)
+
+# ── Resampling ────────────────────────────────────────────────────────────────
+target_spacing: [1.5, 1.5, 3.15]  # mm/voxel (x, y, z)
+
+# ── Cropping ──────────────────────────────────────────────────────────────────
+crop_shape: [128, 128, 32]       # voxels (x, y, z) around cardiac centroid
+
+# ── Registration ──────────────────────────────────────────────────────────────
+reference_patient: patient001    # fixed reference for all registrations
+reference_frame: frame01         # ED frame of the reference patient
+crop_after_registration: true    # crop output to reference window shape
+n_iterations: 200                # optimizer iterations for rigid registration

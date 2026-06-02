@@ -7,7 +7,7 @@ import nibabel as nib
 import glob
 from pathlib import Path
 
-from src.config import DATADIR, TEMPODATA_FOLDER
+from src.config import DATADIR, PROCESSED_IMAGES_FOLDER
 
 
 def extract_nii_file(datatype_tochoose, patient_name, file_name, print_infos=False):
@@ -89,14 +89,14 @@ def load_allframes_resampled(only01=True):
     Load paths to all resampled frame NIfTI files and their GT masks.
     """
     if only01:
-        all_img = glob.glob(str(TEMPODATA_FOLDER / "resampled_frames/patient*_frame01_resampled.nii.gz"))
-        all_gt = glob.glob(str(TEMPODATA_FOLDER / "resampled_frames/patient*_frame01_resampled_gt.nii.gz"))
-        img_90 = glob.glob(str(TEMPODATA_FOLDER / "resampled_frames/patient*_frame04_resampled.nii.gz"))
-        gt_90 = glob.glob(str(TEMPODATA_FOLDER / "resampled_frames/patient*_frame04_resampled_gt.nii.gz"))
+        all_img = glob.glob(str(PROCESSED_IMAGES_FOLDER / "resampled_frames/patient*_frame01_resampled.nii.gz"))
+        all_gt = glob.glob(str(PROCESSED_IMAGES_FOLDER / "resampled_frames/patient*_frame01_resampled_gt.nii.gz"))
+        img_90 = glob.glob(str(PROCESSED_IMAGES_FOLDER / "resampled_frames/patient*_frame04_resampled.nii.gz"))
+        gt_90 = glob.glob(str(PROCESSED_IMAGES_FOLDER / "resampled_frames/patient*_frame04_resampled_gt.nii.gz"))
         all_img, all_gt = all_img + img_90, all_gt + gt_90
     else:
-        all_img = glob.glob(str(TEMPODATA_FOLDER / "resampled_frames/patient*_frame[0-9][0-9]_resampled.nii.gz"))
-        all_gt = glob.glob(str(TEMPODATA_FOLDER / "resampled_frames/patient*_frame[0-9][0-9]_resampled_gt.nii.gz"))
+        all_img = glob.glob(str(PROCESSED_IMAGES_FOLDER / "resampled_frames/patient*_frame[0-9][0-9]_resampled.nii.gz"))
+        all_gt = glob.glob(str(PROCESSED_IMAGES_FOLDER / "resampled_frames/patient*_frame[0-9][0-9]_resampled_gt.nii.gz"))
 
     return all_img, all_gt
 
@@ -107,7 +107,7 @@ def load_allframes_registered(folder="registered_frames", frame_type="ED"):
     Parameters
     ----------
     folder : str
-        Subfolder inside TEMPODATA_FOLDER containing the registered files.
+        Subfolder inside PROCESSED_IMAGES_FOLDER containing the registered files.
     frame_type : str
         "ED" → ED frame (frame01 for all patients, frame04 for patient090)
         "ES" → ES frame (the other frame for each patient)
@@ -122,7 +122,7 @@ def load_allframes_registered(folder="registered_frames", frame_type="ED"):
     if frame_type not in {"ED", "ES"}:
         raise ValueError("frame_type must be 'ED' or 'ES'")
  
-    base = TEMPODATA_FOLDER / folder
+    base = PROCESSED_IMAGES_FOLDER / folder
  
     if frame_type == "ED":
         # frame01 for all patients except patient090 (frame04)
@@ -155,10 +155,10 @@ def load_allgt_res(onlytraining=False):
     Load paths to all resampled GT mask files.
     """
     if onlytraining:
-        all_gt = glob.glob(str(TEMPODATA_FOLDER / "resampled_frames/patient0*_frame[0-9][0-9]_resampled_gt.nii.gz"))
-        all_gt += glob.glob(str(TEMPODATA_FOLDER / "resampled_frames/patient100_frame[0-9][0-9]_resampled_gt.nii.gz"))
+        all_gt = glob.glob(str(PROCESSED_IMAGES_FOLDER / "resampled_frames/patient0*_frame[0-9][0-9]_resampled_gt.nii.gz"))
+        all_gt += glob.glob(str(PROCESSED_IMAGES_FOLDER / "resampled_frames/patient100_frame[0-9][0-9]_resampled_gt.nii.gz"))
     else:
-        all_gt = glob.glob(str(TEMPODATA_FOLDER / "resampled_frames/patient*_frame[0-9][0-9]_resampled_gt.nii.gz"))
+        all_gt = glob.glob(str(PROCESSED_IMAGES_FOLDER / "resampled_frames/patient*_frame[0-9][0-9]_resampled_gt.nii.gz"))
     return all_gt
 
 
@@ -180,7 +180,7 @@ def load_allcroppedframes():
     """
     Load paths to all cropped frame NIfTI files.
     """
-    all_img_crop = glob.glob(str(TEMPODATA_FOLDER / "cropped_frames/patient*_frame*_cropped.nii.gz"))
+    all_img_crop = glob.glob(str(PROCESSED_IMAGES_FOLDER / "cropped_frames/patient*_frame*_cropped.nii.gz"))
     return sorted(all_img_crop)
 
 
@@ -249,13 +249,13 @@ def get_patient_modified_path(patient_id, folder, file_type="frame", frame_type=
     patient_id : int
         Patient number (1 to 150)
     folder : str
-        Subfolder inside tempodata (e.g. "registered_framesBIS")
+        Subfolder inside processed_images (e.g. "registered_frames")
     file_type : str
         Type of file:
         - "frame" : modified image (default)
         - "mask"  : modified GT mask
     base_path : Path or None
-        Root path to tempodata. Defaults to TEMPODATA_FOLDER.
+        Root path to processed_images. Defaults to PROCESSED_IMAGES_FOLDER.
     check_exists : bool
         If True, raise error if file does not exist
 
@@ -265,7 +265,7 @@ def get_patient_modified_path(patient_id, folder, file_type="frame", frame_type=
         Full path to the requested file.
     """
     if base_path is None:
-        base_path = TEMPODATA_FOLDER
+        base_path = PROCESSED_IMAGES_FOLDER
     base_path = Path(base_path)
 
     if not (1 <= patient_id <= 150):

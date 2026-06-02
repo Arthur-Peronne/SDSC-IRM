@@ -9,7 +9,7 @@ from pathlib import Path
 import SimpleITK as sitk
 import glob
 
-from src.config import TEMPODATA_FOLDER
+from src.config import PROCESSED_IMAGES_FOLDER
 from src.data import importdata as ipd
 from src.data import resampling as rsp
 from src.data.geometry import crop_to_reference_window
@@ -143,7 +143,7 @@ def print_rigid_transform_info(transform):
         print(f"Translation Z: {tz:.3f}")
 
 
-def register_all_frames(reference_patient="patient001", reference_frame="frame01", crop_after_registration=True, crop_size_after_registration=(128, 128, 32), limit=1000):    
+def register_all_frames(reference_patient="patient001", reference_frame="frame01", crop_after_registration=True, crop_size_after_registration=(128, 128, 32), number_of_iterations=200, limit=1000):
     """
     Register all patients to a fixed reference.
 
@@ -152,7 +152,7 @@ def register_all_frames(reference_patient="patient001", reference_frame="frame01
     """
     all_img_crop = sorted(ipd.load_allcroppedframes())
 
-    out_folder = TEMPODATA_FOLDER / "registered_frames"
+    out_folder = PROCESSED_IMAGES_FOLDER / "registered_frames"
     out_folder.mkdir(parents=True, exist_ok=True)
 
     # Find reference cropped image dynamically
@@ -172,8 +172,8 @@ def register_all_frames(reference_patient="patient001", reference_frame="frame01
     fixed_mask_crop_path = ref_img_crop_path.replace("_cropped.nii.gz", "_cropped_gt.nii.gz")
     fixed_mask_crop_nii = nib.load(fixed_mask_crop_path)
 
-    fixed_img_full_path = TEMPODATA_FOLDER / "resampled_frames" / f"{ref_patient_id}_{ref_frame_id}_resampled.nii.gz"
-    fixed_mask_full_path = TEMPODATA_FOLDER / "resampled_frames" / f"{ref_patient_id}_{ref_frame_id}_resampled_gt.nii.gz"
+    fixed_img_full_path = PROCESSED_IMAGES_FOLDER / "resampled_frames" / f"{ref_patient_id}_{ref_frame_id}_resampled.nii.gz"
+    fixed_mask_full_path = PROCESSED_IMAGES_FOLDER / "resampled_frames" / f"{ref_patient_id}_{ref_frame_id}_resampled_gt.nii.gz"
 
     fixed_img_full_nii = nib.load(fixed_img_full_path)
     fixed_mask_full_nii = nib.load(fixed_mask_full_path)
@@ -207,21 +207,17 @@ def register_all_frames(reference_patient="patient001", reference_frame="frame01
         moving_mask_crop_path = str(path).replace("_cropped.nii.gz", "_cropped_gt.nii.gz")
         moving_mask_crop_nii = nib.load(moving_mask_crop_path)
 
-        moving_img_full_path = TEMPODATA_FOLDER / "resampled_frames" / f"{patient_id}_{frame_id}_resampled.nii.gz"
-        moving_mask_full_path = TEMPODATA_FOLDER / "resampled_frames" / f"{patient_id}_{frame_id}_resampled_gt.nii.gz"
+        moving_img_full_path = PROCESSED_IMAGES_FOLDER / "resampled_frames" / f"{patient_id}_{frame_id}_resampled.nii.gz"
+        moving_mask_full_path = PROCESSED_IMAGES_FOLDER / "resampled_frames" / f"{patient_id}_{frame_id}_resampled_gt.nii.gz"
 
         moving_img_full_nii = nib.load(moving_img_full_path)
         moving_mask_full_nii = nib.load(moving_mask_full_path)
 
-        # reg_img_full_nii, reg_mask_full_nii, final_transform = rigid_register_one_patient(
-        #     fixed_img_full_nii, fixed_mask_full_nii, fixed_img_crop_nii,
-        #     moving_mask_crop_nii,
-        #     moving_img_full_nii, moving_mask_full_nii
-        # )
-        reg_img_full_nii, reg_mask_full_nii, final_transform = rigid_register_one_patient(
-            fixed_img_full_nii, fixed_mask_full_nii, fixed_mask_crop_nii,  # ← utiliser le masque
+        reg_img_full_nii, reg_mask_full_nii, _ = rigid_register_one_patient(
+            fixed_img_full_nii, fixed_mask_full_nii, fixed_mask_crop_nii,
             moving_mask_crop_nii,
-            moving_img_full_nii, moving_mask_full_nii
+            moving_img_full_nii, moving_mask_full_nii,
+            number_of_iterations=number_of_iterations,
         )
         if crop_after_registration:
             reg_img_nii, reg_mask_nii = crop_to_reference_window(
@@ -251,7 +247,7 @@ def dice_score(mask1, mask2):
     return 2.0 * intersection / volume_sum
 
 
-def dice_all_patients(reference_patient="patient001", cropped_folder="cropped_frames", registered_folder="registered_framesBIS"):
+def dice_all_patients(reference_patient="patient001", cropped_folder="cropped_frames", registered_folder="registered_frames"):
     """
     Compute Dice score before/after registration for all patients.
 
@@ -265,8 +261,8 @@ def dice_all_patients(reference_patient="patient001", cropped_folder="cropped_fr
     results_list : list of dict
         Per-patient dice results.
     """
-    cropped_mask_paths = sorted(glob.glob(str(TEMPODATA_FOLDER / cropped_folder / "patient*_frame*_cropped_gt.nii.gz")))
-    registered_mask_paths = sorted(glob.glob(str(TEMPODATA_FOLDER / registered_folder / "patient*_frame*_registered_gt.nii.gz")))
+    cropped_mask_paths = sorted(glob.glob(str(PROCESSED_IMAGES_FOLDER / cropped_folder / "patient*_frame*_cropped_gt.nii.gz")))
+    registered_mask_paths = sorted(glob.glob(str(PROCESSED_IMAGES_FOLDER / registered_folder / "patient*_frame*_registered_gt.nii.gz")))
 
     ref_mask_path = None
     for p in cropped_mask_paths:

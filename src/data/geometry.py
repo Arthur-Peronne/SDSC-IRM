@@ -9,7 +9,7 @@ import numpy as np
 import nibabel as nib
 from pathlib import Path
 
-from src.config import TEMPODATA_FOLDER
+from src.config import PROCESSED_IMAGES_FOLDER
 from src.data import importdata as ipd
 
 
@@ -266,6 +266,8 @@ def crop_all_frames(only01 = True, crop_shape=(128, 128, 32), limit=1000):
     Crop all resampled frames around their cardiac mask centroid and save results.
     """
     all_img_res, all_gt_res = ipd.load_allframes_resampled(only01 = only01)
+    out_folder = PROCESSED_IMAGES_FOLDER / "cropped_frames"
+    out_folder.mkdir(parents=True, exist_ok=True)
 
     for i in range(min(len(all_img_res), limit)):
 
@@ -294,7 +296,6 @@ def crop_all_frames(only01 = True, crop_shape=(128, 128, 32), limit=1000):
         filename = path.name
         patient_id = filename.split("_")[0]
         frame_id = filename.split("_")[1]
-        out_folder = TEMPODATA_FOLDER / "cropped_frames"
         img_out = out_folder / f"{patient_id}_{frame_id}_cropped.nii.gz"
         mask_out = out_folder / f"{patient_id}_{frame_id}_cropped_gt.nii.gz"
         nib.save(img_crop_nii, img_out)

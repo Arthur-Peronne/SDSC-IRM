@@ -52,8 +52,8 @@ SDSC-arthur-project-1/
 ## Gestion des données
 - **S3 (AWS)** : données raw uniquement, accessibles via Renku
 - **processed_images/** : fichiers nii générés une seule fois (coûteux), rechargés manuellement entre sessions Renku
-- **mlruns/** : tous les modèles entraînés + métriques via MLflow, rechargés manuellement entre sessions Renku
-- Ni `mlruns/` ni `processed_images/` ne vont dans git
+- **mlruns/** : métadonnées MLflow (meta.yaml, metrics, params, tags) **committées dans git** pour pouvoir utiliser `mlflow ui` en local. Les artefacts (modèles `.pth`, etc.) sont exclus via `.gitignore` (`mlruns/**/artifacts/`). Workflow : entraîner sur Renku → commit + push mlruns/ → pull en local → `mlflow ui`
+- **processed_images/** : fichiers nii générés (coûteux), rechargés manuellement entre sessions Renku — **ne va pas dans git**
 
 ## Fonctionnalités scientifiques clés
 - **Visualisation MRI** : plot nii files (image, masque, superposition), multi-timeframes
@@ -117,10 +117,12 @@ SDSC-arthur-project-1/
 
 ### Pan 2 — Fonctionnel
 
-**Étape 4 : Visualisation MRI** — `run_visualize.py` (obsolète → réécrire)
-- Trouver nii depuis paramètres (type de données, numéro patient, type de fichier)
-- Plot image / masque / superposition, 1 ou plusieurs timeframes
-- Output : PDF dans `results/`
+**Étape 4 : Visualisation MRI** ✅
+- `configs/visualization.yaml` : patient, source (raw/processed), frame_type (ED/ES/both), plot_modes
+- `run_visualize.py` réécrit : lit Info.cfg pour les numéros de frames, construit les chemins, appelle `mri_plots`
+- `src/visualization/mri_plots.py` : `plot_masks` supprimée (redondante), `plot_allepochs` harmonisé avec `plot_anat`
+- Modes : image / mask / overlay / all_epochs — naming cohérent `patientXXX_frameXX_{source}_{suffix}_{frame_type}`
+- Testé sur Renku (raw ED/ES, processed registered, 4D)
 
 **Étape 5 : Image registration** — `run_registration.py` + `run_registration_pipelinechecks.py`
 - Resampling → Cropping → Registration
