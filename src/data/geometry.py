@@ -265,13 +265,19 @@ def crop_all_frames(only01 = True, crop_shape=(128, 128, 32), limit=1000):
     """
     Crop all resampled frames around their cardiac mask centroid and save results.
     """
-    all_img_res, all_gt_res = ipd.load_allframes_resampled(only01 = only01)
+    all_img_res, all_gt_res = ipd.load_allframes_resampled(only01=only01)
     out_folder = PROCESSED_IMAGES_FOLDER / "cropped_frames"
     out_folder.mkdir(parents=True, exist_ok=True)
+    n_files = min(len(all_img_res), limit)
+    print(f"Cropping {n_files} frames to {crop_shape}...")
 
-    for i in range(min(len(all_img_res), limit)):
-
+    for i in range(n_files):
         img_path = all_img_res[i]
+        path = Path(img_path)
+        patient_id = path.name.split("_")[0]
+        frame_id = path.name.split("_")[1]
+        print(f"  [{i+1}/{n_files}] {patient_id}_{frame_id}...")
+
         mask_path = img_path.replace("_resampled.nii.gz", "_resampled_gt.nii.gz")
         img_nii = nib.load(img_path)
         mask_nii = nib.load(mask_path)
@@ -292,11 +298,8 @@ def crop_all_frames(only01 = True, crop_shape=(128, 128, 32), limit=1000):
             crop_shape=crop_shape
         )
 
-        path = Path(img_path)
-        filename = path.name
-        patient_id = filename.split("_")[0]
-        frame_id = filename.split("_")[1]
         img_out = out_folder / f"{patient_id}_{frame_id}_cropped.nii.gz"
         mask_out = out_folder / f"{patient_id}_{frame_id}_cropped_gt.nii.gz"
         nib.save(img_crop_nii, img_out)
         nib.save(mask_crop_nii, mask_out)
+        print(f"  [{i+1}/{n_files}] {patient_id}_{frame_id} done.")

@@ -124,10 +124,17 @@ SDSC-arthur-project-1/
 - Modes : image / mask / overlay / all_epochs — naming cohérent `patientXXX_frameXX_{source}_{suffix}_{frame_type}`
 - Testé sur Renku (raw ED/ES, processed registered, 4D)
 
-**Étape 5 : Image registration** — `run_registration.py` + `run_registration_pipelinechecks.py`
-- Resampling → Cropping → Registration
-- Checks : shape/spacing, DICE avant/après registration
-- Outputs dans `processed_images/registered_frames/` uniquement (`registered_framesBIS` obsolète → supprimer toutes les références)
+**Étape 5 : Image registration** ✅ — `run_registration.py` + `run_registration_pipelinechecks.py`
+- `configs/registration.yaml` enrichi : tous les paramètres exposés (target_spacing, crop_shape, reference_patient/frame, n_iterations, limit)
+- `run_registration.py` réécrit : lit le YAML, passe tous les paramètres aux fonctions
+- Migration `TEMPODATA_FOLDER` → `PROCESSED_IMAGES_FOLDER` dans tous les modules `src/data/` et scripts
+- `registered_framesBIS` supprimé partout, `registered_frames` comme seule référence
+- `mkdir` ajouté dans `resample_all` et `crop_all_frames` (manquait)
+- Suivi d'avancement patient par patient dans `resample_all` et `crop_all_frames`
+- `load_dotenv` ancré sur `__file__` dans `config.py` (lancement depuis n'importe quel répertoire)
+- `run_registration_pipelinechecks.py` : comparaison OLD réécrite (ED+ES, lookup par nom, vérification de couverture)
+- `number_of_iterations` exposé dans `register_all_frames`
+- Testé sur Renku : 300 frames (ED+ES), DICE after 0.723 (mean), 282/300 améliorés
 
 **Étape 6 : PCA temporelle** — `run_pca_temporal.py`
 - Extraction voxels depuis 4D nii par patient

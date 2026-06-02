@@ -4,8 +4,8 @@
 # No MLflow tracking for preprocessing — outputs go to processed_images/.
 
 # ── Steps to run ──────────────────────────────────────────────────────────────
-resample_all: false
-crop_all: false
+resample_all: true
+crop_all: true
 register_all: true
 
 # ── Shared options ────────────────────────────────────────────────────────────

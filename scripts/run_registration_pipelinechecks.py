@@ -53,7 +53,7 @@ check_registered = True
 # ── User choices : DICE ───────────────────────────────────────────────────────
 do_dice_checks      = True
 registered_folder   = "registered_frames"
-registered_OLD      = None  # set to None to skip OLD comparison
+registered_OLD      = "registered_frames_OLD"   # set to None to skip OLD comparison
 n_worst_to_print    = 5
 
 # ── Folder paths ──────────────────────────────────────────────────────────────

@@ -81,7 +81,7 @@ def _resample_sitk(img, target_spacing, is_label=False):
 def _save_sitk_as_nifti(img, out_path, dtype=np.float32, axis_signs=(1.0, 1.0, 1.0)):
     """Save SimpleITK image as NIfTI via nibabel with clean affine."""
     arr_zyx = sitk.GetArrayFromImage(img)  # (Z,Y,X)
-    arr_xyz = np.transpose(arr_zyx, (2, 1, 0)).astype(dtype) # Transpose back dimensions
+    arr_xyz = np.transpose(arr_zyx, (2, 1, 0)).astype(dtype) # Transpose back dimensions
 
     sx, sy, sz = img.GetSpacing()
     ox, oy, oz = img.GetOrigin()
@@ -94,12 +94,6 @@ def _save_sitk_as_nifti(img, out_path, dtype=np.float32, axis_signs=(1.0, 1.0, 1
                        [0,            0,            0,            1]], dtype=np.float64)
 
     nii = nib.Nifti1Image(arr_xyz, affine)
-    # affine = np.array([[sx, 0,  0,  ox],
-    #                    [0,  sy, 0,  oy],
-    #                    [0,  0,  sz, oz],
-    #                    [0,  0,  0,  1]], dtype=np.float64)
-
-    # nii = nib.Nifti1Image(arr_xyz, affine)
     nii.header.set_zooms((sx, sy, sz))
     nib.save(nii, out_path)
 
@@ -134,20 +128,18 @@ def phys_size(img):
     return shape * zooms
 
 
-def resample_all(target_spacing, only01 = True, limit = 1000):
-    # Load all images and gt paths
+def resample_all(target_spacing, only01=True, limit=1000):
     all_img, all_gt = ipd.load_allframes(only01=only01)
     out_folder = PROCESSED_IMAGES_FOLDER / "resampled_frames"
     out_folder.mkdir(parents=True, exist_ok=True)
-    for i in range(min(len(all_img), limit)):
-        # Load nii from paths, and crop images from gt masks
-        nii_img= nib.load(all_img[i])
-        nii_mask= nib.load(all_gt[i])
-        # Create outpath
+    n_files = min(len(all_img), limit)
+    print(f"Resampling {n_files} frames to {target_spacing} mm...")
+    for i in range(n_files):
         path = Path(all_img[i])
         patient_id = path.parent.name
         frame_id = path.stem.split("_")[1].split(".")[0]
-        save_path = PROCESSED_IMAGES_FOLDER / "resampled_frames" / f"{patient_id}_{frame_id}_resampled"
-        # Resample and save in tempo data
-        nii_img_res = resample_nifti_file(all_img[i], save_path.with_suffix(".nii.gz"), target_spacing, is_label=False, preserve_axis_signs=True)
-        nii_mask_res = resample_nifti_file(all_gt[i], Path(str(save_path) + "_gt.nii.gz"), target_spacing, is_label=True, preserve_axis_signs=True)
+        print(f"  [{i+1}/{n_files}] {patient_id}_{frame_id}...")
+        save_path = out_folder / f"{patient_id}_{frame_id}_resampled"
+        resample_nifti_file(all_img[i], save_path.with_suffix(".nii.gz"), target_spacing, is_label=False, preserve_axis_signs=True)
+        resample_nifti_file(all_gt[i], Path(str(save_path) + "_gt.nii.gz"), target_spacing, is_label=True, preserve_axis_signs=True)
+        print(f"  [{i+1}/{n_files}] {patient_id}_{frame_id} done.")
