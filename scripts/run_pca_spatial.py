@@ -166,15 +166,18 @@ def main():
                                 step=latent_dimensions,
                             )
 
-            if cfg.get("plot_metrics", True):
-                save_path = RESULTS_FOLDER / f"{plot_tag}_metrics_vs_latentdim.pdf"
-                pcp.plot_pca_metrics_vs_latentdim(
-                    run_id=tracking.active_run_id(),
-                    datasets=[d for d, *_ in datasets],
-                    title=run_name,
-                    save_path=save_path,
-                )
-                tracking.log_artifact(save_path)
+        if cfg.get("plot_metrics", True):
+            plot_datasets = ["train", "test"]
+            if n_validation > 0:
+                plot_datasets = ["train", "validation", "test"]
+            save_path = RESULTS_FOLDER / f"{plot_tag}_metrics_vs_latentdim.png"
+            pcp.plot_pca_metrics_vs_latentdim(
+                run_id=tracking.active_run_id(),
+                datasets=plot_datasets,
+                title=run_name,
+                save_path=save_path,
+            )
+            tracking.log_artifact(save_path)
 
         # ── Plot : explained variance ─────────────────────────────────────────
         if cfg["plot_explained_variance"]:
@@ -244,7 +247,7 @@ def main():
             else:
                 patients_torecons = [tuple(p) for p in cfg["patients_torecons_manual"]]
 
-            pcp.pca_plotcompare_selected(
+            recon_paths = pcp.pca_plotcompare_selected(
                 patients_torecons=patients_torecons,
                 X_train_pca=X_train_pca,
                 X_val_pca=X_val_pca,
@@ -261,6 +264,8 @@ def main():
                 row_means_val=row_means_val,
                 row_means_test=row_means_test,
             )
+            for p in recon_paths:
+                tracking.log_artifact(p)
 
 
 if __name__ == "__main__":

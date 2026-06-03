@@ -169,6 +169,7 @@ def get_vectorsarray(
             )
  
         data_array = np.stack(data_list, axis=0)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         np.save(out_path, data_array)
  
     else:

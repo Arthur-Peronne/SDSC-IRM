@@ -150,6 +150,9 @@ def pca_plotcompare_selected(
     """
     n_train_real = n_train_images // 2 if use_both_frames else n_train_images
 
+    from src.config import RESULTS_FOLDER
+    saved_paths = []
+
     for real_patient, frame_type in patients_torecons:
         if real_patient <= n_train_real:
             X_pca_sub = X_train_pca
@@ -177,15 +180,26 @@ def pca_plotcompare_selected(
             + pca.mean_
             + patient_row_mean
         )
+
+        pat_str = f"patient{real_patient}"
+        ae_str  = f"PCA_{split_name}_{latent_dimensions}dims"
+
         ae_plotcompare_onepatient(
             x_recon_flat.reshape(original_shape),
             real_patient,
             "registered_frames",
-            ae_str=f"PCA_{split_name}_{latent_dimensions}dims",
-            pat_str=f"patient{real_patient}",
-            details_str=f"{frame_type}",
+            ae_str=ae_str,
+            pat_str=pat_str,
+            details_str=frame_type,
             frame_type=frame_type,
         )
+        saved_paths += [
+            RESULTS_FOLDER / f"{pat_str}_original_{frame_type}.png",
+            RESULTS_FOLDER / f"{pat_str}_{ae_str}_{frame_type}.png",
+        ]
+
+    return saved_paths
+
 
 
 # ── Metrics vs latent dimensions ──────────────────────────────────────────────
@@ -297,7 +311,7 @@ def plot_pca_metrics_vs_latentdim(
     plt.tight_layout()
 
     if save_path is None:
-        save_path = RESULTS_FOLDER / f"pca_metrics_vs_latentdim_{run_id[:8]}.pdf"
+        save_path = RESULTS_FOLDER / f"pca_metrics_vs_latentdim_{run_id[:8]}.png"
     save_path = Path(save_path)
     plt.savefig(save_path)
     plt.close()
