@@ -1,0 +1,14 @@
+artifact_uri: file:///home/renku/work/SDSC-arthur-project-1/mlruns/630986741799423978/0a26fe987b6b470286ce20e405be2e79/artifacts
+end_time: 1780478575635
+entry_point_name: ''
+experiment_id: '630986741799423978'
+lifecycle_stage: active
+run_id: 0a26fe987b6b470286ce20e405be2e79
+run_name: PCA_temporal_patient135_baseline
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1780478570896
+status: 3
+tags: []
+user_id: renku

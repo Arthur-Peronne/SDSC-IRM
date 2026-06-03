@@ -34,20 +34,28 @@ def main():
 
     patient_id  = cfg["patient_id"]
     patient_str = f"patient{patient_id:03d}"
-    run_name    = f"PCA_temporal_{patient_str}_{cfg['experiment_tag']}"
+    recalculate = cfg["recalculate_pca"]
+    load_run_id = cfg.get("load_run_id") if not recalculate else None
 
-    with tracking.start_run("pca_temporal", run_name):
+    if not recalculate and not load_run_id:
+        raise ValueError("recalculate_pca: false requires load_run_id in YAML")
 
-        # ── Config artifact + params ──────────────────────────────────────────
-        tracking.log_artifact(CONFIG_PATH)
-        tracking.log_params({
-            "patient_id":           patient_id,
-            "max_pc_calc":          cfg["max_pc_calc"],
-            "recalculate_pca":      cfg["recalculate_pca"],
-            "experiment_tag":       cfg["experiment_tag"],
-            "n_pc_to_reconstruct":  cfg["n_pc_to_reconstruct"],
-            "eigenvectors_to_plot": str(cfg["eigenvectors_to_plot"]),
-        })
+    run_name = f"PCA_temporal_{patient_str}_{cfg['experiment_tag']}"
+    run_ctx  = tracking.start_run("pca_temporal", run_name) if recalculate else tracking.resume_run(load_run_id)
+
+    with run_ctx:
+
+        # ── Config artifact + params (CALC only) ──────────────────────────────
+        if recalculate:
+            tracking.log_artifact(CONFIG_PATH)
+            tracking.log_params({
+                "patient_id":           patient_id,
+                "max_pc_calc":          cfg["max_pc_calc"],
+                "recalculate_pca":      recalculate,
+                "experiment_tag":       cfg["experiment_tag"],
+                "n_pc_to_reconstruct":  cfg["n_pc_to_reconstruct"],
+                "eigenvectors_to_plot": str(cfg["eigenvectors_to_plot"]),
+            })
 
         # ── Load 4D nii ───────────────────────────────────────────────────────
         nii_path   = ipd.get_patient_acdc_path(patient_id, file_type="4d")
@@ -55,32 +63,26 @@ def main():
         data_array = nii_obj.get_fdata()
         print(f"Loaded {patient_str} 4D: shape {data_array.shape}")
 
-        # X: (n_epochs, n_voxels) — sklearn PCA centers column-wise (per voxel)
         X = pc.pca1_transpose(data_array, print_infos=False)
 
         # ── PCA ───────────────────────────────────────────────────────────────
-        if cfg["recalculate_pca"]:
+        if recalculate:
             pca = PCA(n_components=min(nii_obj.shape[3], cfg["max_pc_calc"]))
             X_reduced = pca.fit_transform(X)
             tracking.log_sklearn_model(pca, filename=f"{patient_str}_pca.joblib")
             print(f"PCA calculated: {pca.n_components_} components")
+            for i, var in enumerate(pca.explained_variance_ratio_):
+                tracking.log_metric(f"explained_variance_pc{i + 1}", float(var))
+            tracking.log_metric(
+                f"cumulative_variance_pc{pca.n_components_}",
+                float(np.sum(pca.explained_variance_ratio_)),
+            )
         else:
-            run_id = cfg.get("load_run_id")
-            if not run_id:
-                raise ValueError("recalculate_pca: false requires load_run_id in YAML")
             import mlflow
-            local_path = mlflow.MlflowClient().download_artifacts(run_id, f"{patient_str}_pca.joblib")
+            local_path = mlflow.MlflowClient().download_artifacts(load_run_id, f"{patient_str}_pca.joblib")
             pca = joblib.load(local_path)
             X_reduced = pca.transform(X)
-            print(f"PCA loaded from run {run_id}")
-
-        # ── Metrics ───────────────────────────────────────────────────────────
-        for i, var in enumerate(pca.explained_variance_ratio_):
-            tracking.log_metric(f"explained_variance_pc{i + 1}", float(var))
-        tracking.log_metric(
-            f"cumulative_variance_pc{pca.n_components_}",
-            float(np.sum(pca.explained_variance_ratio_)),
-        )
+            print(f"PCA loaded from run {load_run_id}")
 
         # ── Plot : explained variance ─────────────────────────────────────────
         if cfg["do_explained_variance"]:
@@ -100,7 +102,7 @@ def main():
         if cfg["do_eigenvec_plot"]:
             shape_3d = data_array.shape[:3]
             for n in cfg["eigenvectors_to_plot"]:
-                idx = n - 1  # YAML uses 1-indexed
+                idx = n - 1
                 if idx >= pca.n_components_:
                     print(f"[SKIP] eigenvector {n} > n_components ({pca.n_components_})")
                     continue
@@ -112,6 +114,12 @@ def main():
         if cfg["do_reconstruction"]:
             n_pc   = cfg["n_pc_to_reconstruct"]
             frames = cfg["frames_to_reconstruct"]
+
+            # Mean image = reconstruction with 0 PCs
+            nii_mean = pc.eigenvector_to_nii(pca.mean_, data_array.shape[:3], nii_obj)
+            mrp.plot_oneimg(nii_mean, patient_str=patient_str, file_str="mean_image", details_str="0pc")
+            tracking.log_artifact(RESULTS_FOLDER / f"{patient_str}_mean_image_0pc.png")
+
             nii_rec = pc.pca1_reconstruct(X_reduced, pca, n_pc, data_array, nii_obj)
 
             if frames == "all":

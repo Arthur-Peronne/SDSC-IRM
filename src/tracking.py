@@ -54,6 +54,12 @@ def start_run(experiment_name: str, run_name: str, tags: dict = None):
     with mlflow.start_run(run_name=run_name, tags=tags) as run:
         yield run
 
+@contextmanager
+def resume_run(run_id: str):
+    """Resume an existing MLflow run to add new artifacts."""
+    _setup()
+    with mlflow.start_run(run_id=run_id) as run:
+        yield run
 
 def log_params(params: dict):
     """Log a dict of hyperparameters for the active run."""
@@ -91,6 +97,7 @@ def log_sklearn_model(model, filename: str = "pca.joblib"):
     """Save a sklearn model as an MLflow artifact using joblib serialization."""
     import joblib
     import tempfile
+    from pathlib import Path
 
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / filename
