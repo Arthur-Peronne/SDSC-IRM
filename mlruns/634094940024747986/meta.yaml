@@ -1,8 +1,0 @@
-artifact_location: file:///home/renku/work/SDSC-arthur-project-1/mlruns/634094940024747986
-creation_time: 1780266885652
-experiment_id: '634094940024747986'
-last_update_time: 1780266885652
-lifecycle_stage: active
-name: test_infra
-trace_location: null
-workspace: default

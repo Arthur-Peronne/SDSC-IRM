@@ -129,6 +129,7 @@ def phys_size(img):
 
 
 def resample_all(target_spacing, only01=True, limit=1000):
+    print("Loading all frame paths for resampling...")
     all_img, all_gt = ipd.load_allframes(only01=only01)
     out_folder = PROCESSED_IMAGES_FOLDER / "resampled_frames"
     out_folder.mkdir(parents=True, exist_ok=True)
@@ -138,7 +139,6 @@ def resample_all(target_spacing, only01=True, limit=1000):
         path = Path(all_img[i])
         patient_id = path.parent.name
         frame_id = path.stem.split("_")[1].split(".")[0]
-        print(f"  [{i+1}/{n_files}] {patient_id}_{frame_id}...")
         save_path = out_folder / f"{patient_id}_{frame_id}_resampled"
         resample_nifti_file(all_img[i], save_path.with_suffix(".nii.gz"), target_spacing, is_label=False, preserve_axis_signs=True)
         resample_nifti_file(all_gt[i], Path(str(save_path) + "_gt.nii.gz"), target_spacing, is_label=True, preserve_axis_signs=True)

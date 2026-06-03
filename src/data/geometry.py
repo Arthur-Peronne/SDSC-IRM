@@ -276,7 +276,6 @@ def crop_all_frames(only01 = True, crop_shape=(128, 128, 32), limit=1000):
         path = Path(img_path)
         patient_id = path.name.split("_")[0]
         frame_id = path.name.split("_")[1]
-        print(f"  [{i+1}/{n_files}] {patient_id}_{frame_id}...")
 
         mask_path = img_path.replace("_resampled.nii.gz", "_resampled_gt.nii.gz")
         img_nii = nib.load(img_path)

@@ -87,6 +87,17 @@ def log_artifact(path):
     mlflow.log_artifact(str(path))
 
 
+def log_sklearn_model(model, filename: str = "pca.joblib"):
+    """Save a sklearn model as an MLflow artifact using joblib serialization."""
+    import joblib
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / filename
+        joblib.dump(model, path)
+        mlflow.log_artifact(str(path))
+
+
 def search_runs(experiment_name: str, filter_string: str = "", order_by: list = None):
     """
     Return a DataFrame of runs for the given experiment.

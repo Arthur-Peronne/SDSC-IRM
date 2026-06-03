@@ -7,20 +7,25 @@
 experiment_tag: "baseline"
 
 # ── Data ──────────────────────────────────────────────────────────────────────
-datatype: "training/"            # "training/" or "testing/"
-patient_name: "patient099"
+patient_id: 99
 
 # ── PCA ───────────────────────────────────────────────────────────────────────
+recalculate_pca: true
 max_pc_calc: 5
+# load_run_id: "abc123..."   # required only when recalculate_pca: false
 
-# ── Plots ─────────────────────────────────────────────────────────────────────
-do_explained_variance: false
-do_pc_in_eigenbase: false
-pc_n1: 0
-pc_n2: 1
+# ── Plots : explained variance ─────────────────────────────────────────────────
+do_explained_variance: true
+
+# ── Plots : PC values in eigenbase ────────────────────────────────────────────
+do_pc_in_eigenbase: true
+pc_max: 4          # plots pairs (1,2), (3,4), ... up to pc_max — must be even
+
+# ── Plots : eigenvectors ──────────────────────────────────────────────────────
 do_eigenvec_plot: true
+eigenvectors_to_plot: [1, 2, 3]
 
-# ── Reconstruction ────────────────────────────────────────────────────────────
-do_reconstruction: false
+# ── Plots : reconstruction ────────────────────────────────────────────────────
+do_reconstruction: true
 n_pc_to_reconstruct: 5
-epochs_to_plot: 2
+frames_to_reconstruct: [0, 1]   # list of timeframe indices, or "all"

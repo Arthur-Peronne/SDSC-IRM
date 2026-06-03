@@ -122,7 +122,35 @@ def plot_pcvalues_2d(X_reduced, pc_n1, pc_n2, patient_str, details_str, scale_st
     plt.savefig(RESULTS_FOLDER / f"{patient_str}{details_str}_{pc_n1+1}and{pc_n2+1}.png")
 
 
-# PCA2 : spatial 
+def eigenvector_to_nii(vec, shape_3d, nii_ref):
+    """Reshape a 1D eigenvector into a 3D NIfTI using the reference affine/header."""
+    return nib.Nifti1Image(vec.reshape(shape_3d), nii_ref.affine, nii_ref.header)
+
+
+def pca1_reconstruct(X_reduced, pca, n_pc, data_array, nii_obj):
+    """
+    Reconstruct a 4D NIfTI from the n first temporal principal components.
+
+    Parameters
+    ----------
+    X_reduced  : np.ndarray, shape (n_epochs, n_components)
+    pca        : fitted sklearn PCA
+    n_pc       : int — number of components to use for reconstruction
+    data_array : np.ndarray, shape (x, y, z, t) — original 4D array (for shape)
+    nii_obj    : nibabel NIfTI — for affine/header
+
+    Returns
+    -------
+    Nifti1Image (4D)
+    """
+    X_rec = X_reduced[:, :n_pc] @ pca.components_[:n_pc, :] + pca.mean_
+    n_epochs = data_array.shape[3]
+    X_rec_3d = X_rec.reshape(n_epochs, *data_array.shape[:3])
+    X_rec_4d = np.transpose(X_rec_3d, (1, 2, 3, 0))
+    return nib.Nifti1Image(X_rec_4d, nii_obj.affine, nii_obj.header)
+
+
+# PCA2 : spatial
 
 def pca2_reformat(X_reconstructed, data_array, nii_obj_template, patient_index):
     """
