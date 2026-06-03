@@ -105,6 +105,15 @@ def log_sklearn_model(model, filename: str = "pca.joblib"):
         mlflow.log_artifact(str(path))
 
 
+def active_run_id() -> str:
+    """Return the run_id of the currently active MLflow run."""
+    _setup()
+    run = mlflow.active_run()
+    if run is None:
+        raise RuntimeError("No active MLflow run")
+    return run.info.run_id
+
+
 def search_runs(experiment_name: str, filter_string: str = "", order_by: list = None):
     """
     Return a DataFrame of runs for the given experiment.

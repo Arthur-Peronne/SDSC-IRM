@@ -3,13 +3,10 @@
 Functions to perform PCA — temporal and spatial utilities.
 """
 
-import numpy as np 
-import matplotlib.pyplot as plt
+import numpy as np
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.preprocessing import StandardScaler
-import nibabel as nib # to get the nii format
-
-from src.config import RESULTS_FOLDER
+import nibabel as nib
 
 # PCA 1: each 3D image as a sample (how voxels co-vary over time, temporal dynamics) -> 30 lines, >100 000 columns (dimensions).
 def pca1_transpose(data_array, print_infos=True):
@@ -44,84 +41,6 @@ def pca_clean(X):
     X_scaled = scaler.fit_transform(X_filtered)
     return X_scaled
 
-def plot_pca_explipower(pca,patient_name):
-    """
-    """
-    # fig
-    n_components = len(pca.explained_variance_ratio_)
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6))
-    fig.suptitle(patient_name + ': variance explained by principal components') # Title
-    # Subplot top: explained variance
-    ax1.plot(pca.explained_variance_ratio_, marker='o', linestyle='--')
-    # ax1.set_xlabel('Number of principal components')
-    ax1.set_ylabel('Explained variance')
-    ax1.set_ylim(0, max(pca.explained_variance_ratio_)*1.1)
-    ax1.set_xticks(range(0, n_components, max(1, int(n_components/30))))
-    ax1.set_xticklabels(range(1, n_components + 1, max(1, int(n_components/30))))
-    ax1.grid(True)
-    # plot bot: cumulative explained variance
-    cumulative_variance = np.cumsum(pca.explained_variance_ratio_)
-    ax2.plot(cumulative_variance, marker='o', linestyle='--')
-    ax2.set_xticks(range(0, n_components, max(1, int(n_components/30))))
-    ax2.set_xticklabels(range(1, n_components + 1, max(1, int(n_components/30))))
-    ax2.set_xlabel('Number of principal components')
-    ax2.set_ylabel('Cumulative explained variance')
-    ax2.set_ylim(0, 1.05)
-    ax2.grid(True)
-    #save fig
-    plt.savefig(RESULTS_FOLDER / f"{patient_name}_PCA_explainedvariance.png")
-
-
-def plot_pcvalues_2d(X_reduced, pc_n1, pc_n2, patient_str, details_str, scale_str = 'Time (Epoch)', segments = True, axisscale_fixed=True):
-    """
-    """
-    fig, ax1 = plt.subplots(1,1) 
-    colors = plt.cm.coolwarm(np.linspace(0, 1, X_reduced.shape[0]))
-    
-     # Scatter plot with progressive colors
-    scatter1 = ax1.scatter(
-        X_reduced[:, pc_n1],
-        X_reduced[:, pc_n2],
-        s=40,
-        c=np.linspace(0, 1, X_reduced.shape[0]),
-        cmap='coolwarm'
-    )
-
-    # Plot segments with colormap
-    if segments:
-        for i in range(X_reduced.shape[0] - 1):
-            ax1.plot(
-                X_reduced[i:i+2, pc_n1],
-                X_reduced[i:i+2, pc_n2],
-                color=colors[i],
-                linestyle='-',
-                linewidth=1
-            )
-
-    cbar = plt.colorbar(scatter1, ax=ax1)
-    cbar.set_label(scale_str)
-    cbar.set_ticks(np.linspace(0, 1, 6))
-    cbar.set_ticklabels([f'{i+1}' for i in np.linspace(0, X_reduced.shape[0]-1, 6, dtype=int)])
-
-    ax1.set(
-        title=f"{patient_str} : Principal Components {pc_n1+1} and {pc_n2+1}",
-         xlabel=f"Principal Component {pc_n1+1}",
-        ylabel=f" Principal Component {pc_n2+1}")
-
-    if axisscale_fixed :
-        axis1, axis2 = 0, 1 
-    else:
-         axis1, axis2 = pc_n1, pc_n2      
-    x_ticks = np.linspace(-max(abs(min(X_reduced[:, axis1])), max(X_reduced[:, axis1])), max(abs(min(X_reduced[:, axis1])), max(X_reduced[:, axis1])),7)
-    y_ticks = np.linspace(-max(abs(min(X_reduced[:, axis2])), max(X_reduced[:, axis2])), max(abs(min(X_reduced[:, axis2])), max(X_reduced[:, axis2])),7)
-    ax1.set_xticks(x_ticks)
-    ax1.set_yticks(y_ticks)
-    # ax1.xaxis.set_ticklabels([])
-    # ax1.yaxis.set_ticklabels([])
-
-    plt.savefig(RESULTS_FOLDER / f"{patient_str}{details_str}_{pc_n1+1}and{pc_n2+1}.png")
-
-
 def eigenvector_to_nii(vec, shape_3d, nii_ref):
     """Reshape a 1D eigenvector into a 3D NIfTI using the reference affine/header."""
     return nib.Nifti1Image(vec.reshape(shape_3d), nii_ref.affine, nii_ref.header)
@@ -150,6 +69,27 @@ def pca1_reconstruct(X_reduced, pca, n_pc, data_array, nii_obj):
     return nib.Nifti1Image(X_rec_4d, nii_obj.affine, nii_obj.header)
 
 
+def pca_spatial_reconstruct(X_pca_row, pca, n_pc):
+    """
+    Reconstruct one flat 3D image from its spatial PCA coordinates.
+
+    Parameters
+    ----------
+    X_pca_row : np.ndarray, shape (n_components,)
+        PCA coordinates for one patient (one row of X_pca).
+    pca : fitted sklearn PCA
+    n_pc : int
+        Number of components to use for reconstruction.
+
+    Returns
+    -------
+    np.ndarray, shape (n_voxels,)
+        Reconstructed flat image. Reshape to 3D and pass to eigenvector_to_nii
+        to get a NIfTI.
+    """
+    return X_pca_row[:n_pc] @ pca.components_[:n_pc, :] + pca.mean_
+
+
 # PCA2 : spatial
 
 def pca2_reformat(X_reconstructed, data_array, nii_obj_template, patient_index):
@@ -163,93 +103,3 @@ def pca2_reformat(X_reconstructed, data_array, nii_obj_template, patient_index):
     img3d = img4d[patient_index]  # (256,256,10)
     nii = nib.Nifti1Image(img3d, nii_obj_template.affine, nii_obj_template.header)
     return nii
-
-
-
-def plot_pcvalues_2d_meta(X_reduced, pc_n1, pc_n2, metainfo_str, metainfo_list, axisscale_fixed=True, extremes_toremove=15):
-    """
-    """
-    fig, ax1 = plt.subplots(1,1) 
-
-    # Color scale for numeric
-    botlimit, toplimit = sorted(metainfo_list)[extremes_toremove],  sorted(metainfo_list)[-extremes_toremove]
-    # print(botlimit, toplimit)
-    colors = [max(min((meta_info - botlimit)/(toplimit - botlimit),1),0) for meta_info in metainfo_list]
-
-     # Scatter plot with progressive colors
-    scatter1 = ax1.scatter(
-        X_reduced[:, pc_n1],
-        X_reduced[:, pc_n2],
-        s=40,
-        c= colors,
-        cmap='coolwarm'
-    )
-
-    cbar = plt.colorbar(scatter1, ax=ax1)
-    cbar.set_label(metainfo_str)
-    cbar.set_ticks(np.linspace(0, 1, 6))
-    cbar.set_ticklabels([f'{i}' for i in np.linspace(botlimit, toplimit, 6)])
-
-    ax1.set(
-        title=f"Principal Components {pc_n1+1} and {pc_n2+1} and correlation with patient {metainfo_str}",
-        xlabel=f"Principal Component {pc_n1+1}",
-        ylabel=f" Principal Component {pc_n2+1}")
-
-    if axisscale_fixed :
-        axis1, axis2 = 0, 1 
-    else:
-         axis1, axis2 = pc_n1, pc_n2      
-    x_ticks = np.linspace(-max(abs(min(X_reduced[:, axis1])), max(X_reduced[:, axis1])), max(abs(min(X_reduced[:, axis1])), max(X_reduced[:, axis1])),7)
-    y_ticks = np.linspace(-max(abs(min(X_reduced[:, axis2])), max(X_reduced[:, axis2])), max(abs(min(X_reduced[:, axis2])), max(X_reduced[:, axis2])),7)
-    ax1.set_xticks(x_ticks)
-    ax1.set_yticks(y_ticks)
-    # ax1.xaxis.set_ticklabels([])
-    # ax1.yaxis.set_ticklabels([])
-
-    plt.savefig(RESULTS_FOLDER / f"pc_allpatientsepoch0_{metainfo_str}_{pc_n1+1}and{pc_n2+1}.png")
-
-def plot_pcvalues_2d_metacat(X_reduced, pc_n1, pc_n2, metainfo_str, metainfo_list, axisscale_fixed=True):
-    """
-    Scatter plot of PC values colored by patient group (categorical).
-    """
-
-    fig, ax1 = plt.subplots(1, 1)
-    groups_unique = sorted(set(metainfo_list))
-    
-    # Choix automatique d'une palette qualitative
-    cmap = plt.get_cmap("tab10")  # bon pour <=10 groupes
-    color_dict = {g: cmap(i % 10) for i, g in enumerate(groups_unique)}
-
-    # Plot group by group
-    for g in groups_unique:
-        indices = [i for i, grp in enumerate(metainfo_list) if grp == g]
-        
-        ax1.scatter(
-            X_reduced[indices, pc_n1],
-            X_reduced[indices, pc_n2],
-            s=40,
-            color=color_dict[g],
-            label=g
-        )
-
-    ax1.set(
-        title=f"Principal Components {pc_n1+1} and {pc_n2+1} and correlation with patient " + metainfo_str,
-        xlabel=f"Principal Component {pc_n1+1}",
-        ylabel=f"Principal Component {pc_n2+1}"
-    )
-
-    ax1.legend(title = metainfo_str)
-
-    # ---- Axis scaling (same logic as yours)
-    if axisscale_fixed:
-        axis1, axis2 = 0, 1
-    else:
-        axis1, axis2 = pc_n1, pc_n2
-
-    max_x = max(abs(X_reduced[:, axis1].min()), abs(X_reduced[:, axis1].max()))
-    max_y = max(abs(X_reduced[:, axis2].min()), abs(X_reduced[:, axis2].max()))
-
-    ax1.set_xticks(np.linspace(-max_x, max_x, 7))
-    ax1.set_yticks(np.linspace(-max_y, max_y, 7))
-
-    plt.savefig(RESULTS_FOLDER / f"pc_allpatientsepoch0_{metainfo_str}_{pc_n1+1}and{pc_n2+1}.png")

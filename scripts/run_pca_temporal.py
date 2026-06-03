@@ -23,6 +23,7 @@ from src.config import RESULTS_FOLDER
 from src.data import importdata as ipd
 from src.models import pca as pc
 from src.visualization import mri_plots as mrp
+from src.visualization import pca_plots as pcp
 from src import tracking
 
 CONFIG_PATH = Path(__file__).parent.parent / "configs" / "pca_temporal.yaml"
@@ -85,21 +86,21 @@ def main():
             print(f"PCA loaded from run {load_run_id}")
 
         # ── Plot : explained variance ─────────────────────────────────────────
-        if cfg["do_explained_variance"]:
-            pc.plot_pca_explipower(pca, patient_str)
+        if cfg["plot_explained_variance"]:
+            pcp.plot_pca_explipower(pca, patient_str)
             tracking.log_artifact(RESULTS_FOLDER / f"{patient_str}_PCA_explainedvariance.png")
 
         # ── Plot : PC values in eigenbase ─────────────────────────────────────
-        if cfg["do_pc_in_eigenbase"]:
+        if cfg["plot_pc_values"]:
             pc_max = cfg["pc_max"]
             if pc_max % 2 != 0:
                 raise ValueError(f"pc_max must be even, got {pc_max}")
             for i in range(0, min(pc_max, pca.n_components_ - 1), 2):
-                pc.plot_pcvalues_2d(X_reduced, i, i + 1, patient_str, "_pc_in_eigenbase", axisscale_fixed=False)
+                pcp.plot_pcvalues_2d(X_reduced, i, i + 1, patient_str, "_pc_in_eigenbase", axisscale_fixed=False)
                 tracking.log_artifact(RESULTS_FOLDER / f"{patient_str}_pc_in_eigenbase_{i + 1}and{i + 2}.png")
 
         # ── Plot : eigenvectors ───────────────────────────────────────────────
-        if cfg["do_eigenvec_plot"]:
+        if cfg["plot_eigenvectors"]:
             shape_3d = data_array.shape[:3]
             for n in cfg["eigenvectors_to_plot"]:
                 idx = n - 1
@@ -111,7 +112,7 @@ def main():
                 tracking.log_artifact(RESULTS_FOLDER / f"{patient_str}_eigenvector_pc{n}.png")
 
         # ── Plot : reconstruction ─────────────────────────────────────────────
-        if cfg["do_reconstruction"]:
+        if cfg["plot_reconstruction"]:
             n_pc   = cfg["n_pc_to_reconstruct"]
             frames = cfg["frames_to_reconstruct"]
 

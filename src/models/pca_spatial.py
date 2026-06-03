@@ -10,11 +10,13 @@ import joblib
 from joblib import Parallel, delayed
 from sklearn.decomposition import PCA
 
-from src.config import TEMPODATA_FOLDER
+from src.config import PROCESSED_IMAGES_FOLDER
 from src.visualization import mri_plots as mrp
 from src.data import importdata as ipd
 from src.models import pca as pf
+from src.models.pca import pca_spatial_reconstruct, eigenvector_to_nii
 from src.training import ae_training as aet
+from src.visualization import pca_plots as pcp
 
 def _load_and_flatten_nii(path, binary_mask=False, image_roi_only=False, roi_mask_path=None, flatten=True):
     """
@@ -78,9 +80,9 @@ def get_vectorsarray(
     Parameters
     ----------
     source_folder : str
-        Subfolder in TEMPODATA_FOLDER containing the registered NIfTI files.
+        Subfolder in PROCESSED_IMAGES_FOLDER containing the registered NIfTI files.
     pca_folder : str
-        Subfolder in TEMPODATA_FOLDER where the .npy array is saved/loaded.
+        Subfolder in PROCESSED_IMAGES_FOLDER where the .npy array is saved/loaded.
     recalculate : bool
         If True, reload NIfTI files and recompute the array.
     mask : bool
@@ -120,7 +122,7 @@ def get_vectorsarray(
     else:
         save_suffix += "_flat3d"
  
-    out_path = TEMPODATA_FOLDER / pca_folder / f"Xvectors{save_suffix}.npy"
+    out_path = PROCESSED_IMAGES_FOLDER / pca_folder / f"Xvectors{save_suffix}.npy"
  
     if recalculate:
         # Get paths via importdata — patient090 exception handled there
@@ -199,7 +201,7 @@ def pca_patients(X, pca_folder, pca_description, normalize_rows=True, recalculat
     X_pca : np.ndarray, shape (n_patients, n_components)
     meta : dict  — includes "row_means" key
     """
-    folder_name = TEMPODATA_FOLDER / pca_folder / f"{pca_description}"
+    folder_name = PROCESSED_IMAGES_FOLDER / pca_folder / f"{pca_description}"
  
     if recalculatePCA:
         # Save row means BEFORE centering so they can be used for reconstruction
@@ -234,20 +236,18 @@ def pca_patients(X, pca_folder, pca_description, normalize_rows=True, recalculat
 
 
 
-def plot_eigenvectors(X, pca, original_shape, pca_description, eigenvectors_toplot=10):
-    """
-    """
-    X_4d = X.reshape((X.shape[0],) + original_shape)
-    nii_ref = nib.load(TEMPODATA_FOLDER / "cropped_frames/patient001_frame01_cropped.nii.gz")
-    mrp.plot_oneimg(nii_ref, patient_str=f"{pca_description}_patient001", file_str="frame001", details_str="ORIGINAL")
-    mean_img = X_4d.mean(axis=0)
+def plot_eigenvectors(X, pca, original_shape, pca_description, nii_ref, eigenvectors_to_plot):
+    """Plot the mean image and the specified eigenvectors as MRI slices."""
+    mean_img = X.reshape((X.shape[0],) + original_shape).mean(axis=0)
     nii_mean = nib.Nifti1Image(mean_img, nii_ref.affine, nii_ref.header)
-    mrp.plot_oneimg(nii_mean, patient_str=pca_description, file_str="frame001", details_str="mean_image")
-    for n_eigen in range(eigenvectors_toplot):
-        eigenvector = pca.components_[n_eigen, :]
-        eigenvector_3D = eigenvector.reshape(original_shape)
-        eigenvector_nii = nib.Nifti1Image(eigenvector_3D, nii_ref.affine, nii_ref.header)
-        mrp.plot_oneimg(eigenvector_nii, patient_str=pca_description, file_str="frame001", details_str=f"_eigenvector_{n_eigen+1}")
+    mrp.plot_oneimg(nii_mean, patient_str=pca_description, file_str="mean", details_str="mean_image")
+    for n in eigenvectors_to_plot:
+        idx = n - 1
+        if idx >= pca.n_components_:
+            print(f"[SKIP] eigenvector {n} > n_components ({pca.n_components_})")
+            continue
+        nii_eig = eigenvector_to_nii(pca.components_[idx], original_shape, nii_ref)
+        mrp.plot_oneimg(nii_eig, patient_str=pca_description, file_str="eigenvector", details_str=f"pc{n}")
 
 
 def patient_metalists(all_files, returnonlyone=False, whichtoreturn="group"):
@@ -285,9 +285,9 @@ def plot_pca_patientmeta(X_pca, pc_n1, pc_n2):
     height_list = height_list[:n]
     weight_list = weight_list[:n]
     
-    pf.plot_pcvalues_2d_meta(X_pca, pc_n1, pc_n2, "Height", height_list)
-    pf.plot_pcvalues_2d_meta(X_pca, pc_n1, pc_n2, "Weight", weight_list)
-    pf.plot_pcvalues_2d_metacat(X_pca, pc_n1, pc_n2, "Group", group_list)
+    pcp.plot_pcvalues_2d_meta(X_pca, pc_n1, pc_n2, "Height", height_list)
+    pcp.plot_pcvalues_2d_meta(X_pca, pc_n1, pc_n2, "Weight", weight_list)
+    pcp.plot_pcvalues_2d_metacat(X_pca, pc_n1, pc_n2, "Group", group_list)
 
 
 
@@ -300,7 +300,6 @@ def pca_compute_metrics(
     pca_name,
     metrics_dataset,
     original_shape,
-    pca_folder,
     savemetrics=False,
 ):
     """
@@ -325,7 +324,7 @@ def pca_compute_metrics(
     original_shape : tuple
         3D shape of images, e.g. (128, 128, 32).
     pca_folder : str
-        Subfolder in TEMPODATA_FOLDER for saving results.
+        Subfolder in PROCESSED_IMAGES_FOLDER for saving results.
     savemetrics : bool
         If True, save individual patient metrics to disk.
     """
@@ -333,11 +332,7 @@ def pca_compute_metrics(
     all_metrics = []
 
     for i, x_patient_flat in enumerate(X_flat):
-        x_recon_flat = (
-            X_pca[i, :latent_dimensions]
-            @ pca.components_[:latent_dimensions, :]
-            + pca.mean_
-        )
+        x_recon_flat = pca_spatial_reconstruct(X_pca[i], pca, latent_dimensions)
         x_patient_3d = x_patient_flat.reshape(original_shape)
         x_recon_3d   = x_recon_flat.reshape(original_shape)
 
@@ -352,18 +347,19 @@ def pca_compute_metrics(
         )
         all_metrics.append(metrics)
 
-    aet.ae_aggregate_metrics(
+    summary = aet.ae_aggregate_metrics(
         all_metrics,
         simulation_name=pca_name,
         experiment_name=f"{latent_dimensions}dims",
         n_epochs=None,
         metrics_dataset=metrics_dataset,
         ae=False,
+        save_summary=False,
     )
-    
-    print(
-            f"[PCA {latent_dimensions}dims | {metrics_dataset}] "
-            f"R2 mean = {np.mean([m['R2'] for m in all_metrics]):.4f}"
-        )
 
-    return all_metrics
+    print(
+        f"[PCA {latent_dimensions}dims | {metrics_dataset}] "
+        f"R2 mean = {summary['R2']['mean']:.4f}"
+    )
+
+    return all_metrics, summary

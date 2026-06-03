@@ -136,17 +136,27 @@ SDSC-arthur-project-1/
 - `number_of_iterations` exposé dans `register_all_frames`
 - Testé sur Renku : 300 frames (ED+ES), DICE after 0.723 (mean), 282/300 améliorés
 
-**Étape 6 : PCA temporelle** — `run_pca_temporal.py`
-- Extraction voxels depuis 4D nii par patient
-- Calcul PCA + plots (variance expliquée, eigenbase 2D, eigenvectors, reconstruction)
-- Outputs modèle + métriques dans MLflow
+**Étape 6 : PCA temporelle** ✅ — `run_pca_temporal.py`
+- `configs/pca_temporal.yaml` : patient_id, recalculate_pca, max_pc_calc, pc_max, eigenvectors_to_plot, frames_to_reconstruct
+- `run_pca_temporal.py` réécrit : lit YAML, MLflow via `start_run` / `resume_run`, chargement via `get_patient_acdc_path`
+- Suppression du double centrage (sklearn PCA centre déjà par colonne)
+- `src/models/pca.py` : ajout `eigenvector_to_nii` et `pca1_reconstruct` (retournent des nii, aucun plot)
+- `src/tracking.py` : ajout `log_sklearn_model` (joblib) et `resume_run` (rouvre un run existant pour ajouter des artifacts)
+- Plots via `mrp.plot_oneimg` / `mrp.plot_allepochs` — identiques à `run_visualize`
+- Image moyenne (0 PC) plottée dans la reconstruction
+- Testé sur Renku : patients training et testing, CALC et LOAD, cas limites
 
-**Étape 7 : PCA spatiale** — `run_pca_spatial.py`
-- Utilise `loader.py` unifié
-- Migrer `pca_spatial.py` de `TEMPODATA_FOLDER` vers `PROCESSED_IMAGES_FOLDER` (migration tempodata → processed_images)
-- Calcul PCA + métriques (R², etc.) sur train/val/test
-- Plots (variance expliquée, eigenbase 2D, eigenvectors, reconstruction)
-- Outputs dans MLflow
+**Étape 7 : PCA spatiale** 🔄 en test sur Renku — `run_pca_spatial.py`
+- `run_pca_spatial.py` réécrit : `main()`, YAML, MLflow (`start_run`/`resume_run`), `loader.load_numpy_splits()`
+- `src/models/pca_spatial.py` : `TEMPODATA_FOLDER` → `PROCESSED_IMAGES_FOLDER`, `plot_eigenvectors` prend `nii_ref` en param, `pca_compute_metrics` simplifié
+- `src/models/pca.py` : ajout `pca_spatial_reconstruct` (reconstruction 3D spatiale, partagée)
+- `configs/pca_spatial.yaml` : `cache_folder`, `load_run_id`, `pc_max`, `eigenvectors_to_plot` liste, `n_pc_to_reconstruct`
+- Harmonisation temporel/spatial : flags `plot_*` unifiés dans les deux YAML/scripts
+- Row centering (par patient) explicite avant sklearn, row_means conservés pour reconstruction
+- Métriques R²/MSE/MAE/RMSE par dimension latente logées dans MLflow (`step=latent_dimensions` → courbe R² vs n_PCs dans l'UI) via `tracking.log_metric`
+- **Pending après validation Renku** :
+  - Supprimer `pca_patients()` (dead code dans `pca_spatial.py`) et `archive_scripts/run_pca_spatial_ARCHIVED.py`
+  - `ae_aggregate_metrics` pointe encore vers `TEMPODATA_FOLDER` pour les runs AE (`ae=True`) — à migrer dans Étape 8
 
 **Étape 8 : Autoencoder** — `run_autoencoder.py` + `run_ae_hyperparam.py`
 - Utilise `loader.py` unifié
@@ -167,6 +177,7 @@ SDSC-arthur-project-1/
 - Comparaisons AE-AE (architectures, ED vs ED+ES, baseline vs Optuna)
 - Comparaisons AE vs PCA sur test set
 - Outputs : plots dans `results/`
+- **Note implémentation métriques** : les R²/MSE PCA sont logés avec `step=latent_dimensions` (1 à N) dans MLflow — toutes les valeurs sont stockées dans mlruns/. `search_runs()` ne retourne que la dernière valeur (step max) ; pour récupérer la courbe complète R² vs n_PCs, utiliser `mlflow.MlflowClient().get_metric_history(run_id, metric_name)`. MLflow n'écrase pas les métriques : si on recalcule en mode LOAD, les anciennes et nouvelles valeurs coexistent. Toujours dédupliquer par step en gardant le timestamp le plus récent : `{m.step: m for m in sorted(history, key=lambda m: m.timestamp)}`.
 
 ---
 
