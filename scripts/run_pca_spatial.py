@@ -250,10 +250,6 @@ def main():
                     x_true=x_patient_flat.reshape(original_shape),
                     x_pred=x_recon_flat.reshape(original_shape),
                     patient_number=offset_test + 1 + i,
-                    simulation_name=run_name,
-                    n_epochs=None,
-                    metrics_dataset="test",
-                    savemetrics=False,
                 )
                 all_metrics_plot.append(metrics)
 

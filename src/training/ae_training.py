@@ -1,23 +1,25 @@
 # src/training/ae_training.py
 """
-Training, dataset preparation, and metrics aggregation for the 3D autoencoder.
+Training and evaluation utilities for the 3D autoencoder.
+
+Design principle: these functions contain only training/evaluation logic.
+All file I/O (model saving, metric logging) is handled by run_autoencoder.py via MLflow,
+following the same pattern as run_pca_spatial.py.
 """
 
+import tempfile
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader
 import numpy as np
 from pathlib import Path
 
-from src.config import TEMPODATA_FOLDER, RESULTS_FOLDER
-from src.models import pca_spatial as pcs
+from src.config import RESULTS_FOLDER
 from src.models.ae_models import build_autoencoder
 
 
 def get_device(verbose=False):
-    """
-    Return the best available torch device.
-    """
+    """Return the best available torch device."""
     if torch.cuda.is_available():
         device = torch.device("cuda")
         if verbose:
@@ -29,255 +31,8 @@ def get_device(verbose=False):
     return device
 
 
-def ae_build_basename(model_name, n_patients, splitname, latent_dim, n_epochs=None):
-    """
-    Build a consistent base filename for AE experiments.
-
-    Example without epochs:
-        AE3dFCDeep_96patients_split0_20dims
-
-    Example with epochs:
-        AE3dFCDeep_96patients_split0_20dims_50epochs
-    """
-    parts = [
-        model_name,
-        f"{n_patients}patients",
-        splitname,
-        f"{latent_dim}dims",
-    ]
-
-    if n_epochs is not None:
-        parts.append(f"{n_epochs}epochs")
-
-    return "_".join(parts)
-
-
-def ae_getdataset(
-    n_patients,
-    percentile_max=99.9,
-    imagesource="registered_frames",
-    vectorsource="X_vectors",
-    recalculateXvector=False,
-    image_roi_only=True,
-    n_jobs=1,
-    validation=False,
-    n_validation=24,
-    use_both_frames=False,
-):
-    """
-    Build train / validation / test datasets.
- 
-    If validation=False:
-        train = patients 1..n_patients
-        validation = None
-        test = remaining patients
- 
-    If validation=True:
-        train = first (n_patients - n_validation) patients
-        validation = next n_validation patients
-        test = remaining patients
- 
-    If use_both_frames=True:
-        Loads ED and ES frames separately, splits each by patient index,
-        then concatenates per split — guaranteeing both frames of a patient
-        are always in the same split (no data leakage).
-    """
-    def _load_X(frame_type,):
-        return pcs.get_vectorsarray(
-            source_folder=imagesource,
-            pca_folder=vectorsource,
-            recalculate=recalculateXvector,
-            image_roi_only=image_roi_only,
-            flatten=False,
-            n_jobs=n_jobs,
-            frame_type=frame_type,
-        )
- 
-    X_ED = _load_X(frame_type="ED")
- 
-    if use_both_frames:
-        X_ES = _load_X(frame_type="ES")
-        if X_ED.shape != X_ES.shape:
-            raise ValueError(
-                f"Shape mismatch between ED {X_ED.shape} and ES {X_ES.shape}"
-            )
- 
-    # Normalize on ED development pool only (stable reference)
-    X_maxnorm = np.percentile(X_ED[:n_patients], percentile_max)
- 
-    def _normalize(X):
-        return np.clip(X, 0, X_maxnorm) / X_maxnorm
- 
-    X_ED = _normalize(X_ED)
-    if use_both_frames:
-        X_ES = _normalize(X_ES)
- 
-    def to_tensor_dataset(X_sub):
-        X_sub = np.transpose(X_sub, (0, 3, 1, 2))    # -> (N, 32, 128, 128)
-        X_sub = X_sub[:, np.newaxis, :, :, :]         # -> (N, 1, 32, 128, 128)
-        X_sub = X_sub.astype(np.float32, copy=False)
-        return TensorDataset(torch.from_numpy(X_sub).float())
- 
-    def _split_and_combine(start, end):
-        sub_ED = X_ED[start:end]
-        if not use_both_frames:
-            return sub_ED
-        sub_ES = X_ES[start:end]
-        return np.concatenate([sub_ED, sub_ES], axis=0)
- 
-    if validation:
-        n_train = n_patients - n_validation
-        if n_train <= 0:
-            raise ValueError("n_patients - n_validation must be > 0")
- 
-        train_dataset      = to_tensor_dataset(_split_and_combine(0, n_train))
-        validation_dataset = to_tensor_dataset(_split_and_combine(n_train, n_patients))
-        test_dataset       = to_tensor_dataset(_split_and_combine(n_patients, None))
- 
-    else:
-        train_dataset      = to_tensor_dataset(_split_and_combine(0, n_patients))
-        validation_dataset = None
-        test_dataset       = to_tensor_dataset(_split_and_combine(n_patients, None))
- 
-    return train_dataset, validation_dataset, test_dataset, X_maxnorm
-
-
-def dataset_for_metrics(metrics_dataset, train_dataset, validation_dataset, test_dataset, n_train, n_validation=0):
-    """
-    Return the appropriate dataset and patient offset for metric computation.
-    """
-    if metrics_dataset == "train":
-        dataset = train_dataset
-        patient_offset = 0
-
-    elif metrics_dataset == "validation":
-        if validation_dataset is None:
-            raise ValueError("validation_dataset is None but metrics_dataset='validation'")
-        dataset = validation_dataset
-        patient_offset = n_train
-
-    elif metrics_dataset == "test":
-        dataset = test_dataset
-        patient_offset = n_train + n_validation
-
-    else:
-        raise ValueError("metrics_dataset must be 'train', 'validation', or 'test'")
-
-    return dataset, patient_offset
-
-
-def ae_training_old(
-    dataset,
-    simulation_name,
-    model_name,
-    latent_dimensions,
-    n_epochs=10,
-    recalculateAE=True,
-    batch_size=1,
-    lr=1e-3,
-    dropout_rate=0.0,           
-    checkpoint_epochs=None
-):
-    """
-    Train or load the 3D autoencoder.
-
-    Naming:
-    - final model: {simulation_name}_{n_epochs}epochs.pth
-    - loss file:   {simulation_name}_{n_epochs}epochs_loss.txt
-
-    where simulation_name is now something like:
-    AE3dFCDeep_96patients_split0_20dims
-    """
-    device = get_device()
-
-    final_model_path = (
-        TEMPODATA_FOLDER
-        / "autoencoder/"
-        / simulation_name
-        / f"_{n_epochs}epochs.pth"
-    )
-
-    loss_path = (
-        TEMPODATA_FOLDER
-        / "autoencoder/"
-        / simulation_name
-        / f"_{n_epochs}epochs_loss.txt"
-    )
-
-    if checkpoint_epochs is None:
-        checkpoint_epochs = []
-    checkpoint_epochs = set(checkpoint_epochs)
-
-    if recalculateAE:
-
-        model = build_autoencoder(model_name, latent_dimensions, dropout_rate=dropout_rate).to(device)
-
-        loader = DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            pin_memory=(device.type == "cuda")
-        )
-
-        criterion = nn.MSELoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-
-        epoch_losses = []
-
-        print(f"Training {model_name} on {device} with batch_size={batch_size}")
-
-        for epoch in range(n_epochs):
-            model.train()
-            epoch_loss = 0.0
-
-            for (x_batch,) in loader:
-                x_batch = x_batch.to(device, non_blocking=(device.type == "cuda"))
-
-                optimizer.zero_grad()
-                x_recon, z = model(x_batch)
-                loss = criterion(x_recon, x_batch)
-                loss.backward()
-                optimizer.step()
-
-                epoch_loss += loss.item()
-
-            avg_loss = epoch_loss / len(loader)
-            epoch_losses.append(avg_loss)
-
-            current_epoch = epoch + 1
-            print(f"Epoch {current_epoch}/{n_epochs} - Loss: {avg_loss:.6f}")
-
-            if current_epoch in checkpoint_epochs:
-                checkpoint_path = (
-                    TEMPODATA_FOLDER
-                    / "autoencoder/"
-                    / simulation_name
-                    / f"_{current_epoch}epochs.pth"
-                )
-                torch.save(model.state_dict(), checkpoint_path)
-                print(f"Saved checkpoint: {checkpoint_path}")
-
-        # Save final model
-        torch.save(model.state_dict(), final_model_path)
-
-        # Save loss history
-        with open(loss_path, "w") as f:
-            for i, loss in enumerate(epoch_losses):
-                f.write(f"Epoch {i+1}: {loss}\n")
-
-        model.eval()
-
-    else:
-        model = build_autoencoder(model_name, latent_dimensions).to(device)
-        model.load_state_dict(torch.load(final_model_path, map_location=device))
-        model.eval()
-
-    return model
-
-
 def ae_training(
     train_dataset,
-    simulation_name,
     model_name,
     latent_dimensions,
     n_epochs=75,
@@ -286,78 +41,18 @@ def ae_training(
     weight_decay=0.0,
     dropout_rate=0.0,
     noise_std=0.0,
-    recalculateAE=True,
-    experiment_name="optuna",
 ):
     """
     Train the 3D autoencoder for a fixed number of epochs (no early stopping).
-    Used when training on the full dataset (no validation set available).
-
-    Parameters
-    ----------
-    train_dataset : TensorDataset
-    simulation_name : str
-        e.g. "AE3dFCDeep_240patients_split0_120dims"
-    model_name : str
-    latent_dimensions : int
-    n_epochs : int
-        Fixed number of training epochs. Default 75.
-    batch_size : int
-    lr : float
-    weight_decay : float
-        L2 regularisation coefficient. Default 0.0.
-    dropout_rate : float
-        Dropout probability on FC layers. Default 0.0.
-    noise_std : float
-        Std of Gaussian noise for denoising AE. Default 0.0.
-    recalculateAE : bool
-        If False, load existing model instead of training.
-    experiment_name : str
-        Subfolder name, e.g. "optuna_allpatients".
+    Used when no validation set is available.
 
     Returns
     -------
-    model : nn.Module
-        Trained model in eval mode.
+    model : nn.Module  (eval mode)
     n_epochs : int
-        Number of epochs trained (fixed, returned for consistency with
-        ae_training_early_stopping interface).
-    loss_history : dict
-        {"train": [float, ...]} — one value per epoch.
-
-    Saved files
-    -----------
-    tempodata/autoencoder/{simulation_name}/{experiment_name}/_best_{n_epochs}epochs.pth
-    tempodata/autoencoder/{simulation_name}/{experiment_name}/_best_{n_epochs}epochs_loss.txt
+    loss_history : dict  {"train": [float, ...]}
     """
     device = get_device()
-    output_dir = TEMPODATA_FOLDER / "autoencoder" / simulation_name / experiment_name
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    final_path = output_dir / f"_best_{n_epochs}epochs.pth"
-    loss_path  = output_dir / f"_best_{n_epochs}epochs_loss.txt"
-
-    # ── Load existing model ───────────────────────────────────────────────────
-    if not recalculateAE:
-        if not final_path.exists():
-            raise FileNotFoundError(f"Model file not found: {final_path}")
-
-        print(f"Loading existing model: {final_path}")
-        model = build_autoencoder(model_name, latent_dimensions, dropout_rate=dropout_rate).to(device)
-        model.load_state_dict(torch.load(final_path, map_location=device))
-        model.eval()
-
-        loss_history = {"train": []}
-        if loss_path.exists():
-            with open(loss_path, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("train:"):
-                        loss_history["train"].append(float(line.replace("train:", "").strip()))
-
-        return model, n_epochs, loss_history
-
-    # ── Training ──────────────────────────────────────────────────────────────
     model = build_autoencoder(model_name, latent_dimensions, dropout_rate=dropout_rate).to(device)
 
     train_loader = DataLoader(
@@ -367,9 +62,8 @@ def ae_training(
         pin_memory=(device.type == "cuda"),
     )
 
-    criterion  = nn.MSELoss()
-    optimizer  = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_history = {"train": []}
 
     print(
@@ -381,442 +75,245 @@ def ae_training(
 
     for epoch in range(n_epochs):
         model.train()
-        epoch_train_loss = 0.0
+        epoch_loss = 0.0
 
         for (x_batch,) in train_loader:
             x_batch = x_batch.to(device, non_blocking=(device.type == "cuda"))
 
-            # Denoising AE
             if noise_std > 0.0:
-                x_noisy = x_batch + torch.randn_like(x_batch) * noise_std
-                x_noisy = torch.clamp(x_noisy, 0.0, 1.0)
+                x_noisy = torch.clamp(x_batch + torch.randn_like(x_batch) * noise_std, 0.0, 1.0)
             else:
                 x_noisy = x_batch
 
             optimizer.zero_grad()
-            x_recon, _ = model(x_noisy)
-            loss = criterion(x_recon, x_batch)   # target = clean image
+            output = model(x_noisy)
+            x_recon = output[0]
+            loss = criterion(x_recon, x_batch)
             loss.backward()
             optimizer.step()
-            epoch_train_loss += loss.item()
+            epoch_loss += loss.item()
 
-        avg_train_loss = epoch_train_loss / len(train_loader)
-        loss_history["train"].append(avg_train_loss)
-
-        print(
-            f"Epoch {epoch + 1}/{n_epochs} | train: {avg_train_loss:.6f} | lr: {lr:.2e}"
-        )
-
-    # ── Save model ────────────────────────────────────────────────────────────
-    torch.save(model.state_dict(), final_path)
-    print(f"Model saved: {final_path}")
-
-    # ── Save loss history ─────────────────────────────────────────────────────
-    with open(loss_path, "w") as f:
-        f.write(f"n_epochs: {n_epochs}\n\n")
-        for tl in loss_history["train"]:
-            f.write(f"train: {tl}\n")
+        avg_loss = epoch_loss / len(train_loader)
+        loss_history["train"].append(avg_loss)
+        print(f"Epoch {epoch + 1}/{n_epochs} | train: {avg_loss:.6f}")
 
     model.eval()
     return model, n_epochs, loss_history
 
+
 def ae_reconstructX(patient_tensor, X_maxnorm, model):
     """
     Reconstruct one patient volume with the trained model.
+
+    Returns x_true and x_pred, both denormalized, shape (128, 128, 32).
     """
     device = next(model.parameters()).device
-    x_patient = patient_tensor[0].unsqueeze(0).to(device)
+    x_in = patient_tensor[0].unsqueeze(0).to(device)
     model.eval()
 
     with torch.no_grad():
-        output = model(x_patient)
-        if len(output) == 4:   # VAE
-            x_recon, _, _, _ = output
-        else:                  # AE classique
-            x_recon, _ = output
+        output = model(x_in)
+        x_recon = output[0]
 
-    # move back to CPU for numpy conversion
-    x_patient_3d = x_patient.squeeze(0).squeeze(0).detach().cpu().numpy()   # (32, 128, 128)
-    x_patient_3d = np.transpose(x_patient_3d, (1, 2, 0))                    # (128, 128, 32)
-    x_ini_denorm = x_patient_3d * X_maxnorm
+    x_true_np = x_in.squeeze(0).squeeze(0).detach().cpu().numpy()      # (32, 128, 128)
+    x_true_np = np.transpose(x_true_np, (1, 2, 0)) * X_maxnorm         # (128, 128, 32)
 
-    x_recon_np = x_recon.squeeze(0).squeeze(0).detach().cpu().numpy()       # (32, 128, 128)
-    x_recon_np = np.transpose(x_recon_np, (1, 2, 0))                        # (128, 128, 32)
-    x_recon_denorm = x_recon_np * X_maxnorm
+    x_recon_np = x_recon.squeeze(0).squeeze(0).detach().cpu().numpy()   # (32, 128, 128)
+    x_recon_np = np.transpose(x_recon_np, (1, 2, 0)) * X_maxnorm        # (128, 128, 32)
 
-    return x_ini_denorm, x_recon_denorm
+    return x_true_np, x_recon_np
 
 
-def reconstruction_metrics(x_true, x_pred, patient_number, simulation_name, n_epochs, metrics_dataset, savemetrics=True):
+def reconstruction_metrics(x_true, x_pred, patient_number):
     """
-    Compute reconstruction metrics between two 3D images of identical shape.
-    """
-    if metrics_dataset not in {"train", "validation", "test"}:
-        raise ValueError("metrics_dataset must be 'train' or 'test'")
+    Compute reconstruction metrics between two 3D arrays of identical shape.
 
+    Returns
+    -------
+    dict : {"MSE", "RMSE", "MAE", "R2", "patient_number"}
+    """
     if x_true.shape != x_pred.shape:
         raise ValueError(f"Shape mismatch: {x_true.shape} vs {x_pred.shape}")
 
-    diff = x_true - x_pred
-
-    mse = np.mean(diff ** 2)
-    rmse = np.sqrt(mse)
-    mae = np.mean(np.abs(diff))
-
+    diff   = x_true - x_pred
+    mse    = float(np.mean(diff ** 2))
+    rmse   = float(np.sqrt(mse))
+    mae    = float(np.mean(np.abs(diff)))
     ss_res = np.sum(diff ** 2)
     ss_tot = np.sum((x_true - np.mean(x_true)) ** 2)
+    r2     = float(1 - ss_res / ss_tot) if ss_tot > 0 else float("nan")
 
-    if ss_tot == 0:
-        r2 = np.nan
-    else:
-        r2 = 1 - ss_res / ss_tot
+    return {"MSE": mse, "RMSE": rmse, "MAE": mae, "R2": r2, "patient_number": int(patient_number)}
 
-    metrics = {
-        "MSE": float(mse),
-        "RMSE": float(rmse),
-        "MAE": float(mae),
-        "R2": float(r2),
-        "patient_number": int(patient_number)
-    }
 
-    if savemetrics:
-        if n_epochs is None:
-            save_path = (
-                TEMPODATA_FOLDER
-                / "autoencoder/"
-                / simulation_name
-                / f"_resultspatient{patient_number}_{metrics_dataset}.txt"
-            )
-        else:
-            save_path = (
-                TEMPODATA_FOLDER
-                / "autoencoder/"
-                / simulation_name
-                / f"_{n_epochs}epochs_resultspatient{patient_number}_{metrics_dataset}.txt"
-            )
-
-        with open(save_path, "w") as f:
-            for key, value in metrics.items():
-                f.write(f"{key}: {value}\n")
-
-    return metrics
-
-def ae_aggregate_metrics(all_metrics, simulation_name, n_epochs, metrics_dataset, experiment_name="baseline", ae = True, save_summary=True):
+def ae_aggregate_metrics(all_metrics):
     """
-    Aggregate reconstruction metrics over all patients.
-    Saves in TEMPODATA_FOLDER/autoencoder/{simulation_name}/{experiment_name}/_{n_epochs}epochs_summarymetrics_{metrics_dataset}.txt
+    Aggregate per-patient reconstruction metrics.
+
+    Returns
+    -------
+    dict : {metric_name: {"mean", "std", "min", "max", "median"}}
     """
-    if metrics_dataset not in {"train", "validation", "test"}:
-        raise ValueError("metrics_dataset must be 'train', 'validation', or 'test'")
-
-    metric_names = ["MSE", "RMSE", "MAE", "R2"]
-
     summary = {}
-    for metric_name in metric_names:
+    for metric_name in ("MSE", "RMSE", "MAE", "R2"):
         values = np.array([m[metric_name] for m in all_metrics], dtype=np.float32)
         summary[metric_name] = {
-            "mean": float(np.mean(values)),
-            "std": float(np.std(values)),
-            "min": float(np.min(values)),
-            "max": float(np.max(values)),
+            "mean":   float(np.mean(values)),
+            "std":    float(np.std(values)),
+            "min":    float(np.min(values)),
+            "max":    float(np.max(values)),
             "median": float(np.median(values)),
         }
-
-    if save_summary:
-        # Build filenames
-        if n_epochs is None:
-            local_filename = f"_summarymetrics_{metrics_dataset}.txt"
-            results_filename = f"{simulation_name}_{experiment_name}_summarymetrics_{metrics_dataset}.txt"
-        else:
-            local_filename = f"_{n_epochs}epochs_summarymetrics_{metrics_dataset}.txt"
-            results_filename = f"{simulation_name}_{experiment_name}_{n_epochs}epochs_summarymetrics_{metrics_dataset}.txt"
-
-        def _write_summary(path):
-            with open(path, "w") as f:
-                for metric_name, stats in summary.items():
-                    f.write(f"{metric_name}\n")
-                    for stat_name, value in stats.items():
-                        f.write(f"  {stat_name}: {value}\n")
-                    f.write("\n")
-
-        # Save alongside model files
-        if ae:
-            local_path = TEMPODATA_FOLDER / "autoencoder" / simulation_name / experiment_name / local_filename
-        else :
-            local_path = TEMPODATA_FOLDER / "pca_allpatients_res" / simulation_name  / f"{experiment_name}{local_filename}"
-        _write_summary(local_path)
-
     return summary
 
 
 def _compute_validation_loss(model, validation_dataset, batch_size, device, criterion, beta=1.0):
-    """
-    Compute mean reconstruction loss on the validation set.
-    No gradient computation — fast forward pass only.
-    """
+    """Compute mean reconstruction loss on the validation set (no gradients)."""
     val_loader = DataLoader(
         validation_dataset,
         batch_size=batch_size,
         shuffle=False,
-        pin_memory=(device.type == "cuda")
+        pin_memory=(device.type == "cuda"),
     )
- 
+
     model.eval()
     total_loss = 0.0
- 
+
     with torch.no_grad():
         for (x_batch,) in val_loader:
             x_batch = x_batch.to(device, non_blocking=(device.type == "cuda"))
             output = model(x_batch)
-            if len(output) == 4:   # VAE
+            if len(output) == 4:
                 x_recon, _, mu, logvar = output
                 loss, _, _ = _vae_loss(x_recon, x_batch, mu, logvar, beta)
-            else:                  # AE classique
+            else:
                 x_recon, _ = output
                 loss = criterion(x_recon, x_batch)
             total_loss += loss.item()
- 
+
     return total_loss / len(val_loader)
- 
- 
+
+
 def _vae_loss(x_recon, x_target, mu, logvar, beta):
-    """
-    VAE loss = MSE reconstruction + beta * KL divergence.
-    KL(N(mu, sigma²) || N(0,1)) = -0.5 * mean(1 + logvar - mu² - exp(logvar))
-    """
+    """VAE loss = MSE reconstruction + beta * KL divergence."""
     mse = nn.functional.mse_loss(x_recon, x_target)
     kl  = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
     return mse + beta * kl, mse, kl
 
+
 def ae_training_early_stopping(
     train_dataset,
     validation_dataset,
-    simulation_name,
     model_name,
     latent_dimensions,
-    # Training parameters
     n_epochs=300,
     batch_size=1,
     lr=1e-3,
     patience=40,
-    patience_scheduler=None,  
-    # Regularization parameters
-    weight_decay=0.0,           # L2 regularisation
-    dropout_rate=0.0,           
-    noise_std=0.0,              # denoising AE    
-    # Variational parameters 
-    beta=1.0,                  
-    beta_warmup_epochs=20,     
-    # Loading parameters
-    recalculateAE=True,
-    load_epoch=None,
-    experiment_name="baseline",  
+    patience_scheduler=None,
+    weight_decay=0.0,
+    dropout_rate=0.0,
+    noise_std=0.0,
+    beta=1.0,
+    beta_warmup_epochs=20,
 ):
     """
     Train the 3D autoencoder with early stopping based on validation loss.
- 
-    At every epoch:
-      - training loss is computed (free, already done during training)
-      - validation loss is computed (cheap forward pass, no gradients)
- 
-    The best model (lowest validation loss) is saved during training.
-    Training stops early if validation loss does not improve for `patience` epochs.
- 
-    Parameters
-    ----------
-    train_dataset : TensorDataset
-    validation_dataset : TensorDataset
-    simulation_name : str
-        Base name, e.g. "AE3dConv_96patients_split0_4dims"
-    model_name : str
-    latent_dimensions : int
-    n_epochs : int
-        Maximum number of training epochs.
-    batch_size : int
-    lr : float
-    weight_decay : float
-        L2 regularisation coefficient passed to Adam optimizer.
-        0.0 = no regularisation (baseline). Try 1e-5, 1e-4.
-    dropout_rate : float
-        Dropout probability applied on FC layers of AE3dFCDeep (and others ????)
-        0.0 = no dropout (baseline). Try 0.1, 0.2.
-        Automatically disabled during validation (model.eval()).
-    noise_std : float
-        Std of Gaussian noise added to input during training only (denoising AE).
-        0.0 = no noise (baseline). Try 0.05, 0.1.
-        Loss is always computed against the clean input x, not the noisy x̃.
-    patience : int
-        Epochs without val improvement before early stopping. Default 40.
-    patience_scheduler : int or None
-        Patience for ReduceLROnPlateau. If None, set to patience // 5.
-    recalculateAE : bool
-        If False, load an existing best model instead of training.
-    load_epoch : int or None
-        Required when recalculateAE=False. Specifies which saved model to load,
-        e.g. load_epoch=42 loads "_best_42epochs.pth".
- 
+
+    The best model is saved to a temporary file during training and loaded
+    at the end. Permanent storage (MLflow artifact) is the caller's responsibility.
+
     Returns
     -------
-    model : nn.Module
-        Best model, loaded and set to eval mode.
+    model : nn.Module  (best model, eval mode)
     best_epoch : int
-        Epoch at which the best validation loss was reached.
-    loss_history : dict
-        {"train": [float, ...], "validation": [float, ...]}
-        One value per epoch (up to early stopping or n_epochs).
- 
-    Saved files
-    -----------
-    {simulation_name}/_best_{best_epoch}epochs.pth
-    {simulation_name}/_best_{best_epoch}epochs_loss.txt
+    loss_history : dict  {"train": [...], "validation": [...]}
     """
-
     if patience_scheduler is None:
         patience_scheduler = patience // 5
 
     device = get_device()
-    output_dir = TEMPODATA_FOLDER / "autoencoder" / simulation_name / experiment_name
-    output_dir.mkdir(parents=True, exist_ok=True)
- 
-    # ── Load existing model ───────────────────────────────────────────────────
-    if not recalculateAE:
-        # Auto-detect .pth if load_epoch not specified
-        if load_epoch is None:
-            pth_files = sorted(output_dir.glob("_best_*epochs.pth"))
-            if len(pth_files) == 0:
-                raise FileNotFoundError(
-                    f"No '_best_*epochs.pth' file found in: {output_dir}\n"
-                    f"Train the model first (recalculateAE=True) or specify load_epoch."
-                )
-            if len(pth_files) > 1:
-                import warnings
-                warnings.warn(
-                    f"Multiple .pth files found in {output_dir}, loading the most recent: "
-                    f"{pth_files[-1].name}. Set load_epoch explicitly to suppress this warning.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-            best_path = pth_files[-1]  # le plus récent (tri alphabétique = tri numérique ici)
-            # Extraire l'epoch depuis le nom de fichier
-            load_epoch = int(best_path.stem.replace("_best_", "").replace("epochs", ""))
-        else:
-            best_path = output_dir / f"_best_{load_epoch}epochs.pth"
-            if not best_path.exists():
-                raise FileNotFoundError(f"Model file not found: {best_path}")
-
-        print(f"Loading existing best model: {best_path}")
-        model = build_autoencoder(model_name, latent_dimensions).to(device)
-        model.load_state_dict(torch.load(best_path, map_location=device))
-        model.eval()
-
-        loss_history = {"train": [], "validation": []}
-        loss_path = output_dir / f"_best_{load_epoch}epochs_loss.txt"
-        if loss_path.exists():
-            with open(loss_path, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("train:"):
-                        parts = line.split("validation:")
-                        train_val = float(parts[0].replace("train:", "").strip())
-                        val_val = float(parts[1].strip())
-                        loss_history["train"].append(train_val)
-                        loss_history["validation"].append(val_val)
-
-        return model, load_epoch, loss_history
- 
-    # ── Training ─────────────────────────────────────────────────────────────
     model = build_autoencoder(model_name, latent_dimensions, dropout_rate=dropout_rate).to(device)
- 
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        pin_memory=(device.type == "cuda")
+        pin_memory=(device.type == "cuda"),
     )
 
     criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(
-        model.parameters(), 
-        lr=lr, 
-        weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode="min",
-        factor=0.5,
-        patience=patience_scheduler,
-        )
+        optimizer, mode="min", factor=0.5, patience=patience_scheduler,
+    )
 
     loss_history = {"train": [], "validation": []}
- 
     best_val_loss = float("inf")
     best_epoch = -1
     epochs_without_improvement = 0
-    temp_best_path = output_dir / "_best_model_temp.pth"
- 
+
+    # Temporary file to store the best model state during training
+    tmp = tempfile.NamedTemporaryFile(suffix=".pth", delete=False)
+    temp_best_path = Path(tmp.name)
+    tmp.close()
+
     print(
         f"Training {model_name} | device={device} | "
         f"batch_size={batch_size} | patience={patience} | max_epochs={n_epochs}"
     )
- 
-    for epoch in range(n_epochs):
- 
-        # ── Beta warmup ───────────────────────────────────────────────
-        if beta_warmup_epochs > 0:
-            beta_current = min(beta, beta * (epoch + 1) / beta_warmup_epochs)
-        else:
-            beta_current = beta
 
-        # Training pass
+    for epoch in range(n_epochs):
+
+        beta_current = (
+            min(beta, beta * (epoch + 1) / beta_warmup_epochs)
+            if beta_warmup_epochs > 0 else beta
+        )
+
+        # ── Training pass ─────────────────────────────────────────────────────
         model.train()
         epoch_train_loss = 0.0
- 
+
         for (x_batch,) in train_loader:
             x_batch = x_batch.to(device, non_blocking=(device.type == "cuda"))
 
-            # Add noise if asked 
             if noise_std > 0.0:
-                x_noisy = x_batch + torch.randn_like(x_batch) * noise_std
-                x_noisy = torch.clamp(x_noisy, 0.0, 1.0)  # keep in [0,1]
+                x_noisy = torch.clamp(x_batch + torch.randn_like(x_batch) * noise_std, 0.0, 1.0)
             else:
                 x_noisy = x_batch
 
             optimizer.zero_grad()
-
-             # ── Forward pass : VAE or AE classic ───────────────────
             output = model(x_noisy)
-            if len(output) == 4:   # VAE : (x_recon, z, mu, logvar)
+            if len(output) == 4:
                 x_recon, _, mu, logvar = output
-                loss, mse, kl = _vae_loss(x_recon, x_batch, mu, logvar, beta_current)
-            else:                  # AE classic : (x_recon, z)
+                loss, _, _ = _vae_loss(x_recon, x_batch, mu, logvar, beta_current)
+            else:
                 x_recon, _ = output
                 loss = criterion(x_recon, x_batch)
 
             loss.backward()
             optimizer.step()
             epoch_train_loss += loss.item()
- 
+
         avg_train_loss = epoch_train_loss / len(train_loader)
         loss_history["train"].append(avg_train_loss)
- 
-        # Validation pass
+
+        # ── Validation pass ───────────────────────────────────────────────────
         avg_val_loss = _compute_validation_loss(
-            model, validation_dataset, batch_size, device, criterion, beta=beta_current
+            model, validation_dataset, batch_size, device, criterion, beta=beta_current,
         )
         scheduler.step(avg_val_loss)
         current_lr = optimizer.param_groups[0]["lr"]
         loss_history["validation"].append(avg_val_loss)
- 
+
         current_epoch = epoch + 1
         is_best = avg_val_loss < best_val_loss
         print(
             f"Epoch {current_epoch}/{n_epochs} "
-            f"| train: {avg_train_loss:.6f} "
-            f"| val: {avg_val_loss:.6f}"
-            f"| lr: {current_lr:.2e}"
+            f"| train: {avg_train_loss:.6f} | val: {avg_val_loss:.6f} | lr: {current_lr:.2e}"
             + (" ✓ best" if is_best else f" (no improvement for {epochs_without_improvement + 1} epochs)")
         )
- 
-        # Save best model
+
         if is_best:
             best_val_loss = avg_val_loss
             best_epoch = current_epoch
@@ -824,182 +321,104 @@ def ae_training_early_stopping(
             torch.save(model.state_dict(), temp_best_path)
         else:
             epochs_without_improvement += 1
- 
-        # Early stopping
+
         if epochs_without_improvement >= patience:
             print(
-                f"\nEarly stopping triggered at epoch {current_epoch}. "
+                f"\nEarly stopping at epoch {current_epoch}. "
                 f"Best epoch: {best_epoch} (val loss: {best_val_loss:.6f})."
             )
             break
- 
-    # Rename temp file to permanent name
-    final_best_path = output_dir / f"_best_{best_epoch}epochs.pth"
-    temp_best_path.rename(final_best_path)
-    print(f"Best model saved: {final_best_path}")
- 
-    # Save loss history
-    loss_path = output_dir / f"_best_{best_epoch}epochs_loss.txt"
-    with open(loss_path, "w") as f:
-        f.write(f"best_epoch: {best_epoch}\n")
-        f.write(f"best_val_loss: {best_val_loss:.6f}\n")
-        f.write("\n")
-        for tl, vl in zip(loss_history["train"], loss_history["validation"]):
-            f.write(f"train: {tl}  validation: {vl}\n")
- 
-    # Load and return best model
-    model.load_state_dict(torch.load(final_best_path, map_location=device))
+
+    # Load best weights, clean up temp file
+    model.load_state_dict(torch.load(temp_best_path, map_location=device))
+    temp_best_path.unlink(missing_ok=True)
     model.eval()
- 
+
     return model, best_epoch, loss_history
 
 
-def get_best_epochs_stats(
-    results_folder,
-    model_name,
-    n_patients_list,
-    splitname,
-    latdim_list,
-    experiment_name,
-):
+def get_best_epochs_stats_from_mlflow(model_name, split_name, experiment_tag, latdim_list):
     """
-    Retrieve best_epoch stats across n_patients / latent_dims combinations
-    for a given model and experiment.
+    Retrieve best_epoch values from MLflow across latent dims for a given
+    model / split / experiment combination.
 
-    Returns a dict with keys (n_patients, latent_dim) → stats dict.
-    Stats: epochs list, mean, median, std, min, max.
-
-    Parameters
-    ----------
-    results_folder : Path
-        Path to TEMPODATA_FOLDER / "autoencoder".
-    model_name : str
-        e.g. "AE3dFCDeep"
-    n_patients_list : list of int
-        e.g. [200] or [100, 200]
-    splitname : str
-        e.g. "split0"
-    latdim_list : list of int
-        e.g. [4, 8, 12, 20, 28, 40, 60, 88, 120, 160, 200]
-    experiment_name : str
-        e.g. "optuna"
+    Requires that each run logged `best_epoch` as an MLflow param
+    (done by run_autoencoder.py after training with early stopping).
 
     Returns
     -------
-    dict : {(n_patients, latent_dim): {
-                "epochs": list,
-                "mean": float,
-                "median": float,
-                "std": float,
-                "min": int,
-                "max": int,
-            }}
+    dict : {latent_dim: {"epochs": [...], "mean", "median", "std", "min", "max"}}
     """
-    import numpy as np
-    results_folder = Path(results_folder)
+    from src import tracking
+
+    df = tracking.search_runs(
+        experiment_name="autoencoder",
+        filter_string=(
+            f"params.model_name = '{model_name}' and "
+            f"params.split_name = '{split_name}' and "
+            f"params.experiment_tag = '{experiment_tag}'"
+        ),
+    )
+
+    if df.empty:
+        return {}
+
     stats = {}
-
-    for n_patients in n_patients_list:
-        for latent_dim in latdim_list:
-            simulation_name = (
-                f"{model_name}_{n_patients}patients_{splitname}_{latent_dim}dims"
-            )
-            model_dir = results_folder / simulation_name / experiment_name
-
-            if not model_dir.exists():
-                continue
-
-            pth_files = sorted(
-                model_dir.glob("_best_*epochs.pth"),
-                key=lambda p: int(p.stem.replace("_best_", "").replace("epochs", ""))
-            )
-
-            if not pth_files:
-                continue
-
-            epochs = [
-                int(p.stem.replace("_best_", "").replace("epochs", ""))
-                for p in pth_files
-            ]
-
-            stats[(n_patients, latent_dim)] = {
-                "epochs": epochs,
-                "mean":   float(np.mean(epochs)),
-                "median": float(np.median(epochs)),
-                "std":    float(np.std(epochs)),
-                "min":    int(np.min(epochs)),
-                "max":    int(np.max(epochs)),
-            }
-
+    for latent_dim in latdim_list:
+        subset = df[df["params.latent_dimensions"] == str(latent_dim)]
+        if subset.empty:
+            continue
+        epochs = [int(e) for e in subset["params.best_epoch"].dropna()]
+        if not epochs:
+            continue
+        stats[latent_dim] = {
+            "epochs": epochs,
+            "mean":   float(np.mean(epochs)),
+            "median": float(np.median(epochs)),
+            "std":    float(np.std(epochs)),
+            "min":    int(np.min(epochs)),
+            "max":    int(np.max(epochs)),
+        }
     return stats
 
-def print_and_save_best_epochs_stats(
-    stats,
-    model_name,
-    experiment_name,
-    results_folder_save=None,
-):
+
+def print_and_save_best_epochs_stats(stats, model_name, experiment_tag, results_folder_save=None):
     """
-    Print and save best_epoch stats.
-    - Per row: one (n_patients, latent_dim) combination with its epoch(s)
-    - Aggregated stats at the bottom across all dims for each n_patients group.
+    Print and save best_epoch stats from get_best_epochs_stats_from_mlflow.
+    One row per latent_dim, aggregated stats at the bottom.
 
     Parameters
     ----------
     stats : dict
-        Output of get_best_epochs_stats.
-    model_name : str
-    experiment_name : str
-    results_folder_save : Path or None
-        If None, uses RESULTS_FOLDER.
+        Output of get_best_epochs_stats_from_mlflow.
+        Keys are latent_dim (int).
     """
-    import numpy as np
-    from src.config import RESULTS_FOLDER
-
     results_folder_save = Path(results_folder_save) if results_folder_save else RESULTS_FOLDER
+    all_epochs = [e for s in stats.values() for e in s["epochs"]]
 
     lines = []
-    lines.append(f"Best epoch stats — {model_name} | {experiment_name}")
+    lines.append(f"Best epoch stats — {model_name} | {experiment_tag}")
     lines.append("=" * 60)
-    lines.append(f"{'n_patients':>12} {'latent_dim':>12} {'epochs':>20}")
-    lines.append("-" * 46)
+    lines.append(f"{'latent_dim':>12} {'epochs':>30}")
+    lines.append("-" * 44)
 
-    # Group by n_patients for aggregated stats
-    from collections import defaultdict
-    epochs_by_npatients = defaultdict(list)
+    for latent_dim, s in sorted(stats.items()):
+        lines.append(f"{latent_dim:>12} {str(s['epochs']):>30}")
 
-    for (n_patients, latent_dim), s in sorted(stats.items()):
-        lines.append(
-            f"{n_patients:>12} {latent_dim:>12} {str(s['epochs']):>20}"
-        )
-        epochs_by_npatients[n_patients].extend(s["epochs"])
-
-    # Aggregated stats per n_patients group
     lines.append("")
     lines.append("Aggregated stats across all latent dims")
     lines.append("-" * 60)
-    lines.append(
-        f"{'n_patients':>12} {'mean':>8} {'median':>8} "
-        f"{'std':>8} {'min':>6} {'max':>6}"
-    )
-    lines.append("-" * 52)
-
-    for n_patients, all_epochs in sorted(epochs_by_npatients.items()):
+    if all_epochs:
         lines.append(
-            f"{n_patients:>12} "
-            f"{np.mean(all_epochs):>8.1f} {np.median(all_epochs):>8.1f} "
-            f"{np.std(all_epochs):>8.1f} {int(np.min(all_epochs)):>6} "
-            f"{int(np.max(all_epochs)):>6}"
+            f"mean={np.mean(all_epochs):.1f}  median={np.median(all_epochs):.1f}  "
+            f"std={np.std(all_epochs):.1f}  min={min(all_epochs)}  max={max(all_epochs)}"
         )
-
     lines.append("=" * 60)
 
-    # Print
     for line in lines:
         print(line)
 
-    # Save
-    save_path = results_folder_save / f"best_epochs_stats_{model_name}_{experiment_name}.txt"
+    save_path = results_folder_save / f"best_epochs_stats_{model_name}_{experiment_tag}.txt"
     with open(save_path, "w") as f:
         f.write("\n".join(lines))
     print(f"\nSaved: {save_path}")

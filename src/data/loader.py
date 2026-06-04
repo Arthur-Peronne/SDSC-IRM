@@ -165,6 +165,7 @@ def load_tensor_datasets(
     n_test: int,
     special_split: str | None = None,
     use_both_frames: bool = True,
+    frame_type: str = "ED",
     image_roi_only: bool = True,
     percentile_max: float = 99.9,
     recalculate: bool = False,
@@ -191,6 +192,8 @@ def load_tensor_datasets(
         None       → sequential split, logged as "splitdefault".
         "split42"  → seeded random split, logged under that name.
     use_both_frames : bool
+    frame_type : str
+        "ED" or "ES" — used only if use_both_frames=False.
     image_roi_only : bool
     percentile_max : float
         Percentile used for max-normalization (default 99.9).
@@ -221,6 +224,8 @@ def load_tensor_datasets(
         X_ES = _load_frame(frame_type="ES", **kwargs)
         if X_ED.shape != X_ES.shape:
             raise ValueError(f"Shape mismatch: X_ED={X_ED.shape} vs X_ES={X_ES.shape}")
+    elif frame_type != "ED":
+        X_ED = _load_frame(frame_type=frame_type, **kwargs)
 
     train_idx, val_idx, test_idx, split_name = splt.get_split_indices(
         n_train=n_train, n_val=n_val, n_test=n_test,
@@ -228,6 +233,8 @@ def load_tensor_datasets(
         n_patients=len(X_ED),
     )
 
+    # Normalisation reference: always computed on the training pool
+    # (for ES-only mode, X_ED actually contains ES frames at this point)
     X_maxnorm = float(np.percentile(X_ED[train_idx], percentile_max))
 
     def _normalize(X):

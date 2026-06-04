@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from pathlib import Path
 
-from src.config import RESULTS_FOLDER, TEMPODATA_FOLDER
+from src.config import RESULTS_FOLDER
 from src.data import importdata as ipd
 from src.visualization import mri_plots as mrp
 from src.training.ae_training import ae_reconstructX
@@ -1073,35 +1073,36 @@ def plot_train_val_loss(
     best_epoch,
     simulation_name,
     save_path=None,
-    experiment_name="baseline",  
 ):
     """
     Plot training and validation loss curves from ae_training_early_stopping.
- 
+
     Parameters
     ----------
     loss_history : dict
         {"train": [float, ...], "validation": [float, ...]}
-        As returned by ae_training_early_stopping.
     best_epoch : int
-        Epoch at which the best validation loss was reached. A vertical line
-        is drawn at this epoch.
+        Epoch at which the best validation loss was reached.
     simulation_name : str
         Used for the plot title and default save filename.
     save_path : Path or str or None
         If None, saves as {RESULTS_FOLDER}/{simulation_name}_train_val_loss.png
+
+    Returns
+    -------
+    save_path : Path
     """
     train_losses = np.array(loss_history["train"], dtype=float)
     epochs = np.arange(1, len(train_losses) + 1)
- 
+
     if save_path is None:
         save_path = RESULTS_FOLDER / f"{simulation_name}_train_val_loss.png"
- 
+    save_path = Path(save_path)
+
     fig, ax = plt.subplots(figsize=(9, 5))
- 
+
     ax.plot(epochs, train_losses, linewidth=1.5, label="Train loss")
 
-    # Validation loss — optionnel
     if "validation" in loss_history and len(loss_history["validation"]) > 0:
         val_losses = np.array(loss_history["validation"], dtype=float)
         ax.plot(epochs, val_losses, linewidth=1.5, label="Validation loss")
@@ -1112,31 +1113,20 @@ def plot_train_val_loss(
             linewidth=1.2,
             label=f"Best epoch ({best_epoch})",
         )
- 
+
     ax.set_yscale("log")
     ax.set_xlabel("Epoch")
     ax.set_ylabel("MSE loss (log scale)")
     ax.set_title(f"Train / validation loss — {simulation_name}")
     ax.legend()
     ax.grid(True, which="both", alpha=0.3)
- 
     fig.tight_layout()
 
-    # Save alongside model files
-    model_save_path = (
-        TEMPODATA_FOLDER / "autoencoder" / simulation_name / experiment_name / "train_val_loss.png"
-    )
-    fig.savefig(model_save_path, dpi=200, bbox_inches="tight")
-    print(f"Loss plot saved: {model_save_path}")
-
-    # # Save in results folder with full name
-    # results_save_path = RESULTS_FOLDER / f"{simulation_name}_{experiment_name}_train_val_loss.png"
-    # fig.savefig(results_save_path, dpi=200, bbox_inches="tight")
-    # print(f"Loss plot saved: {results_save_path}")
-
+    fig.savefig(save_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
- 
-    # print(f"Loss plot saved: {save_path}")
+    print(f"Loss plot saved: {save_path}")
+
+    return save_path
 
 # New AE VS PCA plots for comparison
 

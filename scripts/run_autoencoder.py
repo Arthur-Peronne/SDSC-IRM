@@ -1,328 +1,283 @@
 # scripts/run_autoencoder.py
 """
-Script for training and evaluating the 3D autoencoder on cardiac MRI data.
-Uses early stopping based on validation loss.
+3D autoencoder training and evaluation on cardiac MRI data.
+
+Reads configuration from configs/autoencoder.yaml.
+Results (model + metrics + plots) are tracked in MLflow under experiment "autoencoder".
+
+Usage:
+    python scripts/run_autoencoder.py
+
+LOAD mode: set recalculate_ae: false and load_run_id: <mlflow_run_id> in the YAML.
+CALC mode: set recalculate_ae: true.
 """
 
-from src.config import TEMPODATA_FOLDER, RESULTS_FOLDER
+import yaml
+import mlflow
+import torch
+from pathlib import Path
+
+from src.config import RESULTS_FOLDER
+from src.data import loader
+from src.models.ae_models import build_autoencoder
 from src.training import ae_training as aet
 from src.visualization import ae_plots as aep
+from src import tracking
 
-# ── User choices : DATA ───────────────────────────────────────────────────────
-use_both_frames = True
-n_development = 120
-n_validation = 20
-splitname = "split0"
-recalculateX = False
+CONFIG_PATH = Path(__file__).parent.parent / "configs" / "autoencoder.yaml"
 
-# ── User choices : MODEL ──────────────────────────────────────────────────────
-model_name = "AE3dFCDeep_VAE"         # "AE3dCurrent", "AE3dFCDeep", "AE3dConv", "AE3dLinear", "AE3dFCDeep_VAE"
-latent_dimensions = 200
-multiple_modelsanddims = False 
-# models_list = ["AE3dCurrent", "AE3dFCDeep", "AE3dConv"]
-# latdim_list = [4, 8, 12, 20, 28, 40, 60, 88, 120, 160, 200] if use_both_frames else [4, 8, 12, 20, 28, 40, 60, 80, 100]
-models_list = ["AE3dFCDeep"]
-latdim_list = [1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 40, 60, 80, 100, 130, 160, 200, 240] if use_both_frames else [4, 8, 12, 20, 28, 40, 60, 80, 100]
 
-# ── User choices : TRAINING ───────────────────────────────────────────────────
-recalculateAE = True
-load_epoch = None                       # required if a specific model result among the model/experiment_name has to be loaded
-experiment_name = "optuna_beta01warm10"  # "baseline" or other
-n_epochs = 300                               # maximum epochs (early stopping will likely trigger before), baseline 300
-batch_size = 1                              # baseline: 1
-patience = 45                                # baseline: 40, optuna: 45
-patience_scheduler = None    # baseline : None (before 8, by default patience//5)
-lr = 4.24e-5                                     # baseline: 1e-5 (1e-6 for Linear), optuna: 4.24e-5
-# Regularization
-weight_decay = 6.47e-6              # baseline: 0.0, optuna: 6.47e-6
-dropout_rate = 0.221                # baseline: 0.0, optuna: 0.221 (NB: NO DROPOUT for AE3dConv nor AE3dLinear)
-noise_std = 0.002                        # baseline: 0.0, optuna 0.002
-# VAE
-beta               = 0.1    # target value
-beta_warmup_epochs = 20     # epochs to reach target beta
+def _run_one(cfg, model_name, latent_dimensions, split_name,
+             n_train_images, n_val_images,
+             train_dataset, val_dataset, test_dataset, X_maxnorm):
+    """Train (or load) one AE model and log everything to a single MLflow run."""
 
-# ── User choices : RECONSTRUCTION ───────────────────────────────────────────────────
-plot_reconstruction = False 
-recons_auto = False            # Automatically choose 3 patients good/medium/bad reconstruct
-patients_torecons_manual = [(1, "ED"), (30,"ES"), (110, "ED"),(130, "ES"), (145, "ED")] # else manual choice
+    recalculate  = cfg["recalculate_ae"]
+    load_run_id  = cfg.get("load_run_id") if not recalculate else None
+    frame_tag    = "ED+ES" if cfg["use_both_frames"] else cfg["frame_type"]
+    n_train      = cfg["n_train"]
+    n_val        = cfg["n_val"]
+    experiment_tag = cfg["experiment_tag"]
 
-# ── Load data ─────────────────────────────────────────────────────────────────
-n_train_effective = n_development - n_validation
-n_train_images = n_train_effective * 2 if use_both_frames else n_train_effective
-n_val_images = n_validation * 2 if use_both_frames else n_validation
+    if not recalculate and not load_run_id:
+        raise ValueError("recalculate_ae: false requires load_run_id in YAML")
 
-train_dataset, validation_dataset, test_dataset, X_maxnorm = aet.ae_getdataset(
-    n_patients=n_development,
-    validation=(n_validation > 0),
-    n_validation=n_validation,
-    imagesource="registered_frames", 
-    use_both_frames=use_both_frames,
-    recalculateXvector=recalculateX,
-)
+    run_name = (
+        f"AE_{model_name}_{n_train_images}patients_{split_name}"
+        f"_{latent_dimensions}dims_{experiment_tag}"
+    )
 
-# ── Train (or reload) ─────────────────────────────────────────────────────────
-if not multiple_modelsanddims:
-    simulation_name = f"{model_name}_{n_train_images}patients_{splitname}_{latent_dimensions}dims"
-    
-    if n_validation == 0:
-        model, best_epoch, loss_history = aet.ae_training(
-            train_dataset=train_dataset,
-            simulation_name=simulation_name,
-            model_name=model_name,
-            latent_dimensions=latent_dimensions,
-            n_epochs=n_epochs,
-            batch_size=batch_size,
-            lr=lr,
-            weight_decay=weight_decay,
-            dropout_rate=dropout_rate,
-            noise_std=noise_std,
-            recalculateAE=recalculateAE,
-            experiment_name=experiment_name,
-        )
-    else:
-        model, best_epoch, loss_history = aet.ae_training_early_stopping(
-            train_dataset=train_dataset,
-            validation_dataset=validation_dataset,
-            simulation_name=simulation_name,
-            model_name=model_name,
-            latent_dimensions=latent_dimensions,
-            n_epochs=n_epochs,
-            batch_size=batch_size,
-            lr=lr,
-            patience=patience,
-            patience_scheduler=patience_scheduler,
-            weight_decay=weight_decay,
-            dropout_rate=dropout_rate,
-            noise_std=noise_std,
-            beta=beta,
-            beta_warmup_epochs=beta_warmup_epochs,
-            recalculateAE=recalculateAE,
-            load_epoch=load_epoch,
-            experiment_name=experiment_name,
-        )
-        # ── Plot train / validation loss curves ───────────────────────────────────────
-    if recalculateAE:
-        aep.plot_train_val_loss(
-            loss_history=loss_history,
-            best_epoch=best_epoch,
-            simulation_name=simulation_name,
-            experiment_name=experiment_name,
-        )
+    run_ctx = (
+        tracking.start_run("autoencoder", run_name)
+        if recalculate
+        else tracking.resume_run(load_run_id)
+    )
 
-    # ── Compute R² on train and validation sets ───────────────────────────────────
-    metrics_datasets = ["train", "test"] if n_validation == 0 else ["train", "validation", "test"]
-    for metrics_dataset in metrics_datasets:
-        dataset_for_eval, patient_offset = aet.dataset_for_metrics(
-            metrics_dataset,
-            train_dataset,
-            validation_dataset,
-            test_dataset,
-            n_train=n_train_images,
-            n_validation=n_val_images,
-        )
+    with run_ctx:
 
-        all_metrics = []
-        for i, patient_tensor in enumerate(dataset_for_eval):
-            x_patient, x_recon_denorm = aet.ae_reconstructX(patient_tensor, X_maxnorm, model)
-            metrics = aet.reconstruction_metrics(
-                x_true=x_patient,
-                x_pred=x_recon_denorm,
-                patient_number=patient_offset + 1 + i,
-                simulation_name=simulation_name,
-                n_epochs=best_epoch,
-                metrics_dataset=metrics_dataset,
-                savemetrics=False,
-            )
-            all_metrics.append(metrics)
+        # ── CALC mode ─────────────────────────────────────────────────────────
+        if recalculate:
+            tracking.log_artifact(CONFIG_PATH)
+            tracking.log_params({
+                "source_folder":    cfg["source_folder"],
+                "model_name":       model_name,
+                "latent_dimensions": latent_dimensions,
+                "n_train":          n_train,
+                "n_val":            n_val,
+                "n_test":           cfg["n_test"],
+                "split_name":       split_name,
+                "frame_tag":        frame_tag,
+                "image_roi_only":   cfg["image_roi_only"],
+                "mask_ys":          cfg["mask_ys"],
+                "mask_bin":         cfg["mask_bin"],
+                "experiment_tag":   experiment_tag,
+                "n_epochs":         cfg["n_epochs"],
+                "batch_size":       cfg["batch_size"],
+                "lr":               cfg["lr"],
+                "weight_decay":     cfg["weight_decay"],
+                "dropout_rate":     cfg["dropout_rate"],
+                "noise_std":        cfg["noise_std"],
+                "patience":         cfg["patience"],
+                "patience_scheduler": cfg["patience_scheduler"],
+            })
 
-        aet.ae_aggregate_metrics(
-            all_metrics,
-            simulation_name=simulation_name,
-            n_epochs=best_epoch,
-            metrics_dataset=metrics_dataset,
-            experiment_name=experiment_name,
-        )
-else:
-    for latent_dimensions in latdim_list: 
-        for model_name in models_list:
-            simulation_name = f"{model_name}_{n_train_images}patients_{splitname}_{latent_dimensions}dims"
-
-            if n_validation == 0:
-                model, best_epoch, loss_history = aet.ae_training(
-                    train_dataset=train_dataset,
-                    simulation_name=simulation_name,
-                    model_name=model_name,
-                    latent_dimensions=latent_dimensions,
-                    n_epochs=n_epochs,
-                    batch_size=batch_size,
-                    lr=lr,
-                    weight_decay=weight_decay,
-                    dropout_rate=dropout_rate,
-                    noise_std=noise_std,
-                    recalculateAE=recalculateAE,
-                    experiment_name=experiment_name,
-                )
-            else:
+            if n_val > 0:
                 model, best_epoch, loss_history = aet.ae_training_early_stopping(
                     train_dataset=train_dataset,
-                    validation_dataset=validation_dataset,
-                    simulation_name=simulation_name,
+                    validation_dataset=val_dataset,
                     model_name=model_name,
                     latent_dimensions=latent_dimensions,
-                    n_epochs=n_epochs,
-                    batch_size=batch_size,
-                    lr=lr,
-                    patience=patience,
-                    patience_scheduler=patience_scheduler,
-                    weight_decay=weight_decay,
-                    dropout_rate=dropout_rate,
-                    noise_std=noise_std,
-                    beta=beta,
-                    beta_warmup_epochs=beta_warmup_epochs,
-                    recalculateAE=recalculateAE,
-                    load_epoch=load_epoch,
-                    experiment_name=experiment_name,
+                    n_epochs=cfg["n_epochs"],
+                    batch_size=cfg["batch_size"],
+                    lr=cfg["lr"],
+                    patience=cfg["patience"],
+                    patience_scheduler=cfg["patience_scheduler"],
+                    weight_decay=cfg["weight_decay"],
+                    dropout_rate=cfg["dropout_rate"],
+                    noise_std=cfg["noise_std"],
+                    beta=cfg["beta"],
+                    beta_warmup_epochs=cfg["beta_warmup_epochs"],
                 )
-        # ── Plot train / validation loss curves ───────────────────────────────────────
-            if recalculateAE:
-                aep.plot_train_val_loss(
-                    loss_history=loss_history,
-                    best_epoch=best_epoch,
-                    simulation_name=simulation_name,
-                    experiment_name=experiment_name,
+                tracking.log_params({"best_epoch": best_epoch})
+            else:
+                model, best_epoch, loss_history = aet.ae_training(
+                    train_dataset=train_dataset,
+                    model_name=model_name,
+                    latent_dimensions=latent_dimensions,
+                    n_epochs=cfg["n_epochs"],
+                    batch_size=cfg["batch_size"],
+                    lr=cfg["lr"],
+                    weight_decay=cfg["weight_decay"],
+                    dropout_rate=cfg["dropout_rate"],
+                    noise_std=cfg["noise_std"],
+                )
+                best_epoch = cfg["n_epochs"]
+
+            # Save model artifact in MLflow
+            tracking.log_model_state_dict(model, filename=f"model_{best_epoch}epochs.pth")
+
+            # Loss plot (always produced when training)
+            loss_plot_path = RESULTS_FOLDER / f"{run_name}_train_val_loss.png"
+            aep.plot_train_val_loss(
+                loss_history=loss_history,
+                best_epoch=best_epoch,
+                simulation_name=run_name,
+                save_path=loss_plot_path,
+            )
+            tracking.log_artifact(loss_plot_path)
+
+        # ── LOAD mode ─────────────────────────────────────────────────────────
+        else:
+            client = mlflow.MlflowClient()
+            saved  = client.get_run(load_run_id).data.params
+            expected = {
+                "split_name":       split_name,
+                "n_train":          str(n_train),
+                "n_val":            str(n_val),
+                "n_test":           str(cfg["n_test"]),
+                "frame_tag":        frame_tag,
+                "model_name":       model_name,
+                "latent_dimensions": str(latent_dimensions),
+            }
+            mismatches = [
+                f"  {k}: saved={saved.get(k)!r}, current={v!r}"
+                for k, v in expected.items()
+                if saved.get(k) != v
+            ]
+            if mismatches:
+                raise ValueError(
+                    f"Data/model mismatch with run {load_run_id}:\n" + "\n".join(mismatches)
                 )
 
-            # ── Compute R² on train and validation sets ───────────────────────────────────
-            metrics_datasets = ["train", "test"] if n_validation == 0 else ["train", "validation", "test"]
-            for metrics_dataset in metrics_datasets:
-                dataset_for_eval, patient_offset = aet.dataset_for_metrics(
-                    metrics_dataset,
-                    train_dataset,
-                    validation_dataset,
-                    test_dataset,
-                    n_train=n_train_images,
-                    n_validation=n_val_images,
-                )
+            best_epoch     = int(saved["best_epoch"])
+            model_filename = f"model_{best_epoch}epochs.pth"
+            local_path     = client.download_artifacts(load_run_id, model_filename)
+            device         = aet.get_device()
+            model          = build_autoencoder(
+                model_name, latent_dimensions, dropout_rate=cfg["dropout_rate"]
+            ).to(device)
+            model.load_state_dict(torch.load(local_path, map_location=device))
+            model.eval()
+            loss_history = {"train": [], "validation": []}
+            print(f"Model loaded from run {load_run_id} (best_epoch={best_epoch})")
 
+        # ── Reconstruction metrics ─────────────────────────────────────────────
+        if cfg["compute_metrics"]:
+            datasets = [("train", train_dataset, 0)]
+            if n_val > 0:
+                datasets.append(("validation", val_dataset, n_train_images))
+            datasets.append(("test", test_dataset, n_train_images + n_val_images))
+
+            for metrics_dataset, dataset, offset in datasets:
                 all_metrics = []
-                for i, patient_tensor in enumerate(dataset_for_eval):
-                    x_patient, x_recon_denorm = aet.ae_reconstructX(patient_tensor, X_maxnorm, model)
+                for i, patient_tensor in enumerate(dataset):
+                    x_true, x_pred = aet.ae_reconstructX(patient_tensor, X_maxnorm, model)
                     metrics = aet.reconstruction_metrics(
-                        x_true=x_patient,
-                        x_pred=x_recon_denorm,
-                        patient_number=patient_offset + 1 + i,
-                        simulation_name=simulation_name,
-                        n_epochs=best_epoch,
-                        metrics_dataset=metrics_dataset,
-                        savemetrics=False,
+                        x_true=x_true,
+                        x_pred=x_pred,
+                        patient_number=offset + 1 + i,
                     )
                     all_metrics.append(metrics)
 
-                aet.ae_aggregate_metrics(
-                    all_metrics,
-                    simulation_name=simulation_name,
-                    n_epochs=best_epoch,
-                    metrics_dataset=metrics_dataset,
-                    experiment_name=experiment_name,
+                summary = aet.ae_aggregate_metrics(all_metrics)
+                for metric, stats in summary.items():
+                    for stat, value in stats.items():
+                        tracking.log_metric(f"{metrics_dataset}_{metric}_{stat}", value)
+
+                print(
+                    f"[{metrics_dataset}] R2 mean={summary['R2']['mean']:.4f} "
+                    f"std={summary['R2']['std']:.4f} | "
+                    f"MSE mean={summary['MSE']['mean']:.6f}"
                 )
 
-# ── Plot reconstruction for representative patients ───────────────────────────
-if plot_reconstruction:
-    if recons_auto:
-        selected = aep.ae_select_representative_patients(
-            all_metrics,
-            use_both_frames=use_both_frames,
-            n_train_images=n_train_images,
-            n_val_images=n_val_images,
-            n_development=n_development,
-        )
-        patients_torecons = [(v["real_patient"], v["frame_type"]) for v in selected.values()]
-    else:
-        patients_torecons = patients_torecons_manual
+        # ── Reconstruction plots ───────────────────────────────────────────────
+        if cfg["plot_reconstruction"]:
+            n_development = n_train + n_val
 
-    aep.ae_plotcompare_selected(
-        patients_torecons=patients_torecons,
+            if cfg["recons_auto"]:
+                # Compute metrics on test set at this latent_dim for patient selection
+                test_metrics = []
+                for i, patient_tensor in enumerate(test_dataset):
+                    x_true, x_pred = aet.ae_reconstructX(patient_tensor, X_maxnorm, model)
+                    test_metrics.append(aet.reconstruction_metrics(x_true, x_pred, n_train_images + n_val_images + 1 + i))
+                selected = aep.ae_select_representative_patients(
+                    test_metrics,
+                    use_both_frames=cfg["use_both_frames"],
+                    n_train_images=n_train_images,
+                    n_val_images=n_val_images,
+                    n_development=n_development,
+                )
+                patients_torecons = [(v["real_patient"], v["frame_type"]) for v in selected.values()]
+            else:
+                patients_torecons = [tuple(p) for p in cfg["patients_torecons_manual"]]
+
+            aep.ae_plotcompare_selected(
+                patients_torecons=patients_torecons,
+                use_both_frames=cfg["use_both_frames"],
+                n_development=n_development,
+                n_train_images=n_train_images,
+                n_val_images=n_val_images,
+                train_dataset=train_dataset,
+                validation_dataset=val_dataset,
+                test_dataset=test_dataset,
+                X_maxnorm=X_maxnorm,
+                model=model,
+                model_name=model_name,
+                split_name=split_name,
+                latent_dimensions=latent_dimensions,
+                n_epochs=best_epoch,
+            )
+
+
+def main():
+    with open(CONFIG_PATH) as f:
+        cfg = yaml.safe_load(f)
+
+    # ── Derived parameters ────────────────────────────────────────────────────
+    n_train         = cfg["n_train"]
+    n_val           = cfg["n_val"]
+    use_both_frames = cfg["use_both_frames"]
+    n_train_images  = n_train * 2 if use_both_frames else n_train
+    n_val_images    = n_val   * 2 if use_both_frames else n_val
+
+    # ── Load data (before MLflow — split_name needed for run_name) ────────────
+    train_dataset, val_dataset, test_dataset, X_maxnorm, split_name = loader.load_tensor_datasets(
+        source_folder=cfg["source_folder"],
+        cache_folder=cfg["cache_folder"],
+        n_train=n_train,
+        n_val=n_val,
+        n_test=cfg["n_test"],
+        special_split=cfg.get("special_split"),
         use_both_frames=use_both_frames,
-        n_development=n_development,
-        n_train_images=n_train_images,
-        n_val_images=n_val_images,
-        train_dataset=train_dataset,
-        test_dataset=test_dataset,
-        X_maxnorm=X_maxnorm,
-        model=model,
-        model_name=model_name,
-        split_name=splitname,
-        latent_dimensions=latent_dimensions,
-        n_epochs=best_epoch,
-        validation_dataset=validation_dataset,
+        frame_type=cfg["frame_type"],
+        image_roi_only=cfg["image_roi_only"],
+        recalculate=cfg["recalculate_x"],
+    )
+    print(
+        f"Data loaded | train: {len(train_dataset)} | "
+        f"val: {len(val_dataset) if val_dataset else 0} | "
+        f"test: {len(test_dataset)} | split: {split_name}"
     )
 
+    # ── Run ───────────────────────────────────────────────────────────────────
+    if cfg["multiple_models_and_dims"]:
+        if not cfg["recalculate_ae"]:
+            raise ValueError("multiple_models_and_dims: true requires recalculate_ae: true")
+        for model_name in cfg["models_list"]:
+            for latent_dimensions in cfg["latdim_list"]:
+                print(f"\n{'='*60}\nModel: {model_name} | latent_dim: {latent_dimensions}\n{'='*60}")
+                _run_one(
+                    cfg, model_name, latent_dimensions, split_name,
+                    n_train_images, n_val_images,
+                    train_dataset, val_dataset, test_dataset, X_maxnorm,
+                )
+    else:
+        _run_one(
+            cfg, cfg["model_name"], cfg["latent_dimensions"], split_name,
+            n_train_images, n_val_images,
+            train_dataset, val_dataset, test_dataset, X_maxnorm,
+        )
 
 
-# ── Commented: loop over latent dims ──────────────────────────────────────────
-# for latent_dimensions in latdim_list:
-#     simulation_name = f"{model_name}_{n_train_effective}patients_{splitname}_{latent_dimensions}dims"
-#     model, best_epoch, loss_history = aet.ae_training_early_stopping(...)
-#     ...
-
-# ── Commented: comparison plots (AE vs PCA, architectures, scatter) ───────────
-# aep.plot_summarymetrics_vs_latentdim(...)
-# aep.plot_ae_metrics_vs_latentdim_by_architecture(...)
-# aep.plot_ae_metrics_vs_latentdim_by_epoch(...)
-# aep.plot_ae_r2_validation_vs_train_scatter(...)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# #  Plot AE VS PCA results 
-# aep.plot_summarymetrics_vs_latentdim(TEMPODATA_FOLDER / "autoencoder", splitname=splitname, n_patients = n_training, device_tag = None, batch_size=None, metrics_dataset=metrics_dataset, band_mode=None)
-# aep.plot_r2_test_vs_train(
-#     TEMPODATA_FOLDER / "autoencoder",
-#     splitname=splitname,
-#     n_patients=n_training,
-#     device_tag=None,
-#     batch_size=None,
-#     annotate_dims=True
-# )
-
-#  # Compare AE models 
-# epoch_list = sorted(set((checkpoint_epochs or []) + [n_epochs]))
-# figs_by_arch = aep.plot_ae_metrics_vs_latentdim_by_architecture( # 1) One figure per architecture, 3 curves = epochs
-#     results_folder=TEMPODATA_FOLDER / "autoencoder",
-#     splitname=splitname,
-#     n_patients=n_train_effective,
-#     metrics_dataset=metrics_dataset,
-#     model_names=["AE3dCurrent", "AE3dFCDeep", "AE3dConv"],
-#     epoch_list=epoch_list,
-#     xscale="log"
-# )
-# figs_by_epoch = aep.plot_ae_metrics_vs_latentdim_by_epoch( # 2) One figure per epoch, 3 curves = architectures
-#     results_folder=TEMPODATA_FOLDER / "autoencoder",
-#     splitname=splitname,
-#     n_patients=n_train_effective,
-#     metrics_dataset=metrics_dataset,
-#     model_names=["AE3dCurrent", "AE3dFCDeep", "AE3dConv"],
-#     epoch_list=epoch_list,
-#     xscale="log"
-# )
-# fig_scatter, ax_scatter, paired_records = aep.plot_ae_r2_validation_vs_train_scatter( # 3) Scatter train R2 vs validation R2
-#     results_folder=TEMPODATA_FOLDER / "autoencoder",
-#     splitname=splitname,
-#     n_patients=n_train_effective,
-#     model_names=["AE3dCurrent", "AE3dFCDeep", "AE3dConv"],
-#     epoch_list=epoch_list,
-#     annotate_dims=True
-# )
+if __name__ == "__main__":
+    main()

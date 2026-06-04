@@ -158,21 +158,32 @@ SDSC-arthur-project-1/
   - Supprimer `pca_patients()` (dead code dans `pca_spatial.py`) et `archive_scripts/run_pca_spatial_ARCHIVED.py`
   - `ae_aggregate_metrics` pointe encore vers `TEMPODATA_FOLDER` pour les runs AE (`ae=True`) — à migrer dans Étape 8
 
-**Étape 7bis : Splits seeds pour PCA spatiale** — `run_pca_spatial.py` + `src/data/splits.py`
-- Extraire `get_or_create_split_indices` + `splitname_to_seed` de `regression.py` vers `src/data/splits.py`
-- Mettre à jour `loader.py` pour utiliser ce mécanisme
-- `run_pca_spatial.py` : remplacer le split séquentiel (`n_development`) par `splitname → seed`
-- `configs/pca_spatial.yaml` : remplacer `n_development`/`n_validation` par `splitname`, `n_train`, `n_test`
-- Objectif : pouvoir lancer la PCA sur de nombreux splits différents et moyenner les résultats de régression
+**Étape 7bis : Splits seeds pour PCA spatiale** ✅ codée, en validation Renku — `run_pca_spatial.py` + `src/data/splits.py`
+- `src/data/splits.py` (nouveau) : `get_split_indices(n_train, n_val, n_test, special_split, stratify, n_patients=150)` — séquentiel ("splitdefault") ou seedé, stratification optionnelle
+- `src/data/loader.py` : `_split_frames` utilise indices numpy, `load_numpy_splits` + `load_tensor_datasets` nouvelle signature, retournent `split_name`
+- `configs/pca_spatial.yaml` : `n_train`, `n_val`, `n_test`, `special_split: null`
+- `run_pca_spatial.py` : données chargées avant ouverture MLflow run (pour avoir split_name dans run_name), vérification cohérence split au LOAD
+- `src/config.py` : RESULTS_FOLDER + PROCESSED_IMAGES_FOLDER créés avec mkdir à l'import
+- Fixes en cours sur Renku : noms de fichiers output (`pcaspatial_` prefix, `split_name` dans le nom), MSE band clip à 0, vérification split au load
+- **Pending après validation Renku** :
+  - Supprimer `pca_patients()` (dead code dans `pca_spatial.py`) + `archive_scripts/run_pca_spatial_ARCHIVED.py`
 
-**Étape 8 : Autoencoder** — `run_autoencoder.py` + `run_ae_hyperparam.py`
-- Utilise `loader.py` unifié avec splits seeds (même mécanisme que PCA spatiale après Étape 7bis)
-- Split par défaut : séquentiel (patients 1-100 train, 101-120 val, 121-150 test) ou `splitname → seed`
-- Entraînement AE (plusieurs architectures, early stopping)
-- Optuna pour optimisation hyperparamètres
-- Métriques (R², etc.) sur train/val/test logées dans MLflow
-- `ae_aggregate_metrics` : migrer de `TEMPODATA_FOLDER` vers MLflow
-- Plots (loss history, reconstructions)
+**Étape 7ter : Fusion run_registration_pipelinechecks dans run_registration** ✅ codée, à valider sur Renku — `run_registration.py` + `configs/registration.yaml`
+- `run_pipelinechecks: false` ajouté dans `registration.yaml` (+ `check_ED`, `check_ES`, `check_resampled`, `check_cropped`, `check_registered`, `do_dice_checks`, `registered_OLD`, `n_worst_to_print`, `patients_ED`, `patients_ES`)
+- Logique de `run_registration_pipelinecheck.py` déplacée comme section conditionnelle en fin de `run_registration.py`
+- Pour lancer les checks seuls : mettre `resample_all: false`, `crop_all: false`, `register_all: false`, `run_pipelinechecks: true`
+- `run_registration_pipelinecheck.py` archivé dans `archive_scripts/` — à supprimer définitivement après validation Renku
+
+**Étape 8 : Autoencoder** ✅ codée, à valider sur Renku — `run_autoencoder.py` + `ae_training.py`
+- `run_autoencoder.py` réécrit : lit YAML, `loader.load_tensor_datasets()`, MLflow `start_run`/`resume_run`, `log_params`/`log_metric`/`log_model_state_dict`
+- LOAD mode via `load_run_id` + vérification cohérence split/modèle (même pattern que PCA spatiale)
+- `ae_training.py` nettoyé : dead code supprimé (`ae_training_old`, `ae_getdataset`, `dataset_for_metrics`), fonctions pures (plus de I/O fichier), `get_best_epochs_stats_from_mlflow` via MLflow
+- `ae_plots.py` : `plot_train_val_loss` sauvegarde dans RESULTS_FOLDER et retourne le path (loggable MLflow)
+- `run_pca_spatial.py` : appel `reconstruction_metrics` mis à jour (signature simplifiée)
+- `loader.load_tensor_datasets` : ajout param `frame_type` pour cohérence avec `load_numpy_splits`
+- **Pending après validation Renku** :
+  - `mask_ys`/`mask_bin` dans `autoencoder.yaml` non encore connectés à `load_tensor_datasets` (hardcodé `mask=False, binary_mask=False`) — à implémenter quand besoin (voir Pan 4)
+  - Fonctions de comparaison dans `ae_plots.py` lisent encore TEMPODATA_FOLDER → à migrer en Étape 9
 
 **Étape 9 : Comparaisons AE vs PCA** — `run_comparison_aepca.py`
 - **⚠ Vérification préliminaire obligatoire** : AE et PCA comparés doivent être entraînés sur les mêmes splits (vérifier `splitname` dans les params MLflow)
@@ -182,21 +193,19 @@ SDSC-arthur-project-1/
 - Outputs : plots dans `results/`
 - **Note métriques** : courbes R² vs latent dims via `get_metric_history(run_id, key)` ; dédupliquer par step en gardant le timestamp le plus récent
 
-**Étape 10 : Régression** — `run_regression.py`
+**Étape 10 : Hyperparamètres Optuna** — `run_ae_hyperparam.py`
+- Migrer vers YAML (`configs/ae_hyperparam.yaml`) + MLflow
+- Base SQLite Optuna dans RESULTS_FOLDER (ou artifact MLflow)
+- Même pattern que `run_autoencoder.py` : lit YAML, ouvre run MLflow, log résultats
+- `ae_optuna.py` : retirer `TEMPODATA_FOLDER`, DB path passé en paramètre
+
+**Étape 11 : Régression** — `run_regression.py`
 - From PCA results (refactoring de l'existant)
 - From AE results (à écrire)
 - **⚠ Vérification préliminaire** : si comparaison AE vs PCA, vérifier que les splits sont identiques
 - Utilise `src/data/splits.py` (partagé avec PCA/AE) — permet de moyenner sur de nombreux splits pour réduire la stochasticité
 - Métriques (accuracy, R², confusion matrix) + plots
 - Outputs dans MLflow
-
----
-
-### Pan 2b — Migration tempodata → MLflow (après Pan 2)
-
-Migrer les runs déjà entraînés depuis `tempodata/` vers `mlruns/` via un script de migration (pas de réentraînement).
-Structure source : `tempodata/autoencoder/{run_name}/{tag}/` contient `.pth`, `.png`, et `.txt` de métriques.
-Écrire un script qui parse les noms de dossiers (params), lit les `.txt` (métriques), et crée des runs MLflow rétrospectivement.
 
 ---
 
@@ -207,6 +216,14 @@ Structure source : `tempodata/autoencoder/{run_name}/{tag}/` contient `.pth`, `.
 - Type hints
 - Tests unitaires avec pytest (fonctions critiques : loader, métriques, preprocessing)
 - Nettoyage final de `archive_scripts/`
+
+---
+
+### Pan 4 — Nettoyage et extensions mineures (après validation Pan 2)
+
+- `mask_ys`/`mask_bin` dans `autoencoder.yaml` non encore connectés à `load_tensor_datasets` (hardcodé `mask=False, binary_mask=False`) — ajouter les params quand nécessaire, copier le pattern de `load_numpy_splits`
+- Fonctions de comparaison dans `ae_plots.py` (`plot_ae_comparison`, `plot_ae_vs_pca`, etc.) lisent encore depuis TEMPODATA_FOLDER via `_load_summarymetrics` → migrer vers MLflow en même temps que l'Étape 9
+- Supprimer `pca_patients()` (dead code dans `pca_spatial.py`) + `archive_scripts/run_pca_spatial_ARCHIVED.py` après validation Renku complète
 
 ---
 
