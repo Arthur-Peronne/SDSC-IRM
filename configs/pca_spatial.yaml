@@ -9,17 +9,17 @@ experiment_tag: "baseline"       # PCA has no hyperparameter regime — kept for
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
 cache_folder: "X_vectors"        # subfolder in processed_images/ for cached .npy arrays
-n_train: 100
-n_val: 20
+n_train: 120
+n_val: 0
 n_test: 30
-special_split: null              # null = sequential "splitdefault" ; ex: "split42" for seeded random split
+special_split: "split1"             # null = sequential "splitdefault" ; ex: "split42" for seeded random split
 recalculate_x: false
 use_both_frames: true            # true = ED+ES, false = use frame_type below
 frame_type: "ED"                 # "ED" or "ES" — used only if use_both_frames = false
 
 # ── PCA ───────────────────────────────────────────────────────────────────────
 recalculate_pca: false
-load_run_id: "51ccbe1bce89403fbc2989134ce3e42e"                # MLflow run ID — required when recalculate_pca: false
+load_run_id: "eae670bec1ed4ea0b05700776bacb9dc"                # MLflow run ID — required when recalculate_pca: false
 image_roi_only: true
 mask_ys: false                   # apply ground-truth mask
 mask_bin: false                  # use binary mask
@@ -27,7 +27,7 @@ original_shape: [128, 128, 32]
 max_pc_calc: 300
 
 # ── Reconstruction metrics ────────────────────────────────────────────────────
-compute_metrics: false
+compute_metrics: true
 plot_metrics: true               # save R²/MSE vs n_PCs as PDF in results/
 latdim_list_pca: null            # null = range(1, n_development); or explicit list e.g. [10, 20, 50]
 
@@ -35,16 +35,16 @@ latdim_list_pca: null            # null = range(1, n_development); or explicit l
 plot_explained_variance: false
 
 # ── Plots : PC values in eigenbase ────────────────────────────────────────────
-plot_pc_values: false
+plot_pc_values: true
 pc_max: 10                       # plots pairs (1,2), (3,4), ... up to pc_max — must be even
 plot_metadata: false
 
 # ── Plots : eigenvectors ──────────────────────────────────────────────────────
-plot_eigenvectors: false         # slow — set true only when needed
+plot_eigenvectors: true         # slow — set true only when needed
 eigenvectors_to_plot: [1, 2, 3]
 
 # ── Plots : reconstruction ────────────────────────────────────────────────────
-plot_reconstruction: false
+plot_reconstruction: true
 n_pc_to_reconstruct: 10
 recons_auto: false
 patients_torecons_manual:

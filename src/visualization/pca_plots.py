@@ -298,7 +298,8 @@ def plot_pca_metrics_vs_latentdim(
             ax.plot(dims, means, color=color,
                     label=LABELS.get(dataset, dataset), linewidth=1.5)
             if plot_std:
-                ax.fill_between(dims, means - stds, means + stds, alpha=0.2, color=color)
+                lower = np.maximum(means - stds, 0) if metric in {"MSE", "RMSE", "MAE"} else means - stds
+                ax.fill_between(dims, lower, means + stds, alpha=0.2, color=color)
 
         ax.set_ylabel(metric)
         ax.set_xscale(xscale)

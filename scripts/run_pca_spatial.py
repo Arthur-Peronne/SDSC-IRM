@@ -126,7 +126,25 @@ def main():
             )
         else:
             import mlflow
-            local_path = mlflow.MlflowClient().download_artifacts(load_run_id, pca_filename)
+            client = mlflow.MlflowClient()
+            saved = client.get_run(load_run_id).data.params
+            expected = {
+                "split_name": split_name,
+                "n_train":    str(n_train),
+                "n_val":      str(n_val),
+                "n_test":     str(n_test),
+                "frame_tag":  frame_tag,
+            }
+            mismatches = [
+                f"  {k}: saved={saved.get(k)!r}, current={v!r}"
+                for k, v in expected.items()
+                if saved.get(k) != v
+            ]
+            if mismatches:
+                raise ValueError(
+                    f"Split/data mismatch with run {load_run_id}:\n" + "\n".join(mismatches)
+                )
+            local_path = client.download_artifacts(load_run_id, pca_filename)
             pca = joblib.load(local_path)
             X_train_pca = pca.transform(X_train)
             print(f"PCA loaded from run {load_run_id}")
@@ -137,9 +155,10 @@ def main():
 
         # ── Build plot tag ────────────────────────────────────────────────────
         plot_tag = f"allpatients_{frame_tag}"
+        plot_tag = f"pcaspatial_{frame_tag}_{split_name}"
+        if cfg["image_roi_only"]:  plot_tag += "_imgROI"
         if cfg["mask_ys"]:         plot_tag += "_gt"
-        if cfg["mask_bin"]:        plot_tag += "_bin"
-        if cfg["image_roi_only"]:  plot_tag += "_imgROIonly"
+        if cfg["mask_bin"]:        plot_tag += "bin"
 
         # ── Reconstruction metrics ────────────────────────────────────────────
         if cfg["compute_metrics"]:

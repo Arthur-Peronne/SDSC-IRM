@@ -241,7 +241,7 @@ def plot_eigenvectors(X, pca, original_shape, pca_description, nii_ref, eigenvec
     """Plot the mean image and the specified eigenvectors as MRI slices."""
     mean_img = X.reshape((X.shape[0],) + original_shape).mean(axis=0)
     nii_mean = nib.Nifti1Image(mean_img, nii_ref.affine, nii_ref.header)
-    mrp.plot_oneimg(nii_mean, patient_str=pca_description, file_str="mean", details_str="mean_image")
+    mrp.plot_oneimg(nii_mean, patient_str=pca_description, file_str="meanimage", details_str="")
     for n in eigenvectors_to_plot:
         idx = n - 1
         if idx >= pca.n_components_:

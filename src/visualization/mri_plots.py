@@ -136,7 +136,7 @@ def plot_oneimg(nii_img_1t, cmapYN = False, cmap = "", patient_str ="", file_str
             vmin=vmin, vmax=vmax,
             title= patient_str + " " + file_str + " " + details_str)    
     # Save 
-    output_file = RESULTS_FOLDER / f"{patient_str}_{file_str}_{details_str}.png"
+    output_file = RESULTS_FOLDER / (f"{patient_str}_{file_str}" + (f"_{details_str}" if details_str else "") + ".png")
     display.savefig(output_file)
 
 def plot_onemask(nii_img_1t, patient_str ="", file_str = "", details_str=""):
