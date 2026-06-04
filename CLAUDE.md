@@ -158,26 +158,37 @@ SDSC-arthur-project-1/
   - Supprimer `pca_patients()` (dead code dans `pca_spatial.py`) et `archive_scripts/run_pca_spatial_ARCHIVED.py`
   - `ae_aggregate_metrics` pointe encore vers `TEMPODATA_FOLDER` pour les runs AE (`ae=True`) — à migrer dans Étape 8
 
+**Étape 7bis : Splits seeds pour PCA spatiale** — `run_pca_spatial.py` + `src/data/splits.py`
+- Extraire `get_or_create_split_indices` + `splitname_to_seed` de `regression.py` vers `src/data/splits.py`
+- Mettre à jour `loader.py` pour utiliser ce mécanisme
+- `run_pca_spatial.py` : remplacer le split séquentiel (`n_development`) par `splitname → seed`
+- `configs/pca_spatial.yaml` : remplacer `n_development`/`n_validation` par `splitname`, `n_train`, `n_test`
+- Objectif : pouvoir lancer la PCA sur de nombreux splits différents et moyenner les résultats de régression
+
 **Étape 8 : Autoencoder** — `run_autoencoder.py` + `run_ae_hyperparam.py`
-- Utilise `loader.py` unifié
+- Utilise `loader.py` unifié avec splits seeds (même mécanisme que PCA spatiale après Étape 7bis)
+- Split par défaut : séquentiel (patients 1-100 train, 101-120 val, 121-150 test) ou `splitname → seed`
 - Entraînement AE (plusieurs architectures, early stopping)
 - Optuna pour optimisation hyperparamètres
-- Métriques (R², etc.) sur train/val/test
+- Métriques (R², etc.) sur train/val/test logées dans MLflow
+- `ae_aggregate_metrics` : migrer de `TEMPODATA_FOLDER` vers MLflow
 - Plots (loss history, reconstructions)
-- Outputs dans MLflow
 
-**Étape 9 : Régression** — `run_regression.py`
-- From PCA results (refactoring de l'existant)
-- From AE results (à écrire)
-- Métriques (accuracy, R², confusion matrix) + plots
-- Outputs dans MLflow
-
-**Étape 10 : Comparaisons AE vs PCA** — `run_comparison_aepca.py`
+**Étape 9 : Comparaisons AE vs PCA** — `run_comparison_aepca.py`
+- **⚠ Vérification préliminaire obligatoire** : AE et PCA comparés doivent être entraînés sur les mêmes splits (vérifier `splitname` dans les params MLflow)
 - Lecture directe depuis MLflow via `search_runs()` (remplace le parsing de `.txt`)
 - Comparaisons AE-AE (architectures, ED vs ED+ES, baseline vs Optuna)
 - Comparaisons AE vs PCA sur test set
 - Outputs : plots dans `results/`
-- **Note implémentation métriques** : les R²/MSE PCA sont logés avec `step=latent_dimensions` (1 à N) dans MLflow — toutes les valeurs sont stockées dans mlruns/. `search_runs()` ne retourne que la dernière valeur (step max) ; pour récupérer la courbe complète R² vs n_PCs, utiliser `mlflow.MlflowClient().get_metric_history(run_id, metric_name)`. MLflow n'écrase pas les métriques : si on recalcule en mode LOAD, les anciennes et nouvelles valeurs coexistent. Toujours dédupliquer par step en gardant le timestamp le plus récent : `{m.step: m for m in sorted(history, key=lambda m: m.timestamp)}`.
+- **Note métriques** : courbes R² vs latent dims via `get_metric_history(run_id, key)` ; dédupliquer par step en gardant le timestamp le plus récent
+
+**Étape 10 : Régression** — `run_regression.py`
+- From PCA results (refactoring de l'existant)
+- From AE results (à écrire)
+- **⚠ Vérification préliminaire** : si comparaison AE vs PCA, vérifier que les splits sont identiques
+- Utilise `src/data/splits.py` (partagé avec PCA/AE) — permet de moyenner sur de nombreux splits pour réduire la stochasticité
+- Métriques (accuracy, R², confusion matrix) + plots
+- Outputs dans MLflow
 
 ---
 

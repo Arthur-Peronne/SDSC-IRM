@@ -38,25 +38,43 @@ def main():
         cfg = yaml.safe_load(f)
 
     # ── Derived parameters ────────────────────────────────────────────────────
-    original_shape   = tuple(cfg["original_shape"])
-    use_both_frames  = cfg["use_both_frames"]
-    frame_type       = cfg["frame_type"]
-    frame_tag        = "ED+ES" if use_both_frames else frame_type
-    n_development    = cfg["n_development"]
-    n_validation     = cfg["n_validation"]
-    n_train          = n_development - n_validation
-    n_train_images   = n_train * 2 if use_both_frames else n_train
-    n_val_images     = n_validation * 2 if use_both_frames else n_validation
-    splitname        = cfg["splitname"]
-    recalculate      = cfg["recalculate_pca"]
-    load_run_id      = cfg.get("load_run_id") if not recalculate else None
+    original_shape  = tuple(cfg["original_shape"])
+    use_both_frames = cfg["use_both_frames"]
+    frame_type      = cfg["frame_type"]
+    frame_tag       = "ED+ES" if use_both_frames else frame_type
+    n_train         = cfg["n_train"]
+    n_val           = cfg["n_val"]
+    n_test          = cfg["n_test"]
+    special_split   = cfg.get("special_split")   # None or str
+    n_train_images  = n_train * 2 if use_both_frames else n_train
+    n_val_images    = n_val   * 2 if use_both_frames else n_val
+    recalculate     = cfg["recalculate_pca"]
+    load_run_id     = cfg.get("load_run_id") if not recalculate else None
 
     if not recalculate and not load_run_id:
         raise ValueError("recalculate_pca: false requires load_run_id in YAML")
 
     pca_filename = f"pca_{frame_tag}.joblib"
-    run_name     = f"PCA_{n_train_images}patients_{splitname}_{frame_tag}_{cfg['experiment_tag']}"
-    run_ctx      = tracking.start_run("pca_spatial", run_name) if recalculate else tracking.resume_run(load_run_id)
+
+    # ── Load data (before opening MLflow run — split_name needed for run_name) ─
+    X_train, X_val, X_test, split_name = loader.load_numpy_splits(
+        source_folder=cfg["source_folder"],
+        cache_folder=cfg["cache_folder"],
+        n_train=n_train,
+        n_val=n_val,
+        n_test=n_test,
+        special_split=special_split,
+        use_both_frames=use_both_frames,
+        frame_type=frame_type,
+        image_roi_only=cfg["image_roi_only"],
+        mask=cfg["mask_ys"],
+        binary_mask=cfg["mask_bin"],
+        recalculate=cfg["recalculate_x"],
+    )
+    print(f"X_train: {X_train.shape}, X_val: {X_val.shape}, X_test: {X_test.shape}")
+
+    run_name = f"PCA_{n_train_images}patients_{split_name}_{frame_tag}_{cfg['experiment_tag']}"
+    run_ctx  = tracking.start_run("pca_spatial", run_name) if recalculate else tracking.resume_run(load_run_id)
 
     with run_ctx:
 
@@ -64,34 +82,19 @@ def main():
         if recalculate:
             tracking.log_artifact(CONFIG_PATH)
             tracking.log_params({
-                "source_folder":   cfg["source_folder"],
-                "n_development":   n_development,
-                "n_validation":    n_validation,
-                "n_train":         n_train,
-                "frame_tag":       frame_tag,
-                "splitname":       splitname,
-                "image_roi_only":  cfg["image_roi_only"],
-                "mask_ys":         cfg["mask_ys"],
-                "mask_bin":        cfg["mask_bin"],
-                "original_shape":  str(original_shape),
-                "max_pc_calc":     cfg["max_pc_calc"],
-                "experiment_tag":  cfg["experiment_tag"],
+                "source_folder":  cfg["source_folder"],
+                "n_train":        n_train,
+                "n_val":          n_val,
+                "n_test":         n_test,
+                "split_name":     split_name,
+                "frame_tag":      frame_tag,
+                "image_roi_only": cfg["image_roi_only"],
+                "mask_ys":        cfg["mask_ys"],
+                "mask_bin":       cfg["mask_bin"],
+                "original_shape": str(original_shape),
+                "max_pc_calc":    cfg["max_pc_calc"],
+                "experiment_tag": cfg["experiment_tag"],
             })
-
-        # ── Load data ─────────────────────────────────────────────────────────
-        X_train, X_val, X_test = loader.load_numpy_splits(
-            source_folder=cfg["source_folder"],
-            cache_folder=cfg["cache_folder"],
-            n_development=n_development,
-            n_validation=n_validation,
-            use_both_frames=use_both_frames,
-            frame_type=frame_type,
-            image_roi_only=cfg["image_roi_only"],
-            mask=cfg["mask_ys"],
-            binary_mask=cfg["mask_bin"],
-            recalculate=cfg["recalculate_x"],
-        )
-        print(f"X_train: {X_train.shape}, X_val: {X_val.shape}, X_test: {X_test.shape}")
 
         # ── Row centering ─────────────────────────────────────────────────────
         # Subtract per-patient mean to remove brightness offset artefacts.
@@ -142,7 +145,7 @@ def main():
         if cfg["compute_metrics"]:
             latdim_list = cfg["latdim_list_pca"] or list(range(1, n_train_images + 1))
             datasets = [("train", X_train, X_train_pca, 0)]
-            if n_validation > 0:
+            if n_val > 0:
                 datasets.append(("validation", X_val, X_val_pca, n_train_images))
             datasets.append(("test", X_test, X_test_pca, n_train_images + n_val_images))
 
@@ -168,7 +171,7 @@ def main():
 
         if cfg.get("plot_metrics", True):
             plot_datasets = ["train", "test"]
-            if n_validation > 0:
+            if n_val > 0:
                 plot_datasets = ["train", "validation", "test"]
             save_path = RESULTS_FOLDER / f"{plot_tag}_metrics_vs_latentdim.png"
             pcp.plot_pca_metrics_vs_latentdim(
@@ -241,7 +244,7 @@ def main():
                     use_both_frames=use_both_frames,
                     n_train_images=n_train_images,
                     n_val_images=n_val_images,
-                    n_development=n_development,
+                    n_development=n_train + n_val,
                 )
                 patients_torecons = [(v["real_patient"], v["frame_type"]) for v in selected.values()]
             else:
@@ -256,10 +259,10 @@ def main():
                 latent_dimensions=latent_dim_plot,
                 original_shape=original_shape,
                 use_both_frames=use_both_frames,
-                n_development=n_development,
+                n_development=n_train + n_val,
                 n_train_images=n_train_images,
                 n_val_images=n_val_images,
-                split_name=splitname,
+                split_name=split_name,
                 row_means_train=row_means_train,
                 row_means_val=row_means_val,
                 row_means_test=row_means_test,

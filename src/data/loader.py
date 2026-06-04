@@ -9,12 +9,14 @@ load_numpy_splits()    → flat numpy arrays  (PCA pipeline)
 load_tensor_datasets() → TensorDatasets     (AE pipeline)
 
 Both rely on the same internal split logic via _split_frames().
+Split indices are computed by src.data.splits.get_split_indices().
 """
 
 import numpy as np
 import torch
 from torch.utils.data import TensorDataset
 
+from src.data import splits as splt
 from src.models import pca_spatial as pcs
 
 
@@ -35,38 +37,40 @@ def _load_frame(source_folder, cache_folder, frame_type, image_roi_only, mask,
     )
 
 
-def _split_frames(X_ED, X_ES, n_development, n_validation):
+def _split_frames(
+    X_ED: np.ndarray,
+    X_ES: np.ndarray | None,
+    train_idx: np.ndarray,
+    val_idx: np.ndarray,
+    test_idx: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Split arrays into train / val / test by patient index.
+    Split arrays into train / val / test using patient indices.
 
     If X_ES is provided (use_both_frames=True), ED and ES are concatenated
     within each split — both frames of a patient are always in the same split.
 
     Parameters
     ----------
-    X_ED : np.ndarray, shape (n_total_patients, ...)
+    X_ED : np.ndarray, shape (n_patients, ...)
     X_ES : np.ndarray or None
-    n_development : int   — train + validation patients
-    n_validation : int    — 0 = no validation set
+    train_idx, val_idx, test_idx : np.ndarray of int
+        Patient indices returned by splits.get_split_indices().
+        val_idx / test_idx may be empty arrays.
 
     Returns
     -------
     X_train, X_val, X_test : np.ndarray
-        X_val is empty (shape (0, ...)) when n_validation = 0.
+        X_val / X_test have shape (0, ...) when the corresponding index array
+        is empty.
     """
-    n_train = n_development - n_validation
-
-    def _combine(start, end):
-        sub_ed = X_ED[start:end]
+    def _combine(idx):
+        sub_ed = X_ED[idx]
         if X_ES is None:
             return sub_ed
-        return np.concatenate([sub_ed, X_ES[start:end]], axis=0)
+        return np.concatenate([sub_ed, X_ES[idx]], axis=0)
 
-    return (
-        _combine(0, n_train),
-        _combine(n_train, n_development),
-        _combine(n_development, None),
-    )
+    return _combine(train_idx), _combine(val_idx), _combine(test_idx)
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -74,8 +78,10 @@ def _split_frames(X_ED, X_ES, n_development, n_validation):
 def load_numpy_splits(
     source_folder: str,
     cache_folder: str,
-    n_development: int,
-    n_validation: int,
+    n_train: int,
+    n_val: int,
+    n_test: int,
+    special_split: str | None = None,
     use_both_frames: bool = True,
     frame_type: str = "ED",
     image_roi_only: bool = True,
@@ -83,7 +89,7 @@ def load_numpy_splits(
     binary_mask: bool = False,
     recalculate: bool = False,
     n_jobs: int = -1,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, str]:
     """
     Load flat numpy arrays and return train / val / test splits.
     For use in the PCA spatial pipeline.
@@ -94,10 +100,15 @@ def load_numpy_splits(
         Subfolder in PROCESSED_IMAGES_FOLDER containing registered NIfTI files.
     cache_folder : str
         Subfolder where .npy arrays are cached.
-    n_development : int
-        Number of patients used for train + validation.
-    n_validation : int
+    n_train : int
+        Number of training patients.
+    n_val : int
         Number of validation patients (0 = no validation set).
+    n_test : int
+        Number of test patients.  n_train + n_val + n_test must equal 150.
+    special_split : str or None
+        None       → sequential split, logged as "splitdefault".
+        "split42"  → seeded random split, logged under that name.
     use_both_frames : bool
         True  → load ED and ES, concatenate within each split.
         False → load only frame_type.
@@ -117,7 +128,9 @@ def load_numpy_splits(
     Returns
     -------
     X_train, X_val, X_test : np.ndarray, shape (n, n_voxels)
-        X_val has shape (0, n_voxels) when n_validation = 0.
+        X_val / X_test have shape (0, n_voxels) when n_val / n_test = 0.
+    split_name : str
+        Effective split name to log in MLflow ("splitdefault" or special_split).
     """
     kwargs = dict(
         source_folder=source_folder, cache_folder=cache_folder,
@@ -135,33 +148,48 @@ def load_numpy_splits(
     elif frame_type != "ED":
         X_ED = _load_frame(frame_type=frame_type, **kwargs)
 
-    return _split_frames(X_ED, X_ES, n_development, n_validation)
+    train_idx, val_idx, test_idx, split_name = splt.get_split_indices(
+        n_train=n_train, n_val=n_val, n_test=n_test,
+        special_split=special_split,
+        n_patients=len(X_ED),
+    )
+    X_train, X_val, X_test = _split_frames(X_ED, X_ES, train_idx, val_idx, test_idx)
+    return X_train, X_val, X_test, split_name
 
 
 def load_tensor_datasets(
     source_folder: str,
     cache_folder: str,
-    n_development: int,
-    n_validation: int,
+    n_train: int,
+    n_val: int,
+    n_test: int,
+    special_split: str | None = None,
     use_both_frames: bool = True,
     image_roi_only: bool = True,
     percentile_max: float = 99.9,
     recalculate: bool = False,
     n_jobs: int = 1,
-) -> tuple:
+) -> tuple[TensorDataset, TensorDataset | None, TensorDataset, float, str]:
     """
     Load 3D arrays, normalize, split, and wrap into TensorDatasets.
     For use in the autoencoder pipeline.
 
-    Normalisation is computed on the ED development pool only (stable reference),
+    Normalisation is computed on the ED training pool only (stable reference),
     then applied to all splits and both frames.
 
     Parameters
     ----------
     source_folder : str
     cache_folder : str
-    n_development : int
-    n_validation : int
+    n_train : int
+        Number of training patients.
+    n_val : int
+        Number of validation patients (0 = no validation set).
+    n_test : int
+        Number of test patients.  n_train + n_val + n_test must equal 150.
+    special_split : str or None
+        None       → sequential split, logged as "splitdefault".
+        "split42"  → seeded random split, logged under that name.
     use_both_frames : bool
     image_roi_only : bool
     percentile_max : float
@@ -173,10 +201,12 @@ def load_tensor_datasets(
     -------
     train_dataset : TensorDataset
     val_dataset : TensorDataset or None
-        None when n_validation = 0.
+        None when n_val = 0.
     test_dataset : TensorDataset
     X_maxnorm : float
         Normalization constant — needed to denormalize reconstructions.
+    split_name : str
+        Effective split name to log in MLflow ("splitdefault" or special_split).
     """
     kwargs = dict(
         source_folder=source_folder, cache_folder=cache_folder,
@@ -192,7 +222,13 @@ def load_tensor_datasets(
         if X_ED.shape != X_ES.shape:
             raise ValueError(f"Shape mismatch: X_ED={X_ED.shape} vs X_ES={X_ES.shape}")
 
-    X_maxnorm = float(np.percentile(X_ED[:n_development], percentile_max))
+    train_idx, val_idx, test_idx, split_name = splt.get_split_indices(
+        n_train=n_train, n_val=n_val, n_test=n_test,
+        special_split=special_split,
+        n_patients=len(X_ED),
+    )
+
+    X_maxnorm = float(np.percentile(X_ED[train_idx], percentile_max))
 
     def _normalize(X):
         return np.clip(X, 0, X_maxnorm) / X_maxnorm
@@ -201,7 +237,7 @@ def load_tensor_datasets(
     if X_ES is not None:
         X_ES = _normalize(X_ES)
 
-    X_train, X_val, X_test = _split_frames(X_ED, X_ES, n_development, n_validation)
+    X_train, X_val, X_test = _split_frames(X_ED, X_ES, train_idx, val_idx, test_idx)
 
     def _to_tensor_dataset(X):
         X = np.transpose(X, (0, 3, 1, 2))       # (N, D, H, W) = (N, 32, 128, 128)
@@ -210,7 +246,7 @@ def load_tensor_datasets(
         return TensorDataset(torch.from_numpy(X))
 
     train_dataset = _to_tensor_dataset(X_train)
-    val_dataset = _to_tensor_dataset(X_val) if n_validation > 0 else None
-    test_dataset = _to_tensor_dataset(X_test)
+    val_dataset   = _to_tensor_dataset(X_val) if n_val > 0 else None
+    test_dataset  = _to_tensor_dataset(X_test)
 
-    return train_dataset, val_dataset, test_dataset, X_maxnorm
+    return train_dataset, val_dataset, test_dataset, X_maxnorm, split_name

@@ -9,9 +9,10 @@ experiment_tag: "baseline"       # PCA has no hyperparameter regime — kept for
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
 cache_folder: "X_vectors"        # subfolder in processed_images/ for cached .npy arrays
-n_development: 120               # train + validation patients
-n_validation: 0
-splitname: "split0"
+n_train: 100
+n_val: 20
+n_test: 30
+special_split: null              # null = sequential "splitdefault" ; ex: "split42" for seeded random split
 recalculate_x: false
 use_both_frames: true            # true = ED+ES, false = use frame_type below
 frame_type: "ED"                 # "ED" or "ES" — used only if use_both_frames = false
