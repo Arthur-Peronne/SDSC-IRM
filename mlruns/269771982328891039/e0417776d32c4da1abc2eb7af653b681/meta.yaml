@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-arthur-project-1/mlruns/269771982328891039/e0417776d32c4da1abc2eb7af653b681/artifacts
+end_time: 1780660122090
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: e0417776d32c4da1abc2eb7af653b681
+run_name: AE_AE3dLinear_200patients_splitdefault_60dims_baseline
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1780660075734
+status: 3
+tags: []
+user_id: renku

@@ -12,8 +12,9 @@ Les données médicales brutes sont sur S3 (AWS) et accessibles uniquement via R
 mlflow ui --backend-store-uri mlruns/
 # → http://127.0.0.1:5000
 
-# MLflow UI sur Renku : ne fonctionne pas (VSCode Server, pas JupyterLab)
-# Fallback : search_runs() dans un terminal Python
+# MLflow UI sur Renku : ne fonctionne pas complètement
+mlflow ui --host 0.0.0.0 --port 5000 
+# puis cliquer sur le lien...
 ```
 
 ## Règles de travail
@@ -185,19 +186,19 @@ SDSC-arthur-project-1/
   - `mask_ys`/`mask_bin` dans `autoencoder.yaml` non encore connectés à `load_tensor_datasets` (hardcodé `mask=False, binary_mask=False`) — à implémenter quand besoin (voir Pan 4)
   - Fonctions de comparaison dans `ae_plots.py` lisent encore TEMPODATA_FOLDER → à migrer en Étape 9
 
-**Étape 9 : Comparaisons AE vs PCA** — `run_comparison_aepca.py`
+**Étape 9 : Hyperparamètres Optuna** — `run_ae_hyperparam.py`
+- Migrer vers YAML (`configs/ae_hyperparam.yaml`) + MLflow
+- Base SQLite Optuna dans RESULTS_FOLDER (ou artifact MLflow)
+- Même pattern que `run_autoencoder.py` : lit YAML, ouvre run MLflow, log résultats
+- `ae_optuna.py` : retirer `TEMPODATA_FOLDER`, DB path passé en paramètre
+
+**Étape 10 : Comparaisons AE vs PCA** — `run_comparison_aepca.py`
 - **⚠ Vérification préliminaire obligatoire** : AE et PCA comparés doivent être entraînés sur les mêmes splits (vérifier `splitname` dans les params MLflow)
 - Lecture directe depuis MLflow via `search_runs()` (remplace le parsing de `.txt`)
 - Comparaisons AE-AE (architectures, ED vs ED+ES, baseline vs Optuna)
 - Comparaisons AE vs PCA sur test set
 - Outputs : plots dans `results/`
 - **Note métriques** : courbes R² vs latent dims via `get_metric_history(run_id, key)` ; dédupliquer par step en gardant le timestamp le plus récent
-
-**Étape 10 : Hyperparamètres Optuna** — `run_ae_hyperparam.py`
-- Migrer vers YAML (`configs/ae_hyperparam.yaml`) + MLflow
-- Base SQLite Optuna dans RESULTS_FOLDER (ou artifact MLflow)
-- Même pattern que `run_autoencoder.py` : lit YAML, ouvre run MLflow, log résultats
-- `ae_optuna.py` : retirer `TEMPODATA_FOLDER`, DB path passé en paramètre
 
 **Étape 11 : Régression** — `run_regression.py`
 - From PCA results (refactoring de l'existant)

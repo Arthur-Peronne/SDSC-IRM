@@ -8,31 +8,32 @@ experiment_tag: "baseline"       # "baseline", "optuna", or any custom label
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
+use_both_frames: true            # true = ED+ES, false = use frame_type below
+frame_type: "ED"                 # "ED" or "ES" — used only if use_both_frames = false
+image_roi_only: true
+mask_ys: false                   # apply ground-truth mask
+mask_bin: false                  # use binary mask
+recalculate_x: false
 cache_folder: "X_vectors"        # subfolder in processed_images/ for cached .npy arrays
+
+# ── Split ────────────────────────────────────────────────────────────────
 n_train: 100
 n_val: 20
 n_test: 30
 special_split: null              # null = sequential "splitdefault"; e.g. "split42" for seeded
-recalculate_x: false
-use_both_frames: true            # true = ED+ES, false = use frame_type below
-frame_type: "ED"                 # "ED" or "ES" — used only if use_both_frames = false
 
-# ── Image type ────────────────────────────────────────────────────────────────
-image_roi_only: true
-mask_ys: false                   # apply ground-truth mask
-mask_bin: false                  # use binary mask
 
 # ── Model ─────────────────────────────────────────────────────────────────────
-model_name: "AE3dFCDeep"         # "AE3dFCDeep", "AE3dCurrent", "AE3dConv", "AE3dLinear", "AE3dFCDeep_VAE"
-latent_dimensions: 20
+model_name: "AE3dConv"         # "AE3dFCDeep", "AE3dCurrent", "AE3dConv", "AE3dLinear", "AE3dFCDeep_VAE"
+latent_dimensions: 40
 multiple_models_and_dims: false  # true = loop over models_list × latdim_list
 models_list: ["AE3dFCDeep"]
 latdim_list: [1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 40, 60, 80, 100, 130, 160, 200, 240]
 
 # ── Training ──────────────────────────────────────────────────────────────────
-recalculate_ae: true             # false = load existing model (requires load_run_id)
-load_run_id: null                # MLflow run ID — required when recalculate_ae: false
-n_epochs: 300                    # max epochs (early stopping triggers earlier if n_val > 0)
+recalculate_ae: false             # false = load existing model (requires load_run_id)
+load_run_id: 768cbcb505844827a1785bdf704bd5d1                # MLflow run ID — required when recalculate_ae: false
+n_epochs: 5                    # max epochs (early stopping triggers earlier if n_val > 0)
 batch_size: 1
 lr: 1e-5
 weight_decay: 0.0                # L2 regularisation; optuna example: 6.47e-6

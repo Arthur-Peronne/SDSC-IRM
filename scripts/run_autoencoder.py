@@ -138,6 +138,10 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
                 "frame_tag":        frame_tag,
                 "model_name":       model_name,
                 "latent_dimensions": str(latent_dimensions),
+                "source_folder":  cfg["source_folder"],
+                "image_roi_only": str(cfg["image_roi_only"]),
+                "mask_ys":        str(cfg["mask_ys"]),
+                "mask_bin":       str(cfg["mask_bin"]),
             }
             mismatches = [
                 f"  {k}: saved={saved.get(k)!r}, current={v!r}"
@@ -233,6 +237,10 @@ def main():
     with open(CONFIG_PATH) as f:
         cfg = yaml.safe_load(f)
 
+    # ── Float fix ────────────────────────────────────────────────────
+    for key in ("lr", "weight_decay", "dropout_rate", "noise_std", "beta"):
+        cfg[key] = float(cfg[key])
+    
     # ── Derived parameters ────────────────────────────────────────────────────
     n_train         = cfg["n_train"]
     n_val           = cfg["n_val"]
@@ -251,6 +259,8 @@ def main():
         use_both_frames=use_both_frames,
         frame_type=cfg["frame_type"],
         image_roi_only=cfg["image_roi_only"],
+        mask=cfg["mask_ys"],         
+        binary_mask=cfg["mask_bin"], 
         recalculate=cfg["recalculate_x"],
     )
     print(

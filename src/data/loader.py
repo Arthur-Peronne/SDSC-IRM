@@ -167,6 +167,8 @@ def load_tensor_datasets(
     use_both_frames: bool = True,
     frame_type: str = "ED",
     image_roi_only: bool = True,
+    mask: bool = False,          
+    binary_mask: bool = False,  
     percentile_max: float = 99.9,
     recalculate: bool = False,
     n_jobs: int = 1,
@@ -213,7 +215,7 @@ def load_tensor_datasets(
     """
     kwargs = dict(
         source_folder=source_folder, cache_folder=cache_folder,
-        image_roi_only=image_roi_only, mask=False, binary_mask=False,
+        image_roi_only=image_roi_only, mask=mask, binary_mask=binary_mask,
         flatten=False, recalculate=recalculate, n_jobs=n_jobs,
     )
 
