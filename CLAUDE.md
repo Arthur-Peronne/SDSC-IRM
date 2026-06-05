@@ -229,7 +229,8 @@ SDSC-arthur-project-1/
 ---
 
 ## Environnement local
-- Python 3.11.9 via pyenv
-- Venv : `.venv/` (ne pas commiter)
+- Python 3.11 (3.11.15 sur Fedora via `dnf install python3.11`, 3.11.9 sur macOS via pyenv)
+- Venv : `.venv/` (ne pas commiter) — **toujours créer avec `python3.11 -m venv .venv`** (pas `python3` ni `python`, qui pointent vers le Python système)
 - Dépendances : `pip install -r requirements_locked.txt`
 - `.env` local à créer depuis `.env.example` (sans clés AWS pour tests locaux)
+- lancer setup_env.sh pour installer le présent package
