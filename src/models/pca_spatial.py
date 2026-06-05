@@ -178,64 +178,6 @@ def get_vectorsarray(
     return data_array
 
 
-def pca_patients(X, pca_folder, pca_description, normalize_rows=True, recalculatePCA=False, max_pc_calc=1000, addstring=""):
-    """
-    Fit PCA on X and save results.
- 
-    If normalize_rows=True, each row (patient) is centered before PCA.
-    The per-patient means are saved in meta["row_means"] so that
-    reconstructions can be correctly de-centered afterwards.
- 
-    Parameters
-    ----------
-    X : np.ndarray, shape (n_patients, n_voxels)
-    pca_folder : str
-    pca_description : str
-    normalize_rows : bool
-    recalculatePCA : bool
-    max_pc_calc : int
-    addstring : str
- 
-    Returns
-    -------
-    pca : sklearn PCA
-    X_pca : np.ndarray, shape (n_patients, n_components)
-    meta : dict  — includes "row_means" key
-    """
-    folder_name = PROCESSED_IMAGES_FOLDER / pca_folder / f"{pca_description}"
- 
-    if recalculatePCA:
-        # Save row means BEFORE centering so they can be used for reconstruction
-        if normalize_rows:
-            row_means = X.mean(axis=1, keepdims=True)   # shape (n_patients, 1)
-            X -= row_means
-        else:
-            row_means = np.zeros((X.shape[0], 1), dtype=X.dtype)
- 
-        pca = PCA(n_components=min(X.shape[0], max_pc_calc))
-        X_pca = pca.fit_transform(X)
- 
-        folder_name.mkdir(parents=True, exist_ok=True)
-        joblib.dump(pca, folder_name / f"_pca{addstring}.joblib", compress=3)
-        np.save(folder_name / f"_X_pca{addstring}.npy", X_pca)
- 
-        meta = {
-            "n_patients": X.shape[0],
-            "n_features": X.shape[1],
-            "n_components": pca.n_components_,
-            "explained_variance_ratio_": pca.explained_variance_ratio_,
-            "row_means": row_means,   # shape (n_patients, 1) — needed for reconstruction
-        }
-        joblib.dump(meta, folder_name / f"_meta{addstring}.joblib", compress=3)
- 
-    else:
-        pca   = joblib.load(folder_name / f"_pca{addstring}.joblib")
-        X_pca = np.load(folder_name / f"_X_pca{addstring}.npy")
-        meta  = joblib.load(folder_name / f"_meta{addstring}.joblib")
- 
-    return pca, X_pca, meta
-
-
 
 def plot_eigenvectors(X, pca, original_shape, pca_description, nii_ref, eigenvectors_to_plot):
     """Plot the mean image and the specified eigenvectors as MRI slices."""
