@@ -1,4 +1,4 @@
-artifact_uri: file:///home/renku/work/SDSC-arthur-project-1/mlruns/630986741799423978/0a26fe987b6b470286ce20e405be2e79/artifacts
+artifact_uri: file://mlruns/630986741799423978/0a26fe987b6b470286ce20e405be2e79/artifacts
 end_time: 1780478575635
 entry_point_name: ''
 experiment_id: '630986741799423978'

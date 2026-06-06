@@ -30,7 +30,7 @@ from src.config import MLRUNS_FOLDER
 
 def _setup():
     warnings.filterwarnings("ignore", category=FutureWarning, module="mlflow")
-    mlflow.set_tracking_uri(MLRUNS_FOLDER.as_uri())
+    mlflow.set_tracking_uri("mlruns")
 
 
 @contextmanager
