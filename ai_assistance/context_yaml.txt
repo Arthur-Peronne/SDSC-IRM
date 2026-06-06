@@ -1,0 +1,433 @@
+======================================================================
+YAML CONFIG FILES
+Root : /home/arthur/Professionnel/SDSC/2_code/SDSC-IRM
+Files: 8
+======================================================================
+
+
+######################################################################
+# FILE: configs/ae_optuna.yaml
+######################################################################
+
+# configs/ae_optuna.yaml
+# Parameters for run_ae_optuna.py
+# Modify this file, then run: python scripts/run_ae_optuna.py
+# MLflow archives this file as artifact at each run.
+
+# ── Optuna study ──────────────────────────────────────────────────────────────
+study_name: "test_1"
+n_trials: 2
+plot_only: false                 # true = skip optimization, load existing study and replot
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+# source_folder ("registered_frames"), cache_folder ("X_vectors") and
+# recalculate_x (False) are hardcoded in the script for Optuna runs.
+use_both_frames: true            # true = ED+ES, false = use frame_type below
+frame_type: "ED"                 # "ED" or "ES" — used only if use_both_frames = false
+image_roi_only: true
+mask_ys: false                   # apply ground-truth mask
+mask_bin: false                  # use binary mask
+
+# ── Split ─────────────────────────────────────────────────────────────────────
+n_train: 100
+n_val: 20                        # must be > 0 (Optuna requires a validation set)
+n_test: 30
+special_split: null              # null = sequential "splitdefault"; e.g. "split42" for seeded
+
+# ── Fixed hyperparameters ─────────────────────────────────────────────────────
+model_name: "AE3dFCDeep"
+latent_dimensions: 120
+n_epochs: 3
+batch_size: 1
+
+# ── Hyperparameter search ranges ──────────────────────────────────────────────
+# type: "float" → suggest_float (add log: true for log scale)
+# type: "int"   → suggest_int
+#
+# VAE-specific params can be added here when needed, e.g.:
+#   beta:
+#     type: float
+#     low: 0.5
+#     high: 5.0
+#   beta_warmup_epochs:
+#     type: int
+#     low: 5
+#     high: 50
+hp_ranges:
+  lr:
+    type: float
+    low: 1.0e-6
+    high: 1.0e-4
+    log: true
+  weight_decay:
+    type: float
+    low: 1.0e-7
+    high: 1.0e-3
+    log: true
+  dropout_rate:
+    type: float
+    low: 0.0
+    high: 0.3
+  noise_std:
+    type: float
+    low: 0.0
+    high: 0.005
+  patience:
+    type: int
+    low: 20
+    high: 80
+
+# ── Initial trial (enqueued as trial 0 if the study is brand new) ─────────────
+hp_initial:
+  lr: 1.0e-5
+  weight_decay: 1.0e-5
+  dropout_rate: 0.1
+  noise_std: 0.003
+  patience: 40
+
+
+
+######################################################################
+# FILE: configs/autoencoder.yaml
+######################################################################
+
+# configs/autoencoder.yaml
+# Parameters for run_autoencoder.py
+# Modify this file, then run: python scripts/run_autoencoder.py
+# MLflow archives this file as artifact at each run.
+
+# ── Tracking ──────────────────────────────────────────────────────────────────
+experiment_tag: "optuna"       # "baseline", "optuna", or any custom label
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+source_folder: "registered_frames"
+use_both_frames: true            # true = ED+ES, false = use frame_type below
+frame_type: "ED"                 # "ED" or "ES" — used only if use_both_frames = false
+image_roi_only: true
+mask_ys: false                   # apply ground-truth mask
+mask_bin: false                  # use binary mask
+recalculate_x: false
+cache_folder: "X_vectors"        # subfolder in processed_images/ for cached .npy arrays
+
+# ── Split ────────────────────────────────────────────────────────────────
+n_train: 100
+n_val: 20
+n_test: 30
+special_split: null              # null = sequential "splitdefault"; e.g. "split42" for seeded
+
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+model_name: "AE3dConv"         # "AE3dFCDeep", "AE3dCurrent", "AE3dConv", "AE3dLinear", "AE3dFCDeep_VAE"
+latent_dimensions: 40
+multiple_models_and_dims: true  # true = loop over models_list × latdim_list
+models_list: ["AE3dFCDeep", "AE3dCurrent", "AE3dConv"]
+latdim_list: [4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
+
+# ── Training ──────────────────────────────────────────────────────────────────
+recalculate_ae: true             # false = load existing model (requires load_run_id)
+load_run_id: null                # MLflow run ID — required when recalculate_ae: false
+n_epochs: 500                    # max epochs (early stopping triggers earlier if n_val > 0)
+batch_size: 1
+lr: 1e-5
+weight_decay: 6.47e-6              # L2 regularisation; optuna example: 6.47e-6
+dropout_rate: 0.3221                # 0.0 for AE3dConv and AE3dLinear; optuna example: 0.221
+noise_std: 0.002                   # 0.0 = no denoising; optuna example: 0.002
+patience: 40                     # early stopping patience (used only if n_val > 0)
+patience_scheduler: null         # null = patience // 5
+
+# ── VAE parameters (AE3dFCDeep_VAE only) ──────────────────────────────────────
+beta: 1.0                        # KL weight in VAE loss
+beta_warmup_epochs: 20           # epochs to linearly ramp beta from 0 to target value
+
+# ── Reconstruction metrics ────────────────────────────────────────────────────
+compute_metrics: true
+plot_metrics: true               # save R²/MSE vs latent dim as PDF in results/
+
+# ── Plots : reconstruction ────────────────────────────────────────────────────
+plot_reconstruction: false
+recons_auto: false               # true = auto-select good/medium/bad patients (from val/test only)
+patients_torecons_manual:
+  - [1, "ED"]
+  - [30, "ES"]
+  - [110, "ED"]
+  - [130, "ES"]
+  - [145, "ED"]
+
+
+
+######################################################################
+# FILE: configs/comparison.yaml
+######################################################################
+
+# configs/comparison.yaml
+# Parameters for run_comparison_aepca.py
+# Modify this file, then run: python scripts/run_comparison_aepca.py
+# No MLflow tracking — output is plots in results/.
+
+# ── Plots to produce ──────────────────────────────────────────────────────────
+run_plot1_ae_comparison: false   # AE vs AE (validation set) — use to select best architecture
+run_plot2_ae_vs_pca: false       # AE vs PCA (test set, informative only)
+run_plot3_npatients: false       # AE trained on different n_patients
+run_plot4_hyper_comparison: false  # baseline vs optuna
+run_stats_nepochs: false         # early stopping epoch statistics
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+splitname: "split0"
+
+# ── AE (shared) ───────────────────────────────────────────────────────────────
+model_names: ["AE3dFCDeep"]      # ["AE3dCurrent", "AE3dFCDeep", "AE3dConv"]
+experiment_tag: "optuna"
+
+# ── Plot 1 & 2 ────────────────────────────────────────────────────────────────
+frame_tag: "ED+ES"               # "ED" or "ED+ES"
+n_patients: 240                  # n_train_images used for this study
+latdim_list_ae: [1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 40, 60, 80, 100, 130, 160, 200, 240]
+
+# ── Plot 3 — n_patients comparison ────────────────────────────────────────────
+n_patients_list: [100, 200]
+plot3_metrics_dataset: "validation"   # "train", "validation", or "test"
+
+# ── Plot 4 — hyperparameter comparison ────────────────────────────────────────
+experiment_tags_comparison: ["baseline", "optuna"]
+plot4_n_patients: 200
+
+# ── Shared plot options ───────────────────────────────────────────────────────
+metric: "R2"
+xscale: "log"
+
+
+
+######################################################################
+# FILE: configs/pca_spatial.yaml
+######################################################################
+
+# configs/pca_spatial.yaml
+# Parameters for run_pca_spatial.py
+# Modify this file, then run: python scripts/run_pca_spatial.py
+# MLflow archives this file as artifact at each run.
+
+# ── Tracking ──────────────────────────────────────────────────────────────────
+experiment_tag: "baseline"       # PCA has no hyperparameter regime — kept for symmetry with AE
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+source_folder: "registered_frames"
+cache_folder: "X_vectors"        # subfolder in processed_images/ for cached .npy arrays
+n_train: 120
+n_val: 0
+n_test: 30
+special_split: "split1"             # null = sequential "splitdefault" ; ex: "split42" for seeded random split
+recalculate_x: false
+use_both_frames: true            # true = ED+ES, false = use frame_type below
+frame_type: "ED"                 # "ED" or "ES" — used only if use_both_frames = false
+
+# ── PCA ───────────────────────────────────────────────────────────────────────
+recalculate_pca: false
+load_run_id: "eae670bec1ed4ea0b05700776bacb9dc"                # MLflow run ID — required when recalculate_pca: false
+image_roi_only: true
+mask_ys: false                   # apply ground-truth mask
+mask_bin: false                  # use binary mask
+original_shape: [128, 128, 32]
+max_pc_calc: 300
+
+# ── Reconstruction metrics ────────────────────────────────────────────────────
+compute_metrics: true
+plot_metrics: true               # save R²/MSE vs n_PCs as PDF in results/
+latdim_list_pca: null            # null = range(1, n_development); or explicit list e.g. [10, 20, 50]
+
+# ── Plots : explained variance ────────────────────────────────────────────────
+plot_explained_variance: false
+
+# ── Plots : PC values in eigenbase ────────────────────────────────────────────
+plot_pc_values: true
+pc_max: 10                       # plots pairs (1,2), (3,4), ... up to pc_max — must be even
+plot_metadata: false
+
+# ── Plots : eigenvectors ──────────────────────────────────────────────────────
+plot_eigenvectors: true         # slow — set true only when needed
+eigenvectors_to_plot: [1, 2, 3]
+
+# ── Plots : reconstruction ────────────────────────────────────────────────────
+plot_reconstruction: true
+n_pc_to_reconstruct: 10
+recons_auto: false
+patients_torecons_manual:
+  - [1, "ED"]
+  - [30, "ES"]
+  - [110, "ED"]
+  - [130, "ES"]
+  - [145, "ED"]
+
+
+
+######################################################################
+# FILE: configs/pca_temporal.yaml
+######################################################################
+
+# configs/pca_temporal.yaml
+# Parameters for run_pca_temporal.py
+# Modify this file, then run: python scripts/run_pca_temporal.py
+# MLflow archives this file as artifact at each run.
+
+# ── Tracking ──────────────────────────────────────────────────────────────────
+experiment_tag: "baseline"
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+patient_id: 27
+
+# ── PCA ───────────────────────────────────────────────────────────────────────
+recalculate_pca: false
+load_run_id: "33332a9f10ba405b88edbf1c2b9a4952"   # required only when recalculate_pca: false
+max_pc_calc: 100
+
+# ── Plots : explained variance ────────────────────────────────────────────────
+plot_explained_variance: true
+
+# ── Plots : PC values in eigenbase ────────────────────────────────────────────
+plot_pc_values: true
+pc_max: 10          # plots pairs (1,2), (3,4), ... up to pc_max — must be even
+
+# ── Plots : eigenvectors ──────────────────────────────────────────────────────
+plot_eigenvectors: true
+eigenvectors_to_plot: [1, 2, 3]
+
+# ── Plots : reconstruction ────────────────────────────────────────────────────
+plot_reconstruction: true
+n_pc_to_reconstruct: 1
+frames_to_reconstruct: [0]   # list of timeframe indices, or "all"
+
+
+
+######################################################################
+# FILE: configs/registration.yaml
+######################################################################
+
+# configs/registration.yaml
+# Parameters for run_registration.py
+# Modify this file, then run: python scripts/run_registration.py
+# No MLflow tracking for preprocessing — outputs go to processed_images/.
+
+# ── Steps to run ──────────────────────────────────────────────────────────────
+resample_all: true
+crop_all: true
+register_all: true
+
+# ── Shared options ────────────────────────────────────────────────────────────
+only_01: false                   # true = process only frame01/frame04 (ED frames, debug)
+limit: 1000                      # max number of frames to process (set to 2 for quick debug)
+
+# ── Resampling ────────────────────────────────────────────────────────────────
+target_spacing: [1.5, 1.5, 3.15]  # mm/voxel (x, y, z)
+
+# ── Cropping ──────────────────────────────────────────────────────────────────
+crop_shape: [128, 128, 32]       # voxels (x, y, z) around cardiac centroid
+
+# ── Registration ──────────────────────────────────────────────────────────────
+reference_patient: patient001    # fixed reference for all registrations
+reference_frame: frame01         # ED frame of the reference patient
+crop_after_registration: true    # crop output to reference window shape
+n_iterations: 200                # optimizer iterations for rigid registration
+
+# ── Pipeline checks ───────────────────────────────────────────────────────────
+# To run checks only: set resample_all, crop_all, register_all to false.
+run_pipelinechecks: false
+check_ED: true                   # plot ED sample frames
+check_ES: true                   # plot ES sample frames
+check_resampled: true            # check resampled step
+check_cropped: true              # check cropped step
+check_registered: true           # check registered step
+do_dice_checks: true             # compute Dice before/after registration
+registered_OLD: null             # folder name to compare against, or null to skip
+n_worst_to_print: 5
+patients_ED:
+  patient001: frame01
+  patient050: frame01
+  patient090: frame04
+  patient110: frame01
+  patient140: frame01
+patients_ES:
+  patient001: frame12
+  patient050: frame12
+  patient090: frame11
+  patient110: frame12
+  patient140: frame12
+
+
+
+######################################################################
+# FILE: configs/regression.yaml
+######################################################################
+
+# configs/regression.yaml
+# Parameters for run_regression.py
+# Modify this file, then run: python scripts/run_regression.py
+# MLflow archives this file as artifact at each run.
+
+# ── Tracking ──────────────────────────────────────────────────────────────────
+experiment_tag: "baseline"
+
+# ── Target variable ───────────────────────────────────────────────────────────
+y_name: "group"                  # "group", "height", "weight"
+group_binary: false              # true = binary classification (one class vs rest)
+group_bin_value: "RV"            # used only if group_binary = true; "DCM", "HCM", "MINF", "NOR", "RV"
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+source_folder: "registered_frames"
+pca_folder: "pca_allpatients_res"
+image_roi_only: true
+mask_ys: false
+mask_bin: false
+splitname: "split0"
+
+# ── PCA dimensionality selection ──────────────────────────────────────────────
+cumvar_threshold: 1.0            # variance threshold for selecting n_components
+n_idealpc_confusion: 12          # n_components for confusion matrix plot
+
+
+
+######################################################################
+# FILE: configs/visualization.yaml
+######################################################################
+
+# configs/visualization.yaml
+# Configuration for run_visualize.py
+
+# Patient ID (1-150)
+patient_id: 1
+
+# ── Source ───────────────────────────────────────────────────────────────────
+# "raw"       → original ACDC file from DATADIR
+# "processed" → file from PROCESSED_IMAGES_FOLDER
+source: "processed"
+
+# For source=raw only:
+#   "frame" → single frame (ED or ES, controlled by frame_type below)
+#   "4d"    → full cine volume (patientXXX_4d.nii.gz) — frame_type ignored
+raw_file_type: "frame"
+
+# For source=processed only:
+#   Subfolder in PROCESSED_IMAGES_FOLDER.
+#   File suffix is derived from the folder name:
+#     registered_frames → _registered
+#     resampled_frames  → _resampled
+#     cropped_frames    → _cropped
+folder: "registered_frames"
+
+# Frame to visualize — applies to both raw and processed.
+# The exact frame number is read from the patient's Info.cfg (DATADIR).
+# "ED" | "ES" | "both"
+# Ignored when source=raw and raw_file_type=4d.
+frame_type: "both"
+
+# ── Plot modes ────────────────────────────────────────────────────────────────
+# Combinable:
+#   image      → 3D image alone
+#   mask       → GT mask alone (skipped silently if no mask file found)
+#   overlay    → image + mask superimposed + masked region only
+#   all_epochs → all timeframes (source=raw, raw_file_type=4d only)
+plot_modes:
+  - image
+  - mask 
+  - overlay
+
+# Max epochs to plot in all_epochs mode
+epoch_limit: 5

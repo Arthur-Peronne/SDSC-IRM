@@ -1,34 +1,37 @@
 ======================================================================
 PROJECT ARBORESCENCE WITH MODULE DESCRIPTIONS
-Root : /home/renku/work/SDSC-arthur-project-1
+Root : /home/arthur/Professionnel/SDSC/2_code/SDSC-IRM
 ======================================================================
 
-SDSC-arthur-project-1/
+SDSC-IRM/
 ├── ai_assistance/
+│   ├── What the code must perform.txt
 │   ├── context_arborescence.txt
 │   ├── context_code.txt
 │   └── dump_context.py
-├── archive_scripts/
-│   ├── run_pca_spatial_OLD.py  # Script for the functions for the PCA "each patient"
-│   ├── run_pca_vs_ae.py  # Script for the functions for the PCA  across each patient and compare the results with the autoencoder
-│   └── run_pca_vs_ae_OLD.py  # Script for the functions for the PCA  across each patient and compare the results with the autoencoder
+├── configs/
+│   ├── ae_optuna.yaml
+│   ├── autoencoder.yaml
+│   ├── comparison.yaml
+│   ├── pca_spatial.yaml
+│   ├── pca_temporal.yaml
+│   ├── registration.yaml
+│   ├── regression.yaml
+│   └── visualization.yaml
 ├── experiments/
 │   ├── pca_testiris.py  # Script to perform a simple PCA on the IRIS dataset
-│   ├── regression_testscikit.py
-│   └── test.py
+│   └── regression_testscikit.py
 ├── reports/
 │   └── test.txt
 ├── scripts/
-│   ├── run_ae_hyperparam.py  # Optuna hyperparameter optimisation for AE3dFCDeep.
-│   ├── run_autoencoder.py  # Script for training and evaluating the 3D autoencoder on cardiac MRI data.
+│   ├── run_ae_optuna.py  # Optuna hyperparameter optimisation for 3D autoencoders.
+│   ├── run_autoencoder.py  # 3D autoencoder training and evaluation on cardiac MRI data.
 │   ├── run_comparison_aepca.py  # Comparison plots between AE architectures and PCA.
-│   ├── run_imagetreatment.py  # Script to treat MRI images before analysis (PCA)
 │   ├── run_pca_spatial.py  # Spatial PCA across patients.
-│   ├── run_pca_temporal.py  # Scripts to perform PCA
-│   ├── run_registration.py  # Script to perform the image resampling and the following registration
-│   ├── run_registration_pipelinechecks.py  # Visual quality check of the preprocessing pipeline.
+│   ├── run_pca_temporal.py  # Temporal PCA on a single patient's 4D cardiac MRI.
+│   ├── run_registration.py  # Preprocessing pipeline: resampling -> cropping -> registration.
 │   ├── run_regression.py  # Script for the functions for the PCA "each patient" and followed by the logistic regression with patient metadata
-│   └── run_visualize.py  # Script to visualize MRI images
+│   └── run_visualize.py  # Visualize MRI NIfTI images (raw ACDC or processed).
 ├── sdsc_arthur_project.egg-info/
 │   ├── PKG-INFO
 │   ├── SOURCES.txt
@@ -40,8 +43,10 @@ SDSC-arthur-project-1/
 │   │   ├── geometry.py  # Geometry utilities for cardiac MRI preprocessing:
 │   │   ├── imagetreatment.py  # Basic MRI image treatment functions (cropping, resampling).
 │   │   ├── importdata.py  # Functions to import data
+│   │   ├── loader.py  # Unified data loading and train/val/test split utilities.
 │   │   ├── registration.py  # Rigid registration of cardiac MRI frames and Dice-based evaluation.
-│   │   └── resampling.py  # Functions defined for the image registration
+│   │   ├── resampling.py  # Functions defined for the image registration
+│   │   └── splits.py  # Patient-level train / val / test split utilities.
 │   ├── models/
 │   │   ├── __init__.py
 │   │   ├── ae_models.py  # 3D autoencoder architectures for cardiac MRI representation learning.
@@ -55,45 +60,27 @@ SDSC-arthur-project-1/
 │   │   └── top_level.txt
 │   ├── training/
 │   │   ├── __init__.py
-│   │   ├── ae_optuna.py  # Functions for ptuna hyperparameter optimisation for AE3dFCDeep used in run_ae_hyperparam.py
-│   │   └── ae_training.py  # Training, dataset preparation, and metrics aggregation for the 3D autoencoder.
+│   │   ├── ae_optuna.py  # Optuna hyperparameter optimisation for 3D autoencoders.
+│   │   └── ae_training.py  # Training and evaluation utilities for the 3D autoencoder.
 │   ├── visualization/
 │   │   ├── __init__.py
 │   │   ├── ae_plots.py  # Plotting and result parsing functions for the 3D autoencoder.
 │   │   ├── mri_plots.py  # Functions to visualize MRI images
+│   │   ├── pca_plots.py  # PCA visualization functions — shared by the temporal and spatial pipelines.
 │   │   ├── plots.py  # Various plots, not direct MRI representations
 │   │   └── regression_plots.py  # Result parsing and plotting functions for logistic and linear regression
 │   ├── __init__.py
-│   └── config.py  # Central configuration — paths loaded from environment variables.
+│   ├── config.py  # Central configuration — paths loaded from environment variables.
+│   └── tracking.py  # MLflow utilities. All tracking interactions must go through this module.
+├── CLAUDE.md
 ├── README.md
-├── backup_results.tar.gz
 ├── pyproject.toml
-├── requirements-OLD.txt
-├── requirements.txt
 ├── requirements_locked.txt
-├── setup_env.sh
-└── shortcut_AP.txt
+└── setup_env.sh
 
 ======================================================================
 DETAILED DOCSTRINGS PER FILE
 ======================================================================
-
-# archive_scripts/run_pca_spatial_OLD.py
-"""
-Script for the functions for the PCA "each patient"
-"""
-
-# archive_scripts/run_pca_vs_ae.py
-"""
-Script for the functions for the PCA  across each patient and compare the results with the autoencoder
-Reasons to have a new script: need same inputs and same outputs as AE pipeline
-"""
-
-# archive_scripts/run_pca_vs_ae_OLD.py
-"""
-Script for the functions for the PCA  across each patient and compare the results with the autoencoder
-Reasons to have a new script: need same inputs and same outputs as AE pipeline
-"""
 
 # experiments/pca_testiris.py
 """
@@ -105,27 +92,35 @@ Script to perform a simple PCA on the IRIS dataset
 (no module docstring)
 """
 
-# experiments/test.py
+# scripts/run_ae_optuna.py
 """
-(no module docstring)
-"""
+Optuna hyperparameter optimisation for 3D autoencoders.
 
-# scripts/run_ae_hyperparam.py
-"""
-Optuna hyperparameter optimisation for AE3dFCDeep.
-
-Each trial trains AE3dFCDeep with early stopping and returns
-the best validation loss. Results are persisted in SQLite so
-the study can be interrupted and resumed at any time.
+Reads configuration from configs/ae_optuna.yaml.
+Results (plots, summary, SQLite DB) are tracked in MLflow under experiment "ae_optuna".
 
 Usage:
-    python scripts/run_ae_hyperparam.py
+    python scripts/run_ae_optuna.py
+
+CALC mode: set plot_only: false — runs the Optuna study (resumes if DB already exists).
+PLOT mode: set plot_only: true  — loads the existing study from SQLite and regenerates plots.
+
+After finding the best hyperparameters, copy them into configs/autoencoder.yaml
+and run run_autoencoder.py to train the final model.
 """
 
 # scripts/run_autoencoder.py
 """
-Script for training and evaluating the 3D autoencoder on cardiac MRI data.
-Uses early stopping based on validation loss.
+3D autoencoder training and evaluation on cardiac MRI data.
+
+Reads configuration from configs/autoencoder.yaml.
+Results (model + metrics + plots) are tracked in MLflow under experiment "autoencoder".
+
+Usage:
+    python scripts/run_autoencoder.py
+
+LOAD mode: set recalculate_ae: false and load_run_id: <mlflow_run_id> in the YAML.
+CALC mode: set recalculate_ae: true.
 """
 
 # scripts/run_comparison_aepca.py
@@ -145,47 +140,43 @@ Plot 3 — AE n_patients comparison:
     Helps assess the effect of data augmentation (e.g. ED vs ED+ES).
 """
 
-# scripts/run_imagetreatment.py
-"""
-Script to treat MRI images before analysis (PCA)
-"""
-
 # scripts/run_pca_spatial.py
 """
 Spatial PCA across patients.
 
-Two use cases:
-  1. Standalone PCA study: explained variance, eigenvectors, metadata correlations.
-  2. AE comparison: reconstruction metrics (R2, MSE...) on train / val / test sets,
-     using the same splits as run_autoencoder.py for a fair comparison.
+For each patient, all voxels of one registered 3D frame are a sample — the PCA
+captures how voxel intensities co-vary across the population (anatomical modes).
 
-Supports ED only, ES only, or ED+ES combined datasets.
-All output files include a frame tag (ED / ES / ED+ES) to avoid overwriting.
+Reads configuration from configs/pca_spatial.yaml.
+Results (model + plots) are tracked in MLflow under experiment "pca_spatial".
+
+Usage:
+    python scripts/run_pca_spatial.py
 """
 
 # scripts/run_pca_temporal.py
 """
-Scripts to perform PCA
+Temporal PCA on a single patient's 4D cardiac MRI.
+
+For each patient, all 3D volumes (timeframes) are samples — the PCA captures
+how voxel intensities co-vary over time (cardiac cycle dynamics).
+
+Reads configuration from configs/pca_temporal.yaml.
+Results (model + plots) are tracked in MLflow under experiment "pca_temporal".
+
+Usage:
+    python scripts/run_pca_temporal.py
 """
 
 # scripts/run_registration.py
 """
-Script to perform the image resampling and the following registration
-"""
+Preprocessing pipeline: resampling -> cropping -> registration.
+All parameters are read from configs/registration.yaml.
+Outputs go to processed_images/ (no MLflow tracking for preprocessing).
 
-# scripts/run_registration_pipelinechecks.py
-"""
-Visual quality check of the preprocessing pipeline.
-
-For a selection of patients, plots images and masks at each step:
-  1. Resampled (full image)
-  2. Cropped (around cardiac centroid)
-  3. Registered (aligned to reference)
-
-Also computes Dice scores before/after registration, separately for ED and ES frames.
-
-Run this script after any change to resampling, cropping, or registration
-to verify the pipeline produces correct outputs.
+Pipeline checks (visual + Dice) can be run at the end by setting
+run_pipelinechecks: true in the YAML. To run checks only, set
+resample_all, crop_all, register_all to false.
 """
 
 # scripts/run_regression.py
@@ -195,7 +186,15 @@ Script for the functions for the PCA "each patient" and followed by the logistic
 
 # scripts/run_visualize.py
 """
-Script to visualize MRI images
+Visualize MRI NIfTI images (raw ACDC or processed).
+Reads configuration from configs/visualization.yaml.
+Outputs PNG files to RESULTS_FOLDER.
+
+Supported sources:
+  raw       - original ACDC frames or 4D volumes from DATADIR
+  processed - resampled/cropped/registered files from PROCESSED_IMAGES_FOLDER
+
+Frame numbers (ED/ES) are read from each patient's Info.cfg.
 """
 
 # src/__init__.py
@@ -230,6 +229,20 @@ Basic MRI image treatment functions (cropping, resampling).
 Functions to import data
 """
 
+# src/data/loader.py
+"""
+Unified data loading and train/val/test split utilities.
+Shared by the PCA spatial and autoencoder pipelines.
+
+Two public entry points
+-----------------------
+load_numpy_splits()    → flat numpy arrays  (PCA pipeline)
+load_tensor_datasets() → TensorDatasets     (AE pipeline)
+
+Both rely on the same internal split logic via _split_frames().
+Split indices are computed by src.data.splits.get_split_indices().
+"""
+
 # src/data/registration.py
 """
 Rigid registration of cardiac MRI frames and Dice-based evaluation.
@@ -238,6 +251,35 @@ Rigid registration of cardiac MRI frames and Dice-based evaluation.
 # src/data/resampling.py
 """
 Functions defined for the image registration
+"""
+
+# src/data/splits.py
+"""
+Patient-level train / val / test split utilities.
+Shared by the PCA spatial, autoencoder, and regression pipelines.
+
+Two modes
+---------
+- Default sequential split  (special_split=None) : patients are assigned in
+  order — first n_train for training, then n_val, then n_test.  Logged as
+  "splitdefault" in MLflow.
+- Named random split        (special_split="split42") : the name is hashed to
+  a deterministic seed, patients are shuffled, and the same partition is
+  always reproduced from the same name.
+
+Usage
+-----
+    from src.data.splits import get_split_indices
+
+    train_idx, val_idx, test_idx, split_name = get_split_indices(
+        n_train=100, n_val=20, n_test=30,
+        special_split=None,      # → "splitdefault"
+    )
+
+    train_idx, val_idx, test_idx, split_name = get_split_indices(
+        n_train=100, n_val=20, n_test=30,
+        special_split="split42",
+    )
 """
 
 # src/models/__init__.py
@@ -266,6 +308,29 @@ Data loading, split management, logistic and linear regression models
 for PCA-based cardiac group classification and metadata prediction.
 """
 
+# src/tracking.py
+"""
+MLflow utilities. All tracking interactions must go through this module.
+Scripts must not import mlflow directly.
+
+Naming convention
+-----------------
+experiment_name : pipeline type
+    "autoencoder", "pca_spatial", "pca_temporal", "regression"
+
+run_name : "{simulation_name}_{experiment_tag}"
+    simulation_name identifies the data configuration:
+        AE  → "AE3dFCDeep_240patients_split0_120dims"
+        PCA → "PCA_240patients_split0_ED+ES"
+    experiment_tag identifies the hyperparameter regime:
+        AE  → "optuna", "baseline", ...
+        PCA → "baseline"  (always — kept for symmetry with AE)
+
+    Full run_name examples:
+        "AE3dFCDeep_240patients_split0_120dims_optuna"
+        "PCA_240patients_split0_ED+ES_baseline"
+"""
+
 # src/training/__init__.py
 """
 (no module docstring)
@@ -273,16 +338,20 @@ for PCA-based cardiac group classification and metadata prediction.
 
 # src/training/ae_optuna.py
 """
-Functions for ptuna hyperparameter optimisation for AE3dFCDeep used in run_ae_hyperparam.py
+Optuna hyperparameter optimisation for 3D autoencoders.
 
-Each trial trains AE3dFCDeep with early stopping and returns
-the best validation loss. Results are persisted in SQLite so
-the study can be interrupted and resumed at any time.
+Each trial trains one AE with early stopping and returns the best validation loss.
+Results are persisted in a SQLite DB so the study can be interrupted and resumed.
+All I/O (MLflow logging, artifact saving) is handled by run_ae_optuna.py.
 """
 
 # src/training/ae_training.py
 """
-Training, dataset preparation, and metrics aggregation for the 3D autoencoder.
+Training and evaluation utilities for the 3D autoencoder.
+
+Design principle: these functions contain only training/evaluation logic.
+All file I/O (model saving, metric logging) is handled by run_autoencoder.py via MLflow,
+following the same pattern as run_pca_spatial.py.
 """
 
 # src/visualization/__init__.py
@@ -298,6 +367,11 @@ Plotting and result parsing functions for the 3D autoencoder.
 # src/visualization/mri_plots.py
 """
 Functions to visualize MRI images
+"""
+
+# src/visualization/pca_plots.py
+"""
+PCA visualization functions — shared by the temporal and spatial pipelines.
 """
 
 # src/visualization/plots.py
