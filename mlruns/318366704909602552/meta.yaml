@@ -1,0 +1,8 @@
+artifact_location: file:///home/renku/work/SDSC-arthur-project-1/mlruns/318366704909602552
+creation_time: 1780668448079
+experiment_id: '318366704909602552'
+last_update_time: 1780668448079
+lifecycle_stage: active
+name: ae_optuna
+trace_location: null
+workspace: default

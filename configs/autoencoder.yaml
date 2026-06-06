@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "baseline"       # "baseline", "optuna", or any custom label
+experiment_tag: "optuna"       # "baseline", "optuna", or any custom label
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
@@ -26,19 +26,19 @@ special_split: null              # null = sequential "splitdefault"; e.g. "split
 # ── Model ─────────────────────────────────────────────────────────────────────
 model_name: "AE3dConv"         # "AE3dFCDeep", "AE3dCurrent", "AE3dConv", "AE3dLinear", "AE3dFCDeep_VAE"
 latent_dimensions: 40
-multiple_models_and_dims: false  # true = loop over models_list × latdim_list
-models_list: ["AE3dFCDeep"]
-latdim_list: [1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 40, 60, 80, 100, 130, 160, 200, 240]
+multiple_models_and_dims: true  # true = loop over models_list × latdim_list
+models_list: ["AE3dFCDeep", "AE3dCurrent", "AE3dConv"]
+latdim_list: [4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
 
 # ── Training ──────────────────────────────────────────────────────────────────
-recalculate_ae: false             # false = load existing model (requires load_run_id)
-load_run_id: 768cbcb505844827a1785bdf704bd5d1                # MLflow run ID — required when recalculate_ae: false
-n_epochs: 5                    # max epochs (early stopping triggers earlier if n_val > 0)
+recalculate_ae: true             # false = load existing model (requires load_run_id)
+load_run_id: null                # MLflow run ID — required when recalculate_ae: false
+n_epochs: 500                    # max epochs (early stopping triggers earlier if n_val > 0)
 batch_size: 1
 lr: 1e-5
-weight_decay: 0.0                # L2 regularisation; optuna example: 6.47e-6
-dropout_rate: 0.0                # 0.0 for AE3dConv and AE3dLinear; optuna example: 0.221
-noise_std: 0.0                   # 0.0 = no denoising; optuna example: 0.002
+weight_decay: 6.47e-6              # L2 regularisation; optuna example: 6.47e-6
+dropout_rate: 0.3221                # 0.0 for AE3dConv and AE3dLinear; optuna example: 0.221
+noise_std: 0.002                   # 0.0 = no denoising; optuna example: 0.002
 patience: 40                     # early stopping patience (used only if n_val > 0)
 patience_scheduler: null         # null = patience // 5
 
