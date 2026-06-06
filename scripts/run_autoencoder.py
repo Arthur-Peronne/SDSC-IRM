@@ -54,6 +54,7 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
     )
 
     with run_ctx:
+        tracking.log_metric("latent_dim", latent_dimensions)
 
         # ── CALC mode ─────────────────────────────────────────────────────────
         if recalculate:

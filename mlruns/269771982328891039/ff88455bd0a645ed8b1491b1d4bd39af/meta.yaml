@@ -1,10 +1,11 @@
 artifact_uri: /home/renku/work/SDSC-arthur-project-1/mlruns/269771982328891039/ff88455bd0a645ed8b1491b1d4bd39af/artifacts
-end_time: 1780689997732
+end_time: 1780739525927
 entry_point_name: ''
 experiment_id: '269771982328891039'
 lifecycle_stage: active
 run_id: ff88455bd0a645ed8b1491b1d4bd39af
 run_name: AE_AE3dFCDeep_200patients_splitdefault_120dims_optuna
+run_uuid: ff88455bd0a645ed8b1491b1d4bd39af
 source_name: ''
 source_type: 4
 source_version: ''
