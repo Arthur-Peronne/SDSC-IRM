@@ -1,0 +1,24 @@
+============================================================
+Optuna Study : test_1
+Trials completed : 2
+Best val loss    : 0.131755
+
+Best hyperparameters :
+                    lr = 1e-05
+          weight_decay = 1e-05
+          dropout_rate = 0.1
+             noise_std = 0.003
+              patience = 40
+
+Hyperparameter importance :
+             noise_std : 0.286  ████████
+                    lr : 0.286  ████████
+              patience : 0.214  ██████
+          dropout_rate : 0.143  ████
+          weight_decay : 0.071  ██
+
+ Trial     Val loss  Epoch           lr weight_decay dropout_rate    noise_std     patience
+-------------------------------------------------------------------------------------------
+     0     0.131755      3     1.00e-05     1.00e-05     1.00e-01     3.00e-03           40
+     1     0.146889      3     1.43e-06     8.73e-05     1.64e-01     3.51e-03           34
+============================================================

@@ -21,7 +21,6 @@
 *.pt
 *.joblib
 *.pkl
-mlruns/**/artifacts/
 
 # =============================================================================
 # PROJECT-SPECIFIC FOLDERS

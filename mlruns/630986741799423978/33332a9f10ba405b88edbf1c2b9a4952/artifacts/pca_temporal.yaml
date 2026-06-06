@@ -1,0 +1,31 @@
+# configs/pca_temporal.yaml
+# Parameters for run_pca_temporal.py
+# Modify this file, then run: python scripts/run_pca_temporal.py
+# MLflow archives this file as artifact at each run.
+
+# ── Tracking ──────────────────────────────────────────────────────────────────
+experiment_tag: "baseline"
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+patient_id: 27
+
+# ── PCA ───────────────────────────────────────────────────────────────────────
+recalculate_pca: true
+#load_run_id: "b4ee25fd8a8449eeb5689f8a0c03e13a"   # required only when recalculate_pca: false
+max_pc_calc: 100
+
+# ── Plots : explained variance ─────────────────────────────────────────────────
+do_explained_variance: true
+
+# ── Plots : PC values in eigenbase ────────────────────────────────────────────
+do_pc_in_eigenbase: true
+pc_max: 10          # plots pairs (1,2), (3,4), ... up to pc_max — must be even
+
+# ── Plots : eigenvectors ──────────────────────────────────────────────────────
+do_eigenvec_plot: true
+eigenvectors_to_plot: [1, 2, 3]
+
+# ── Plots : reconstruction ────────────────────────────────────────────────────
+do_reconstruction: true
+n_pc_to_reconstruct: 4
+frames_to_reconstruct: [0]   # list of timeframe indices, or "all"

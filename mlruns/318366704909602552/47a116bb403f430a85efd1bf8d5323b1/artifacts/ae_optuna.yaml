@@ -1,0 +1,75 @@
+# configs/ae_optuna.yaml
+# Parameters for run_ae_optuna.py
+# Modify this file, then run: python scripts/run_ae_optuna.py
+# MLflow archives this file as artifact at each run.
+
+# ── Optuna study ──────────────────────────────────────────────────────────────
+study_name: "test_1"
+n_trials: 2
+plot_only: false                 # true = skip optimization, load existing study and replot
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+# source_folder ("registered_frames"), cache_folder ("X_vectors") and
+# recalculate_x (False) are hardcoded in the script for Optuna runs.
+use_both_frames: true            # true = ED+ES, false = use frame_type below
+frame_type: "ED"                 # "ED" or "ES" — used only if use_both_frames = false
+image_roi_only: true
+mask_ys: false                   # apply ground-truth mask
+mask_bin: false                  # use binary mask
+
+# ── Split ─────────────────────────────────────────────────────────────────────
+n_train: 100
+n_val: 20                        # must be > 0 (Optuna requires a validation set)
+n_test: 30
+special_split: null              # null = sequential "splitdefault"; e.g. "split42" for seeded
+
+# ── Fixed hyperparameters ─────────────────────────────────────────────────────
+model_name: "AE3dFCDeep"
+latent_dimensions: 120
+n_epochs: 3
+batch_size: 1
+
+# ── Hyperparameter search ranges ──────────────────────────────────────────────
+# type: "float" → suggest_float (add log: true for log scale)
+# type: "int"   → suggest_int
+#
+# VAE-specific params can be added here when needed, e.g.:
+#   beta:
+#     type: float
+#     low: 0.5
+#     high: 5.0
+#   beta_warmup_epochs:
+#     type: int
+#     low: 5
+#     high: 50
+hp_ranges:
+  lr:
+    type: float
+    low: 1.0e-6
+    high: 1.0e-4
+    log: true
+  weight_decay:
+    type: float
+    low: 1.0e-7
+    high: 1.0e-3
+    log: true
+  dropout_rate:
+    type: float
+    low: 0.0
+    high: 0.3
+  noise_std:
+    type: float
+    low: 0.0
+    high: 0.005
+  patience:
+    type: int
+    low: 20
+    high: 80
+
+# ── Initial trial (enqueued as trial 0 if the study is brand new) ─────────────
+hp_initial:
+  lr: 1.0e-5
+  weight_decay: 1.0e-5
+  dropout_rate: 0.1
+  noise_std: 0.003
+  patience: 40
