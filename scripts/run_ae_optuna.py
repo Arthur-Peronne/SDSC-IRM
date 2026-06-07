@@ -34,11 +34,11 @@ def main():
     if cfg["n_val"] <= 0:
         raise ValueError("n_val must be > 0 for Optuna (early stopping requires a validation set)")
 
-    frame_tag      = "ED+ES" if cfg["use_both_frames"] else cfg["frame_type"]
-    n_train        = cfg["n_train"]
-    n_val          = cfg["n_val"]
+    frame_tag  = "ED+ES" if cfg["use_both_frames"] else cfg["frame_type"]
+    n_train    = cfg["n_train"]
+    n_val      = cfg["n_val"]
+    study_name = cfg["study_name"]
 
-    # Load data before opening the MLflow run (split_name needed for run_name)
     train_dataset, val_dataset, _, _, split_name = loader.load_tensor_datasets(
         source_folder="registered_frames",
         cache_folder="X_vectors",
@@ -55,58 +55,67 @@ def main():
     )
     print(f"Data loaded | train: {len(train_dataset)} | val: {len(val_dataset)} | split: {split_name}")
 
-    db_path    = RESULTS_FOLDER / "optuna" / f"{cfg['study_name']}.db"
-    study_name = cfg["study_name"]
-    run_name   = f"optuna_{study_name}_{split_name}"
-
+    run_name = f"optuna_{study_name}_{split_name}"
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    with tracking.start_run("ae_optuna", run_name):
-        tracking.log_artifact(CONFIG_PATH)
-        tracking.log_params({
-            "model_name":        cfg["model_name"],
-            "latent_dimensions": cfg["latent_dimensions"],
-            "n_train":           n_train,
-            "n_val":             n_val,
-            "n_test":            cfg["n_test"],
-            "split_name":        split_name,
-            "frame_tag":         frame_tag,
-            "image_roi_only":    cfg["image_roi_only"],
-            "mask_ys":           cfg["mask_ys"],
-            "mask_bin":          cfg["mask_bin"],
-            "n_epochs":          cfg["n_epochs"],
-            "batch_size":        cfg["batch_size"],
-            "study_name":        study_name,
-            "n_trials_target":   cfg["n_trials"],
-        })
+    if cfg["plot_only"]:
+        load_run_id = cfg.get("load_run_id")
+        if not load_run_id:
+            raise ValueError("plot_only: true requires load_run_id in the YAML")
+        db_path = tracking.download_artifact(load_run_id)
+        study = aeo.load_study(study_name, db_path)
+        print(f"Study loaded from DB: {len(study.trials)} trials")
 
-        if cfg["plot_only"]:
-            study = aeo.load_study(study_name, db_path)
-            print(f"Study loaded from DB: {len(study.trials)} trials")
-        else:
+        with tracking.resume_run(load_run_id):
+            tracking.log_artifact(CONFIG_PATH)
+            _log_and_plot(study, cfg, n_train, n_val, split_name, frame_tag, study_name)
+            
+    else:
+        mlflow_run, artifact_dir = tracking.start_run_and_get_id("ae_optuna", run_name)
+        with mlflow_run:
+            tracking.log_artifact(CONFIG_PATH)
+            tracking.log_params({
+                "model_name":        cfg["model_name"],
+                "latent_dimensions": cfg["latent_dimensions"],
+                "n_train":           n_train,
+                "n_val":             n_val,
+                "n_test":            cfg["n_test"],
+                "split_name":        split_name,
+                "frame_tag":         frame_tag,
+                "image_roi_only":    cfg["image_roi_only"],
+                "mask_ys":           cfg["mask_ys"],
+                "mask_bin":          cfg["mask_bin"],
+                "n_epochs":          cfg["n_epochs"],
+                "batch_size":        cfg["batch_size"],
+                "study_name":        study_name,
+                "n_trials_target":   cfg["n_trials"],
+            })
+            db_path = artifact_dir / f"{study_name}.db"
             study = aeo.run_optuna(cfg, train_dataset, val_dataset, db_path)
+            _log_and_plot(study, cfg, n_train, n_val, split_name, frame_tag, study_name)
 
-        n_complete = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
-        tracking.log_metric("best_val_loss",      study.best_value)
-        tracking.log_metric("best_trial_number",  float(study.best_trial.number))
-        tracking.log_metric("n_trials_completed", float(n_complete))
-        for k, v in study.best_params.items():
-            tracking.log_metric(f"best_{k}", float(v))
 
-        plot_paths = aeo.plot_optuna_results(study, cfg, RESULTS_FOLDER)
-        for p in plot_paths:
-            tracking.log_artifact(p)
+def _log_and_plot(study, cfg, n_train, n_val, split_name, frame_tag, study_name):
+    """Log metrics, plots and summary for a completed or loaded Optuna study."""
+    n_complete = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
+    tracking.log_metric("best_val_loss",      study.best_value)
+    tracking.log_metric("best_trial_number",  float(study.best_trial.number))
+    tracking.log_metric("n_trials_completed", float(n_complete))
+    for k, v in study.best_params.items():
+        tracking.log_metric(f"best_{k}", float(v))
 
-        summary_path = aeo.save_optuna_summary(study, RESULTS_FOLDER)
-        tracking.log_artifact(summary_path)
+    plot_paths = aeo.plot_optuna_results(study, cfg, RESULTS_FOLDER)
+    for p in plot_paths:
+        tracking.log_artifact(p)
 
-        tracking.log_artifact(db_path)
+    summary_path = aeo.save_optuna_summary(study, RESULTS_FOLDER)
+    tracking.log_artifact(summary_path)
 
-        print(f"\nBest trial      : {study.best_trial.number}")
-        print(f"Best val_loss   : {study.best_value:.6f}")
-        print("Best params :")
-        for k, v in study.best_params.items():
-            print(f"  {k:>20} = {v}")
+    print(f"\nBest trial      : {study.best_trial.number}")
+    print(f"Best val loss   : {study.best_value:.6f}")
+    print("Best params :")
+    for k, v in study.best_params.items():
+        print(f"  {k:>20} = {v}")
 
 
 if __name__ == "__main__":

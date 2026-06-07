@@ -24,13 +24,15 @@ run_name : "{simulation_name}_{experiment_tag}"
 import warnings
 import mlflow
 from contextlib import contextmanager
+from pathlib import Path
 
 from src.config import MLRUNS_FOLDER
 
+_PROJECT_ROOT = Path(__file__).parent.parent
 
 def _setup():
     warnings.filterwarnings("ignore", category=FutureWarning, module="mlflow")
-    mlflow.set_tracking_uri("mlruns")
+    mlflow.set_tracking_uri(str(_PROJECT_ROOT / "mlruns"))
 
 
 @contextmanager
@@ -135,3 +137,32 @@ def search_runs(experiment_name: str, filter_string: str = "", order_by: list = 
         filter_string=filter_string,
         order_by=order_by or [],
     )
+
+def start_run_and_get_id(experiment_name: str, run_name: str, tags: dict = None) -> tuple:
+    """
+    Start an MLflow run and return (run_id, artifact_dir) immediately.
+    Use when the artifact path is needed before the run context closes.
+    """
+    _setup()
+    mlflow.set_experiment(experiment_name)
+    run = mlflow.start_run(run_name=run_name, tags=tags)
+    artifact_dir = _PROJECT_ROOT / "mlruns" / run.info.experiment_id / run.info.run_id / "artifacts"
+    return run, artifact_dir
+
+
+def download_artifact(run_id: str) -> Path:
+    """
+    Copy the .db artifact from an MLflow run into a temp directory.
+    Returns the local path of the .db file.
+    """
+    import tempfile
+    import shutil
+
+    db_files = list((_PROJECT_ROOT / "mlruns").glob(f"*/{run_id}/artifacts/*.db"))
+    if not db_files:
+        raise FileNotFoundError(f"No .db file found in artifacts of run {run_id}")
+
+    tmp_dir = Path(tempfile.mkdtemp())
+    dst = tmp_dir / db_files[0].name
+    shutil.copy2(db_files[0], dst)
+    return dst

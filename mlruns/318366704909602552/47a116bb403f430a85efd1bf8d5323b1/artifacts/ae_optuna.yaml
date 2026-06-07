@@ -6,7 +6,8 @@
 # ── Optuna study ──────────────────────────────────────────────────────────────
 study_name: "test_1"
 n_trials: 2
-plot_only: false                 # true = skip optimization, load existing study and replot
+plot_only: true                 # true = skip optimization, load existing study and replot
+load_run_id: "47a116bb403f430a85efd1bf8d5323b1"   # required when plot_only: true
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 # source_folder ("registered_frames"), cache_folder ("X_vectors") and

@@ -189,6 +189,45 @@ def plot_optuna_results(study: optuna.Study, config: dict, save_dir: Path) -> li
     print(f"Saved: {p2}")
     saved_paths.append(p2)
 
+# ── Plot 3: Val loss vs hyperparameter value ────────────────────────────────
+    fig, axes = plt.subplots(n_hp, 1, figsize=(10, 3 * n_hp), sharex=False)
+    if n_hp == 1:
+        axes = [axes]
+
+    best_val_loss = min(val_losses)
+
+    for ax, hp_name, color in zip(axes, hp_names, _COLORS):
+        values = [t.params.get(hp_name) for t in completed]
+        is_best = [v == best_val_loss for v in val_losses]
+
+        ax.scatter(
+            [v for v, b in zip(values, is_best) if not b],
+            [l for l, b in zip(val_losses, is_best) if not b],
+            color=color, alpha=0.7, s=30, zorder=3,
+        )
+        ax.scatter(
+            [v for v, b in zip(values, is_best) if b],
+            [l for l, b in zip(val_losses, is_best) if b],
+            color="#E24B4A", s=80, zorder=5, label="Best trial",
+        )
+        ax.axhline(y=best_val_loss, color="#E24B4A", linewidth=1.2,
+                   linestyle="--", alpha=0.7)
+        ax.set_xlabel(hp_name, fontsize=9)
+        ax.set_ylabel("val loss", fontsize=9)
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8)
+
+        if config["hp_ranges"][hp_name].get("log", False):
+            ax.set_xscale("log")
+
+    fig.suptitle(f"Optuna — val loss vs hyperparameter value\n{study_name}", fontsize=11)
+    fig.tight_layout()
+    p3 = save_dir / f"optuna_{study_name}_hp_vs_loss.png"
+    fig.savefig(p3, dpi=150)
+    plt.close(fig)
+    print(f"Saved: {p3}")
+    saved_paths.append(p3)
+    
     return saved_paths
 
 
