@@ -4,8 +4,8 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Optuna study ──────────────────────────────────────────────────────────────
-study_name: "fcdeep_newtest"
-n_trials: 40
+study_name: "vae_firstopt"
+n_trials: 30
 plot_only: false                 # true = skip optimization, load existing study and replot
 load_run_id: "47a116bb403f430a85efd1bf8d5323b1"   # required when plot_only: true
 
@@ -25,24 +25,16 @@ n_test: 30
 special_split: null              # null = sequential "splitdefault"; e.g. "split42" for seeded
 
 # ── Fixed hyperparameters ─────────────────────────────────────────────────────
-model_name: "AE3dFCDeep"
+model_name: "AE3dFCDeep_VAE"
 latent_dimensions: 120
 n_epochs: 300
 batch_size: 1
+dropout_rate: 0.0
+noise_std: 0.0
 
 # ── Hyperparameter search ranges ──────────────────────────────────────────────
 # type: "float" → suggest_float (add log: true for log scale)
 # type: "int"   → suggest_int
-#
-# VAE-specific params can be added here when needed, e.g.:
-#   beta:
-#     type: float
-#     low: 0.5
-#     high: 5.0
-#   beta_warmup_epochs:
-#     type: int
-#     low: 5
-#     high: 50
 hp_ranges:
   lr:
     type: float
@@ -54,18 +46,29 @@ hp_ranges:
     low: 1.0e-7
     high: 1.0e-3
     log: true
-  dropout_rate:
-    type: float
-    low: 0.0
-    high: 0.4
-  noise_std:
-    type: float
-    low: 0.0
-    high: 0.005
+  # dropout_rate:
+  #   type: float
+  #   low: 0.0
+  #   high: 0.4
+  # noise_std:
+  #   type: float
+  #   low: 0.0
+  #   high: 0.005
   patience:
     type: int
     low: 20
     high: 80
+
+#VAE-specific params
+  beta:
+    type: float
+    low: 1e-4
+    high: 1
+    log: true
+  beta_warmup_epochs:
+    type: int
+    low: 5
+    high: 50
 
 # ── Initial trial (enqueued as trial 0 if the study is brand new) ─────────────
 hp_initial:
@@ -74,3 +77,7 @@ hp_initial:
   dropout_rate: 0.1
   noise_std: 0.003
   patience: 40
+
+  # VAE-specific params
+  beta: 5.0e-2
+  beta_warmup_epochs: 20

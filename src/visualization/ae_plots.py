@@ -1074,54 +1074,54 @@ def plot_train_val_loss(
     simulation_name,
     save_path=None,
 ):
-    """
-    Plot training and validation loss curves from ae_training_early_stopping.
-
-    Parameters
-    ----------
-    loss_history : dict
-        {"train": [float, ...], "validation": [float, ...]}
-    best_epoch : int
-        Epoch at which the best validation loss was reached.
-    simulation_name : str
-        Used for the plot title and default save filename.
-    save_path : Path or str or None
-        If None, saves as {RESULTS_FOLDER}/{simulation_name}_train_val_loss.png
-
-    Returns
-    -------
-    save_path : Path
-    """
-    train_losses = np.array(loss_history["train"], dtype=float)
+    train_losses = np.array(loss_history.get("train", []), dtype=float)
     epochs = np.arange(1, len(train_losses) + 1)
+
+    has_val = bool(loss_history.get("validation"))
+    has_vae = bool(loss_history.get("train_mse"))
 
     if save_path is None:
         save_path = RESULTS_FOLDER / f"{simulation_name}_train_val_loss.png"
     save_path = Path(save_path)
 
-    fig, ax = plt.subplots(figsize=(9, 5))
+    n_plots = 2 if has_vae else 1
+    fig, axes = plt.subplots(n_plots, 1, figsize=(9, 4 * n_plots), sharex=True)
+    if n_plots == 1:
+        axes = [axes]
 
-    ax.plot(epochs, train_losses, linewidth=1.5, label="Train loss")
-
-    if "validation" in loss_history and len(loss_history["validation"]) > 0:
+    # ── Plot 1 : total loss ───────────────────────────────────────────────────
+    ax = axes[0]
+    ax.plot(epochs, train_losses, linewidth=1.5, color="steelblue",label="Train loss (total)")
+    if has_val:
         val_losses = np.array(loss_history["validation"], dtype=float)
-        ax.plot(epochs, val_losses, linewidth=1.5, label="Validation loss")
-        ax.axvline(
-            x=best_epoch,
-            color="red",
-            linestyle="--",
-            linewidth=1.2,
-            label=f"Best epoch ({best_epoch})",
-        )
-
+        ax.plot(epochs, val_losses, linewidth=1.5, color="forestgreen", label="Validation loss (total)")
+        ax.axvline(x=best_epoch, color="red", linestyle="--",
+                   linewidth=1.2, label=f"Best epoch ({best_epoch})")
     ax.set_yscale("log")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("MSE loss (log scale)")
+    ax.set_ylabel("Loss (log scale)")
     ax.set_title(f"Train / validation loss — {simulation_name}")
     ax.legend()
     ax.grid(True, which="both", alpha=0.3)
-    fig.tight_layout()
 
+    # ── Plot 2 : MSE et KL separately (for VAE only) ────────────────────────
+    if has_vae:
+        ax2 = axes[1]
+        train_mse = np.array(loss_history["train_mse"], dtype=float)
+        train_kl  = np.array(loss_history["train_kl"],  dtype=float)
+        ax2.plot(epochs, train_mse, linewidth=1.5, color="darkorange",  label="Train MSE")
+        ax2.plot(epochs, train_kl,  linewidth=1.5, color="indianred", label="Train KL")
+        ax2.axvline(x=best_epoch, color="red", linestyle="--",
+                    linewidth=1.2, label=f"Best epoch ({best_epoch})")
+        ax2.set_yscale("log")
+        ax2.set_xlabel("Epoch")
+        ax2.set_ylabel("Loss (log scale)")
+        ax2.set_title("VAE loss decomposition — MSE vs KL")
+        ax2.legend()
+        ax2.grid(True, which="both", alpha=0.3)
+    else:
+        axes[0].set_xlabel("Epoch")
+
+    fig.tight_layout()
     fig.savefig(save_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     print(f"Loss plot saved: {save_path}")

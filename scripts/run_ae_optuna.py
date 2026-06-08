@@ -74,6 +74,7 @@ def main():
         mlflow_run, artifact_dir = tracking.start_run_and_get_id("ae_optuna", run_name)
         with mlflow_run:
             tracking.log_artifact(CONFIG_PATH)
+
             tracking.log_params({
                 "model_name":        cfg["model_name"],
                 "latent_dimensions": cfg["latent_dimensions"],
@@ -90,6 +91,16 @@ def main():
                 "study_name":        study_name,
                 "n_trials_target":   cfg["n_trials"],
             })
+            # Hyperparameter fixed 
+            fixed_hp_keys = {"lr", "weight_decay", "dropout_rate", "noise_std", "patience",
+                            "beta", "beta_warmup_epochs"}
+            fixed_params = {
+                k: cfg[k] for k in fixed_hp_keys
+                if k in cfg and k not in cfg.get("hp_ranges", {})
+            }
+            if fixed_params:
+                tracking.log_params(fixed_params)
+
             db_path = artifact_dir / f"{study_name}.db"
             study = aeo.run_optuna(cfg, train_dataset, val_dataset, db_path)
             _log_and_plot(study, cfg, n_train, n_val, split_name, frame_tag, study_name)

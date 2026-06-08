@@ -25,6 +25,7 @@ import warnings
 import mlflow
 from contextlib import contextmanager
 from pathlib import Path
+import os
 
 from src.config import MLRUNS_FOLDER
 
@@ -32,6 +33,7 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 
 def _setup():
     warnings.filterwarnings("ignore", category=FutureWarning, module="mlflow")
+    os.chdir(_PROJECT_ROOT)
     mlflow.set_tracking_uri(str(_PROJECT_ROOT / "mlruns"))
 
 
@@ -80,6 +82,7 @@ def log_metrics(metrics: dict, step: int = None):
 
 def log_model_state_dict(model, filename: str = "model.pth"):
     """Save a PyTorch state dict as an MLflow artifact."""
+    _setup() 
     import torch
     import tempfile
     from pathlib import Path
@@ -92,8 +95,8 @@ def log_model_state_dict(model, filename: str = "model.pth"):
 
 def log_artifact(path):
     """Log a file (plot, summary, etc.) as an MLflow artifact."""
+    _setup() 
     mlflow.log_artifact(str(path))
-
 
 def log_sklearn_model(model, filename: str = "pca.joblib"):
     """Save a sklearn model as an MLflow artifact using joblib serialization."""

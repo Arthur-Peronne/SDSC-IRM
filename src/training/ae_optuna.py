@@ -26,6 +26,9 @@ def objective(
     """Sample one set of hyperparams and return the best validation loss."""
     hp = {}
     for name, bounds in config["hp_ranges"].items():
+        # Skip VAE-specific params if model is not VAE
+        if name in ("beta", "beta_warmup_epochs") and config["model_name"] != "AE3dFCDeep_VAE":
+            continue
         if bounds["type"] == "int":
             hp[name] = trial.suggest_int(name, int(bounds["low"]), int(bounds["high"]))
         else:

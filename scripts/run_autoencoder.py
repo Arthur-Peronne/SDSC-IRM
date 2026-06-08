@@ -114,6 +114,16 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
                 )
                 best_epoch = cfg["n_epochs"]
 
+            # ── Log loss history in MLflow ────────────────────────────────────────────
+            for step, value in enumerate(loss_history.get("train", [])):
+                tracking.log_metric("train_loss", value, step=step + 1)
+            for step, value in enumerate(loss_history.get("validation", [])):
+                tracking.log_metric("val_loss", value, step=step + 1)
+            for step, value in enumerate(loss_history.get("train_mse", [])):
+                tracking.log_metric("train_mse", value, step=step + 1)
+            for step, value in enumerate(loss_history.get("train_kl", [])):
+                tracking.log_metric("train_kl", value, step=step + 1)
+
             # Save model artifact in MLflow
             tracking.log_model_state_dict(model, filename=f"model_{best_epoch}epochs.pth")
 
@@ -288,7 +298,6 @@ def main():
             n_train_images, n_val_images,
             train_dataset, val_dataset, test_dataset, X_maxnorm,
         )
-
 
 if __name__ == "__main__":
     main()

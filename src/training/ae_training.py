@@ -248,7 +248,7 @@ def ae_training_early_stopping(
         optimizer, mode="min", factor=0.5, patience=patience_scheduler,
     )
 
-    loss_history = {"train": [], "validation": []}
+    loss_history = {"train": [], "validation": [], "train_mse": [], "train_kl": []}
     best_val_loss = float("inf")
     best_epoch = -1
     epochs_without_improvement = 0
@@ -272,7 +272,9 @@ def ae_training_early_stopping(
 
         # ── Training pass ─────────────────────────────────────────────────────
         model.train()
-        epoch_train_loss = 0.0
+        epoch_train_loss = 0.0             
+        epoch_train_mse = 0.0
+        epoch_train_kl  = 0.0
 
         for (x_batch,) in train_loader:
             x_batch = x_batch.to(device, non_blocking=(device.type == "cuda"))
@@ -286,7 +288,9 @@ def ae_training_early_stopping(
             output = model(x_noisy)
             if len(output) == 4:
                 x_recon, _, mu, logvar = output
-                loss, _, _ = _vae_loss(x_recon, x_batch, mu, logvar, beta_current)
+                loss, mse, kl = _vae_loss(x_recon, x_batch, mu, logvar, beta_current)
+                epoch_train_mse += mse.item()
+                epoch_train_kl  += kl.item()
             else:
                 x_recon, _ = output
                 loss = criterion(x_recon, x_batch)
@@ -296,7 +300,11 @@ def ae_training_early_stopping(
             epoch_train_loss += loss.item()
 
         avg_train_loss = epoch_train_loss / len(train_loader)
+        avg_train_mse = epoch_train_mse / len(train_loader)
+        avg_train_kl  = epoch_train_kl  / len(train_loader)
         loss_history["train"].append(avg_train_loss)
+        loss_history["train_mse"].append(avg_train_mse)
+        loss_history["train_kl"].append(avg_train_kl)
 
         # ── Validation pass ───────────────────────────────────────────────────
         avg_val_loss = _compute_validation_loss(
