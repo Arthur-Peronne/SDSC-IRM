@@ -295,3 +295,16 @@ def get_patient_modified_path(patient_id, folder, file_type="frame", frame_type=
         raise FileNotFoundError(f"File not found: {full_path}")
 
     return full_path
+
+def load_acdc_groups(n_patients: int) -> list[str]:
+    """
+    Load ACDC group label for each patient (1 to n_patients).
+    Returns list of strings e.g. ["NOR", "DCM", "HCM", ...]
+    """
+    groups = []
+    for patient_id in range(1, n_patients + 1):
+        subset = "training" if patient_id <= 100 else "testing"
+        cfg_path = DATADIR / subset / f"patient{patient_id:03d}" / "Info.cfg"
+        info = read_info_cfg(cfg_path)
+        groups.append(info["Group"])
+    return groups

@@ -1768,3 +1768,83 @@ def ae_select_representative_patients(
         }
  
     return selected
+
+def collect_latent_vectors(model, dataset, device) -> np.ndarray:
+    """
+    Run encoder on all images and collect latent vectors.
+    VAE: returns mu (deterministic). AE: returns z.
+    Returns array of shape (n_images, latent_dim).
+    """
+    import torch
+    from torch.utils.data import DataLoader
+
+    model.eval()
+    vectors = []
+    with torch.no_grad():
+        for (x,) in DataLoader(dataset, batch_size=1, shuffle=False):
+            x = x.to(device)
+            output = model.encode(x)
+            z = output[0] if isinstance(output, tuple) else output
+            vectors.append(z.cpu().numpy().squeeze())
+    return np.array(vectors)
+
+
+def plot_latent_pca(
+    mus: np.ndarray,
+    labels: list[str],
+    run_name: str,
+    use_both_frames: bool,
+    save_path: Path,
+) -> Path:
+    """
+    Project latent vectors to 2D via PCA and plot colored by ACDC group.
+    """
+    from sklearn.decomposition import PCA
+    import matplotlib.patches as mpatches
+
+    pca = PCA(n_components=2)
+    mus_2d = pca.fit_transform(mus)
+    var_explained = pca.explained_variance_ratio_
+
+    group_colors = {
+        "NOR":  "#1D9E75",
+        "DCM":  "#534AB7",
+        "HCM":  "#D85A30",
+        "RV":   "#378ADD",
+        "MINF": "#E24B4A",
+    }
+    markers = {"ED": "o", "ES": "s"}
+    n_patients = len(labels) // 2 if use_both_frames else len(labels)
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+
+    for i, (group, (x, y)) in enumerate(zip(labels, mus_2d)):
+        color = group_colors.get(group, "gray")
+        marker = markers["ED" if i < n_patients else "ES"] if use_both_frames else "o"
+        ax.scatter(x, y, color=color, marker=marker,
+                   s=30, alpha=0.75, linewidths=0)
+
+    group_patches = [
+        mpatches.Patch(color=c, label=g)
+        for g, c in group_colors.items()
+    ]
+    frame_handles = []
+    if use_both_frames:
+        frame_handles = [
+            plt.Line2D([0], [0], marker="o", color="gray",
+                       linestyle="", markersize=7, label="ED"),
+            plt.Line2D([0], [0], marker="s", color="gray",
+                       linestyle="", markersize=7, label="ES"),
+        ]
+
+    ax.legend(handles=group_patches + frame_handles,
+              loc="best", fontsize=9, framealpha=0.8)
+    ax.set_xlabel(f"PC1 ({var_explained[0]*100:.1f}% var)", fontsize=10)
+    ax.set_ylabel(f"PC2 ({var_explained[1]*100:.1f}% var)", fontsize=10)
+    ax.set_title(f"Latent space — PCA 2D\n{run_name}", fontsize=11)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Plot saved: {save_path}")
+    return save_path
