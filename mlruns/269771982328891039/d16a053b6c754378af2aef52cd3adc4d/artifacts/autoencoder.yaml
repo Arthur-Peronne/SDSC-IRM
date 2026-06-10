@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "vae_optuna1"       # "baseline", "optuna", or any custom label
+experiment_tag: "vae_earlytests"       # "baseline", "optuna", or any custom label
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
@@ -35,16 +35,16 @@ recalculate_ae: true             # false = load existing model (requires load_ru
 load_run_id: null                # MLflow run ID — required when recalculate_ae: false
 n_epochs: 300                    # max epochs (early stopping triggers earlier if n_val > 0)
 batch_size: 1
-lr: 1e-4                         # Learning rate; AEoptuna: 1e-5, VAEoptuna: 1e-4
-weight_decay: 4e-4            # L2 regularisation; AEoptuna: 6.47e-6, VAEoptuna: 4e-4
-dropout_rate: 0.0                # 0.0 for AE3dConv and AE3dLinear; AEoptuna: 0.221
-noise_std: 0.0                   # 0.0 = no denoising; AEoptuna: 0.002
-patience: 58                     # early stopping patience (used only if n_val > 0)
+lr: 1e-5
+weight_decay: 6.47e-6              # L2 regularisation; optuna example: 6.47e-6
+dropout_rate: 0.0                # 0.0 for AE3dConv and AE3dLinear; optuna example: 0.221
+noise_std: 0.0                   # 0.0 = no denoising; optuna example: 0.002
+patience: 40                     # early stopping patience (used only if n_val > 0)
 patience_scheduler: null         # null = patience // 5
 
 # ── VAE parameters (AE3dFCDeep_VAE only) ──────────────────────────────────────
-beta: 0.00015                    # KL weight in VAE loss, VAEoptuna: 0.00015
-beta_warmup_epochs: 50           # epochs to linearly ramp beta from 0 to target value, VAEoptuna: 50
+beta: 0.1                      # KL weight in VAE loss
+beta_warmup_epochs: 10           # epochs to linearly ramp beta from 0 to target value
 
 # ── Reconstruction metrics ────────────────────────────────────────────────────
 compute_metrics: true
