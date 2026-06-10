@@ -60,15 +60,15 @@ def objective(
         print(f"Trial {trial.number} failed: {e}")
         raise optuna.exceptions.TrialPruned()
 
-    best_val_loss = min(loss_history["validation"])
+    best_val_mse = min(loss_history["val_mse"])
     trial.set_user_attr("best_epoch", best_epoch)
 
     hp_str = " | ".join(
         f"{k}={v:.2e}" if isinstance(v, float) else f"{k}={v}"
         for k, v in hp.items()
     )
-    print(f"Trial {trial.number:>3} | val_loss={best_val_loss:.6f} | epoch={best_epoch:>4} | {hp_str}")
-    return best_val_loss
+    print(f"Trial {trial.number:>3} | val_mse_loss={best_val_mse:.6f} | epoch={best_epoch:>4} | {hp_str}")
+    return best_val_mse
 
 
 def load_study(study_name: str, db_path: Path) -> optuna.Study:
@@ -147,7 +147,7 @@ def plot_optuna_results(study: optuna.Study, config: dict, save_dir: Path) -> li
                linestyle="--", label=f"Best trial ({best_trial})")
     ax.scatter([best_trial], [min(val_losses)], color="#E24B4A", s=60, zorder=5)
     ax.set_xlabel("Trial number")
-    ax.set_ylabel("Val loss")
+    ax.set_ylabel("Val MSE (reconstruction loss)")
     ax.set_title(f"Optuna — optimization history\n{study_name}")
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
@@ -216,14 +216,14 @@ def plot_optuna_results(study: optuna.Study, config: dict, save_dir: Path) -> li
         ax.axhline(y=best_val_loss, color="#E24B4A", linewidth=1.2,
                    linestyle="--", alpha=0.7)
         ax.set_xlabel(hp_name, fontsize=9)
-        ax.set_ylabel("val loss", fontsize=9)
+        ax.set_ylabel("val MSE", fontsize=9)
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=8)
 
         if config["hp_ranges"][hp_name].get("log", False):
             ax.set_xscale("log")
 
-    fig.suptitle(f"Optuna — val loss vs hyperparameter value\n{study_name}", fontsize=11)
+    fig.suptitle(f"Optuna — val MSE vs hyperparameter value\n{study_name}", fontsize=11)
     fig.tight_layout()
     p3 = save_dir / f"optuna_{study_name}_hp_vs_loss.png"
     fig.savefig(p3, dpi=150)
@@ -244,7 +244,7 @@ def save_optuna_summary(study: optuna.Study, save_dir: Path) -> Path:
     lines.append("=" * 60)
     lines.append(f"Optuna Study : {study.study_name}")
     lines.append(f"Trials completed : {len(completed)}")
-    lines.append(f"Best val loss    : {study.best_value:.6f}")
+    lines.append(f"Best val MSE    : {study.best_value:.6f}")
     lines.append("")
     lines.append("Best hyperparameters :")
     for k, v in study.best_params.items():

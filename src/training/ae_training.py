@@ -168,30 +168,31 @@ def ae_aggregate_metrics(all_metrics):
 
 
 def _compute_validation_loss(model, validation_dataset, batch_size, device, criterion, beta=1.0):
-    """Compute mean reconstruction loss on the validation set (no gradients)."""
-    val_loader = DataLoader(
-        validation_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        pin_memory=(device.type == "cuda"),
-    )
-
+    val_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False,
+                            pin_memory=(device.type == "cuda"))
     model.eval()
     total_loss = 0.0
+    total_mse  = 0.0
+    total_kl   = 0.0
 
     with torch.no_grad():
         for (x_batch,) in val_loader:
             x_batch = x_batch.to(device, non_blocking=(device.type == "cuda"))
             output = model(x_batch)
-            if len(output) == 4:
+            if len(output) == 4:   # VAE
                 x_recon, _, mu, logvar = output
-                loss, _, _ = _vae_loss(x_recon, x_batch, mu, logvar, beta)
-            else:
+                loss, mse, kl = _vae_loss(x_recon, x_batch, mu, logvar, beta)
+                total_mse += mse.item()
+                total_kl  += kl.item()
+            else:                  # AE classique
                 x_recon, _ = output
                 loss = criterion(x_recon, x_batch)
+                total_mse += loss.item()  # pour AE classique, mse = loss totale
+
             total_loss += loss.item()
 
-    return total_loss / len(val_loader)
+    n = len(val_loader)
+    return total_loss / n, total_mse / n, total_kl / n
 
 
 def _vae_loss(x_recon, x_target, mu, logvar, beta):
@@ -248,7 +249,7 @@ def ae_training_early_stopping(
         optimizer, mode="min", factor=0.5, patience=patience_scheduler,
     )
 
-    loss_history = {"train": [], "validation": [], "train_mse": [], "train_kl": []}
+    loss_history = {"train": [], "validation": [], "train_mse": [], "train_kl": [],  "val_mse": [], "val_kl": []}
     best_val_loss = float("inf")
     best_epoch = -1
     epochs_without_improvement = 0
@@ -307,12 +308,14 @@ def ae_training_early_stopping(
         loss_history["train_kl"].append(avg_train_kl)
 
         # ── Validation pass ───────────────────────────────────────────────────
-        avg_val_loss = _compute_validation_loss(
+        avg_val_loss, avg_val_mse, avg_val_kl = _compute_validation_loss(
             model, validation_dataset, batch_size, device, criterion, beta=beta_current,
         )
         scheduler.step(avg_val_loss)
         current_lr = optimizer.param_groups[0]["lr"]
         loss_history["validation"].append(avg_val_loss)
+        loss_history["val_mse"].append(avg_val_mse)
+        loss_history["val_kl"].append(avg_val_kl)
 
         current_epoch = epoch + 1
         is_best = avg_val_loss < best_val_loss

@@ -123,6 +123,10 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
                 tracking.log_metric("train_mse", value, step=step + 1)
             for step, value in enumerate(loss_history.get("train_kl", [])):
                 tracking.log_metric("train_kl", value, step=step + 1)
+            for step, value in enumerate(loss_history.get("val_mse", [])):
+                tracking.log_metric("val_mse", value, step=step + 1)
+            for step, value in enumerate(loss_history.get("val_kl", [])):
+                tracking.log_metric("val_kl", value, step=step + 1)
 
             # Save model artifact in MLflow
             tracking.log_model_state_dict(model, filename=f"model_{best_epoch}epochs.pth")
