@@ -1848,3 +1848,103 @@ def plot_latent_pca(
     plt.close(fig)
     print(f"Plot saved: {save_path}")
     return save_path
+
+
+# ── New MLflow-based comparison plot ──────────────────────────────────────────
+
+_COMPARISON_COLORS = [
+    "#534AB7", "#1D9E75", "#D85A30", "#BA7517",
+    "#378ADD", "#E24B4A", "#8B4513", "#9467bd",
+]
+
+_MAX_XTICKS = 30
+
+
+_METRIC_LINESTYLES = ["-", "--", ":", "-."]
+
+
+def plot_comparison_curves(
+    series_data: list[dict],
+    metrics: list[str],
+    xscale: str = "log",
+    superpose_metrics: bool = False,
+    save_path: "Path | None" = None,
+) -> "Path | None":
+    """
+    Plot metric vs latent_dim for multiple series (AE and/or PCA).
+
+    Parameters
+    ----------
+    series_data       : list of {"label": str, "data": {latent_dim (int): {metric_key: value}}}
+    metrics           : metric keys to plot
+    xscale            : "log" or "linear"
+    superpose_metrics : if False (default), one subplot per metric;
+                        if True, all metrics on a single axes — color encodes series,
+                        linestyle encodes metric (solid / dashed / dotted / dashdot)
+    save_path         : where to save; auto-generated in RESULTS_FOLDER if None
+    """
+    if not series_data:
+        print("plot_comparison_curves: no series data — nothing to plot.")
+        return None
+
+    all_x: list[int] = []
+
+    if superpose_metrics:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        axes = [ax]
+
+        for series, color in zip(series_data, _COMPARISON_COLORS):
+            data = series["data"]
+            for i, (metric, linestyle) in enumerate(zip(metrics, _METRIC_LINESTYLES)):
+                pts = [(k, v[metric]) for k, v in sorted(data.items()) if metric in v]
+                if not pts:
+                    continue
+                xs, ys = zip(*pts)
+                all_x.extend(xs)
+                ax.plot(xs, ys, color=color, linestyle=linestyle,
+                        marker="o", markersize=4, linewidth=1.8 if i == 0 else 1.0,
+                        label=f"{series['label']} — {metric}")
+
+        ax.set_ylabel(" / ".join(metrics))
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8)
+        ax.set_xscale(xscale)
+
+    else:
+        n_metrics = len(metrics)
+        fig, axes = plt.subplots(n_metrics, 1, figsize=(10, 4 * n_metrics), sharex=True)
+        if n_metrics == 1:
+            axes = [axes]
+
+        for ax, metric in zip(axes, metrics):
+            for series, color in zip(series_data, _COMPARISON_COLORS):
+                data = series["data"]
+                pts = [(k, v[metric]) for k, v in sorted(data.items()) if metric in v]
+                if not pts:
+                    continue
+                xs, ys = zip(*pts)
+                all_x.extend(xs)
+                ax.plot(xs, ys, color=color, marker="o", markersize=4,
+                        linewidth=1.8, label=series["label"])
+
+            ax.set_ylabel(metric)
+            ax.grid(True, alpha=0.3)
+            ax.legend(fontsize=8)
+            ax.set_xscale(xscale)
+
+    # X-ticks: show all unique values only when there are few enough
+    unique_x = sorted(set(all_x))
+    if len(unique_x) <= _MAX_XTICKS:
+        axes[-1].set_xticks(unique_x)
+        axes[-1].set_xticklabels([str(x) for x in unique_x], rotation=45, fontsize=7)
+
+    axes[-1].set_xlabel("Latent dimension / number of principal components")
+    fig.tight_layout()
+
+    if save_path is None:
+        save_path = RESULTS_FOLDER / "comparison_curves.png"
+    save_path = Path(save_path)
+    fig.savefig(save_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Plot saved: {save_path}")
+    return save_path

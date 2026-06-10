@@ -181,19 +181,26 @@ SDSC-arthur-project-1/
 - `mask_ys`/`mask_bin` dans `autoencoder.yaml` non encore connectés à `load_tensor_datasets` (hardcodé `mask=False, binary_mask=False`) → Pan 4
 - Fonctions de comparaison dans `ae_plots.py` lisent encore TEMPODATA_FOLDER → à migrer en Étape 10
 
-**Étape 9 : Hyperparamètres Optuna** — `run_ae_hyperparam.py`
-- Migrer vers YAML (`configs/ae_hyperparam.yaml`) + MLflow
-- Base SQLite Optuna dans RESULTS_FOLDER (ou artifact MLflow)
-- Même pattern que `run_autoencoder.py` : lit YAML, ouvre run MLflow, log résultats
-- `ae_optuna.py` : retirer `TEMPODATA_FOLDER`, DB path passé en paramètre
+**Étape 9 : Hyperparamètres Optuna** ✅ — `run_ae_optuna.py` + `src/training/ae_optuna.py`
+- `run_ae_optuna.py` réécrit (renommé depuis `run_ae_hyperparam.py`) : lit `configs/ae_optuna.yaml`, `loader.load_tensor_datasets()`, MLflow via `start_run_and_get_id`/`resume_run`
+- Deux modes : CALC (`plot_only: false`) lance l'étude Optuna et persiste la DB SQLite dans l'artifact dir MLflow ; PLOT (`plot_only: true` + `load_run_id`) recharge la DB via `tracking.download_artifact` et regénère les plots
+- `src/training/ae_optuna.py` : aucun `TEMPODATA_FOLDER`, DB path passé en paramètre, fonctions pures — `run_optuna`, `load_study`, `plot_optuna_results` (3 graphiques : history, HP evolution, HP vs loss), `save_optuna_summary`
+- `configs/ae_optuna.yaml` : ranges de recherche par type (`float`/`int`, log scale), trial initial enqueuable (`hp_initial`), support VAE (`beta`, `beta_warmup_epochs`)
+- Params fixes (non optimisés) loggés séparément dans MLflow ; meilleurs params loggés comme métriques (`best_lr`, etc.)
+- Des runs validés existent dans MLflow (expérience `ae_optuna`, `mlruns/318366704909602552/`)
 
-**Étape 10 : Comparaisons AE vs PCA** — `run_comparison_aepca.py`
-- **⚠ Vérification préliminaire obligatoire** : AE et PCA comparés doivent être entraînés sur les mêmes splits (vérifier `splitname` dans les params MLflow)
-- Lecture directe depuis MLflow via `search_runs()` (remplace le parsing de `.txt`)
-- Comparaisons AE-AE (architectures, ED vs ED+ES, baseline vs Optuna)
-- Comparaisons AE vs PCA sur test set
-- Outputs : plots dans `results/`
-- **Note métriques** : courbes R² vs latent dims via `get_metric_history(run_id, key)` ; dédupliquer par step en gardant le timestamp le plus récent
+**Étape 10 : Comparaisons AE vs PCA** ✅ — `run_comparison_aepca.py` + `src/visualization/ae_plots.py`
+- `run_comparison_aepca.py` réécrit : lit `configs/comparison_aepca.yaml`, lecture MLflow via `search_runs()` + `get_metric_history()`, outputs dans `results/` (pas de tracking MLflow)
+- Un seul plot générique configurable via une liste de `series` (model_name + experiment_tag + `params_filter` optionnel)
+  - `model_name: "PCA"` → expérience `pca_spatial` (une courbe continue, step = n_pcs)
+  - tout autre model_name → expérience `autoencoder` (un run par latent_dim, agrégés automatiquement)
+- `params_filter` : dict de params MLflow supplémentaires pour discriminer quand `model_name + experiment_tag` ne suffisent pas (ex : `frame_tag`, `n_train`)
+- `plotname` : null = nom auto-généré depuis les labels des séries ; string = nom de fichier custom
+- `superpose_metrics` : false = un subplot par métrique ; true = toutes sur un seul axes (couleur = série, linestyle + linewidth = métrique)
+- WARNINGs imprimés (jamais bloquants) si params incohérents au sein d'une série ou entre séries
+- `run_stats_nepochs` : stats best_epoch depuis MLflow directement (sans `split_name` obligatoire)
+- `plot_comparison_curves()` ajoutée dans `ae_plots.py` ; anciennes fonctions txt-based conservées (dead code, nettoyage Pan 4)
+- Validé en local sur runs MLflow existants
 
 **Étape 11 : Régression** — `run_regression.py`
 - From PCA results (refactoring de l'existant)
@@ -218,7 +225,7 @@ SDSC-arthur-project-1/
 ### Pan 4 — Nettoyage et extensions mineures (après validation Pan 2)
 
 - `mask_ys`/`mask_bin` dans `autoencoder.yaml` non encore connectés à `load_tensor_datasets` (hardcodé `mask=False, binary_mask=False`) — ajouter les params quand nécessaire, copier le pattern de `load_numpy_splits`
-- Fonctions de comparaison dans `ae_plots.py` (`plot_ae_comparison`, `plot_ae_vs_pca`, etc.) lisent encore depuis TEMPODATA_FOLDER via `_load_summarymetrics` → migrer vers MLflow en même temps que l'Étape 9
+- Fonctions de comparaison dans `ae_plots.py` (`plot_ae_comparison`, `plot_ae_vs_pca`, etc.) lisent encore depuis TEMPODATA_FOLDER via `_load_summarymetrics` — remplacées fonctionnellement par `plot_comparison_curves`, à supprimer lors du nettoyage final
 - Supprimer `experiments/archive_scripts/` (nettoyage final Pan 3)
 
 ---

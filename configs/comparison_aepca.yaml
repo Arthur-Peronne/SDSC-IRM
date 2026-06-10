@@ -1,0 +1,50 @@
+# configs/comparison_aepca.yaml
+# Parameters for scripts/run_comparison_aepca.py
+# Modify this file, then run: python scripts/run_comparison_aepca.py
+
+# ── Plot options ──────────────────────────────────────────────────────────────
+plotname: null           # null = auto-generated from series labels; set a string to override
+metrics: ["test_R2_mean","train_R2_mean"]
+xscale: "log"
+superpose_metrics: true     # false = one subplot per metric; true = all on one axes (linestyle encodes metric)
+
+# ── Series ────────────────────────────────────────────────────────────────────
+# Required per series: model_name + experiment_tag
+#   model_name "PCA"  → reads from the "pca_spatial" MLflow experiment
+#   any other name    → reads from "autoencoder" (one run per latent_dim)
+#.   Ex: "AE3dFCDeep", "AE3dCurrent", "AE3dConv", "AE3dLinear", "AE3dFCDeep_VAE"
+# params_filter (optional): extra MLflow param key/value pairs to disambiguate
+#   when model_name + experiment_tag alone match multiple unintended runs.
+#   Values are matched as strings (MLflow storage format).
+#   Example: {frame_tag: "ED", n_train: "100"}
+#
+# For AE: latent dims are auto-detected from all matching runs.
+# For PCA: one continuous curve (step = n_pcs), all available points.
+#
+# WARNINGs are printed (never blocking) when:
+#   - multiple runs match the same latent_dim  → most recent is used
+#   - key params (split_name, n_train, frame_tag) differ within a series
+#   - key params differ between series (potential apples-to-oranges comparison)
+
+series:
+  - model_name: AE3dCurrent
+    experiment_tag: optuna
+
+  - model_name: AE3dConv
+    experiment_tag: optuna
+
+  - model_name: AE3dFCDeep
+    experiment_tag: optuna
+
+  # Example with params_filter override:
+  # - model_name: AE3dFCDeep
+  #   experiment_tag: optuna
+  #   params_filter:
+  #     frame_tag: "ED"
+
+# ── Early stopping epoch statistics ──────────────────────────────────────────
+run_stats_nepochs: false
+stats_model_name: AE3dFCDeep
+stats_experiment_tag: optuna
+# stats_params_filter:       # optional — same rules as params_filter above
+#   split_name: splitdefault
