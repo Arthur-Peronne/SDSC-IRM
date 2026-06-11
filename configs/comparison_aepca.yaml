@@ -27,14 +27,14 @@ superpose_metrics: true     # false = one subplot per metric; true = all on one 
 #   - key params differ between series (potential apples-to-oranges comparison)
 
 series:
-  - model_name: AE3dCurrent
-    experiment_tag: optuna
+  - model_name: AE3dFCDeep_VAE
+    experiment_tag: vae_optuna2
 
   - model_name: AE3dFCDeep
     experiment_tag: optuna
-
-  - model_name: AE3dConv
-    experiment_tag: optuna
+  
+  - model_name: PCA
+    experiment_tag: baseline
 
   # Example with params_filter override:
   # - model_name: AE3dFCDeep
