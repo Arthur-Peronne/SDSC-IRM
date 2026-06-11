@@ -1895,14 +1895,19 @@ def plot_comparison_curves(
 
         for series, color in zip(series_data, _COMPARISON_COLORS):
             data = series["data"]
+            is_pca = series["label"].startswith("PCA/")
+            marker = "" if is_pca else "o"
+            markersize = 0 if is_pca else 4
+            c = "black" if is_pca else color
             for i, (metric, linestyle) in enumerate(zip(metrics, _METRIC_LINESTYLES)):
                 pts = [(k, v[metric]) for k, v in sorted(data.items()) if metric in v]
                 if not pts:
                     continue
                 xs, ys = zip(*pts)
                 all_x.extend(xs)
-                ax.plot(xs, ys, color=color, linestyle=linestyle,
-                        marker="o", markersize=4, linewidth=1.8 if i == 0 else 1.0,
+                ax.plot(xs, ys, color=c, linestyle=linestyle,
+                        marker=marker, markersize=markersize, 
+                        linewidth=1.8 if i == 0 else 1.0,
                         label=f"{series['label']} — {metric}")
 
         ax.set_ylabel(" / ".join(metrics))
@@ -1919,12 +1924,16 @@ def plot_comparison_curves(
         for ax, metric in zip(axes, metrics):
             for series, color in zip(series_data, _COMPARISON_COLORS):
                 data = series["data"]
+                is_pca = series["label"].startswith("PCA/")
+                c = "black" if is_pca else color
+                marker, markersize = ("", 0) if is_pca else ("o", 4)
                 pts = [(k, v[metric]) for k, v in sorted(data.items()) if metric in v]
                 if not pts:
                     continue
                 xs, ys = zip(*pts)
                 all_x.extend(xs)
-                ax.plot(xs, ys, color=color, marker="o", markersize=4,
+                ax.plot(xs, ys, color=c, 
+                        marker=marker, markersize=markersize, 
                         linewidth=1.8, label=series["label"])
 
             ax.set_ylabel(metric)
@@ -1937,6 +1946,10 @@ def plot_comparison_curves(
     if len(unique_x) <= _MAX_XTICKS:
         axes[-1].set_xticks(unique_x)
         axes[-1].set_xticklabels([str(x) for x in unique_x], rotation=45, fontsize=7)
+    else:
+        for ax in axes:
+            ax.xaxis.set_major_formatter(plt.matplotlib.ticker.ScalarFormatter())
+            ax.xaxis.get_major_formatter().set_scientific(False)
 
     axes[-1].set_xlabel("Latent dimension / number of principal components")
     fig.tight_layout()

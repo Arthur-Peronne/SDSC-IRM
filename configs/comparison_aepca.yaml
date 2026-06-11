@@ -30,10 +30,10 @@ series:
   - model_name: AE3dCurrent
     experiment_tag: optuna
 
-  - model_name: AE3dConv
+  - model_name: AE3dFCDeep
     experiment_tag: optuna
 
-  - model_name: AE3dFCDeep
+  - model_name: AE3dConv
     experiment_tag: optuna
 
   # Example with params_filter override:

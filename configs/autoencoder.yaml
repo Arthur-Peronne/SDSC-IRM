@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "vae_optuna1"       # "baseline", "optuna", or any custom label
+experiment_tag: "vae_optuna2"       # "baseline", "optuna", or any custom label
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
@@ -26,25 +26,25 @@ special_split: null              # null = sequential "splitdefault"; e.g. "split
 # ── Model ─────────────────────────────────────────────────────────────────────
 model_name: "AE3dFCDeep_VAE"         # "AE3dFCDeep", "AE3dCurrent", "AE3dConv", "AE3dLinear", "AE3dFCDeep_VAE"
 latent_dimensions: 120
-multiple_models_and_dims: false  # true = loop over models_list × latdim_list
-models_list: ["AE3dFCDeep", "AE3dCurrent", "AE3dConv"]
-latdim_list: [4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
+multiple_models_and_dims: true  # true = loop over models_list × latdim_list
+models_list: ["AE3dFCDeep_VAE",]
+latdim_list: [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
 
 # ── Training ──────────────────────────────────────────────────────────────────
 recalculate_ae: true             # false = load existing model (requires load_run_id)
 load_run_id: null                # MLflow run ID — required when recalculate_ae: false
 n_epochs: 300                    # max epochs (early stopping triggers earlier if n_val > 0)
 batch_size: 1
-lr: 1e-4                         # Learning rate; AEoptuna: 1e-5, VAEoptuna: 1e-4
-weight_decay: 4e-4            # L2 regularisation; AEoptuna: 6.47e-6, VAEoptuna: 4e-4
+lr: 5e-5                         # Learning rate; AEoptuna: 1e-5, VAEoptuna: 5e-5
+weight_decay: 1e-7            # L2 regularisation; AEoptuna: 6.47e-6, VAEoptuna: 1e-7 
 dropout_rate: 0.0                # 0.0 for AE3dConv and AE3dLinear; AEoptuna: 0.221
 noise_std: 0.0                   # 0.0 = no denoising; AEoptuna: 0.002
-patience: 58                     # early stopping patience (used only if n_val > 0)
+patience: 27                     # early stopping patience (used only if n_val > 0), VAEoptuna: 27
 patience_scheduler: null         # null = patience // 5
 
 # ── VAE parameters (AE3dFCDeep_VAE only) ──────────────────────────────────────
-beta: 0.00015                    # KL weight in VAE loss, VAEoptuna: 0.00015
-beta_warmup_epochs: 50           # epochs to linearly ramp beta from 0 to target value, VAEoptuna: 50
+beta: 0.00022                    # KL weight in VAE loss, VAEoptuna: 0.00022
+beta_warmup_epochs: 41           # epochs to linearly ramp beta from 0 to target value, VAEoptuna: 41
 
 # ── Reconstruction metrics ────────────────────────────────────────────────────
 compute_metrics: true
