@@ -61,9 +61,15 @@ SDSC-arthur-project-1/
 - **Pipeline preprocessing** : resampling → cropping → registration (SimpleITK) + checks DICE
 - **PCA temporelle** : par patient, sur fichiers 4D
 - **PCA spatiale** : across patients, supports ED / ES / ED+ES, plusieurs types d'images
-- **Autoencodeurs 3D** : plusieurs architectures (`AE3dFCDeep`, `AE3dLinear`...), early stopping, Optuna pour hyperparamètres
-- **Régression** : logistique et linéaire sur coordonnées PCA + AE + métadonnées patients
+- **Autoencodeurs 3D** : plusieurs architectures (`AE3dFCDeep`, `AE3dLinear`...), sans val set (n_val=0) ou avec early stopping, Optuna pour hyperparamètres
+- **Régression** : logistique et linéaire sur coordonnées PCA + AE + métadonnées patients (group, height, weight)
 - **Comparaisons AE vs PCA** : mêmes splits train/val/test, lecture directe depuis MLflow
+
+## Conventions scientifiques importantes
+- **Split régression** : n_train=100, n_val=0, n_test=50. Les AE entraînés avec n_val=20 sont compatibles (mêmes 100 premiers patients). Les PCA entraînées avec n_train=120 ne le sont pas — réentraîner en 100/50.
+- **Stratification** : pour que les modèles PCA/AE soient utilisables en régression sur les groupes ACDC, les entraîner sur un split stratifié (5 groupes équilibrés). Le splitdefault est par chance stratifié ; pour les splits seedés, utiliser `stratify=True`.
+- **AE sans val set** : n_val=0 est désormais la norme. `run_regression.py` gère le fallback `best_epoch → n_epochs` si le param n'est pas logué.
+- **PCA artifact** : sauvegardé comme `pca_{frame_tag}.joblib` (ex: `pca_ED.joblib`, `pca_ED+ES.joblib`) dans les artifacts MLflow du run `pca_spatial`.
 
 ## Questions ouvertes à trancher pendant le refactoring
 - Mean subtraction dans PCA : sklearn `PCA` centre les données par défaut — vérifier que ce n'est pas fait en double dans le code actuel
@@ -202,13 +208,19 @@ SDSC-arthur-project-1/
 - `plot_comparison_curves()` ajoutée dans `ae_plots.py` ; anciennes fonctions txt-based conservées (dead code, nettoyage Pan 4)
 - Validé en local sur runs MLflow existants
 
-**Étape 11 : Régression** — `run_regression.py`
-- From PCA results (refactoring de l'existant)
-- From AE results (à écrire)
-- **⚠ Vérification préliminaire** : si comparaison AE vs PCA, vérifier que les splits sont identiques
-- Utilise `src/data/splits.py` (partagé avec PCA/AE) — permet de moyenner sur de nombreux splits pour réduire la stochasticité
-- Métriques (accuracy, R², confusion matrix) + plots
-- Outputs dans MLflow
+**Étape 11 : Régression** ⚠ écrit, à tester sur Renku — `run_regression.py`
+- `scripts/run_regression.py` réécrit : YAML, MLflow `start_run`, métriques à `step=n_dims`
+- `src/models/regression.py` : fonctions pures (fit_scaler, fit_logistic, fit_linear, eval_*)
+- `src/visualization/regression_plots.py` : plots in-memory (logistic metrics, linear metrics, confusion matrix, predicted vs true)
+- `src/data/importdata.py` : `load_patient_metadata(y_name)` + `load_acdc_groups` comme wrapper
+- `configs/regression.yaml` : source_type (pca/ae), y_name, n_train=100, cumvar_threshold_list, ae_source, plot_only/load_run_id, logistic_C, n_pc_confusion
+- **Source PCA** : charge la PCA depuis MLflow (`pca_{frame_tag}.joblib`), sweep sur `cumvar_threshold_list` avec déduplication des n_pc identiques, row-centering identique à `run_pca_spatial.py`
+- **Source AE** : `search_runs()` par model_name/experiment_tag/split_name/params_filter, groupés par latent_dim, vérification split sur tous les runs, encoding via `collect_latent_vectors`
+- **Vérification split** : `split_name + n_train` comparés entre le run PCA/AE source et la config régression — ValueError si incohérence
+- **Split régression** : n_train=100, n_test=50, pas de val set. Compatible avec AE entraînés en 100/20/30 (mêmes 100 premiers patients). **Incompatible avec PCA entraînées en 120/30** → réentraîner la PCA spatiale en 100/50 avant de lancer la régression PCA
+- **JSON artifacts** : confusion matrix + Y_pred sauvegardés en `.json` dans `mlruns/` (committés git) → `plot_only: true` + `load_run_id` régénère tous les plots sans données ni modèles
+- `logistic_C` : null = auto (0.5 si ED+ES pour corriger les paires corrélées, 1.0 sinon)
+- Y dupliqué si `use_both_frames` (dérivé de `frame_tag == "ED+ES"` depuis les params MLflow du run source)
 
 ---
 

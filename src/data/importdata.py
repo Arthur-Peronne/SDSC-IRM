@@ -5,6 +5,7 @@ Functions to import data
 
 import nibabel as nib
 import glob
+import numpy as np
 from pathlib import Path
 
 from src.config import DATADIR, PROCESSED_IMAGES_FOLDER
@@ -296,15 +297,43 @@ def get_patient_modified_path(patient_id, folder, file_type="frame", frame_type=
 
     return full_path
 
+def load_patient_metadata(y_name: str, n_patients: int = 150) -> np.ndarray:
+    """
+    Load patient metadata for one target variable.
+
+    Parameters
+    ----------
+    y_name : str
+        "group"  → ACDC cardiac group (str: "NOR", "DCM", "HCM", "MINF", "RV")
+        "height" → patient height in cm (float)
+        "weight" → patient weight in kg (float)
+    n_patients : int
+        Number of patients to load (1 to n_patients, in order). Default 150.
+        Order matches get_vectorsarray() / load_allframes_registered().
+
+    Returns
+    -------
+    np.ndarray, shape (n_patients,)
+        String dtype for "group", float64 for "height" / "weight".
+    """
+    key_map = {"group": "Group", "height": "Height", "weight": "Weight"}
+    if y_name not in key_map:
+        raise ValueError(f"y_name must be 'group', 'height', or 'weight'. Got: {y_name!r}")
+
+    cfg_key = key_map[y_name]
+    values = []
+    for patient_id in range(1, n_patients + 1):
+        subset = "training" if patient_id <= 100 else "testing"
+        cfg_path = DATADIR / subset / f"patient{patient_id:03d}" / "Info.cfg"
+        info = read_info_cfg(cfg_path)
+        values.append(info[cfg_key])
+
+    return np.asarray(values)
+
+
 def load_acdc_groups(n_patients: int) -> list[str]:
     """
     Load ACDC group label for each patient (1 to n_patients).
     Returns list of strings e.g. ["NOR", "DCM", "HCM", ...]
     """
-    groups = []
-    for patient_id in range(1, n_patients + 1):
-        subset = "training" if patient_id <= 100 else "testing"
-        cfg_path = DATADIR / subset / f"patient{patient_id:03d}" / "Info.cfg"
-        info = read_info_cfg(cfg_path)
-        groups.append(info["Group"])
-    return groups
+    return load_patient_metadata("group", n_patients).tolist()
