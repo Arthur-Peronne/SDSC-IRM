@@ -1,0 +1,14 @@
+artifact_uri: mlruns/269771982328891039/41c35c8ec0334cb8b9f60a2a0dd198a2/artifacts
+end_time: 1781176538378
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: 41c35c8ec0334cb8b9f60a2a0dd198a2
+run_name: AE_AE3dFCDeep_VAE_200patients_splitdefault_60dims_vae_optuna2
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1781175725899
+status: 3
+tags: []
+user_id: renku
