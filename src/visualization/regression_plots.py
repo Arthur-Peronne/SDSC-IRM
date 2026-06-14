@@ -36,15 +36,17 @@ def plot_logistic_metrics(results: list[dict], y_name: str, run_label: str,
     """
     n_dims = [r["n_dims"] for r in results]
     accuracy = [r["accuracy"] for r in results]
-    ev = [r["explained_variance"] for r in results]
+    show_ev = results[0]["explained_variance"] is not None
+    ev = [r["explained_variance"] for r in results] if show_ev else None
 
     if binary:
         fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(8, 10), sharex=True)
 
         ax1.plot(n_dims, [r["roc_auc"] for r in results], marker="o", label="ROC AUC")
         ax1.plot(n_dims, accuracy, marker="o", label="Accuracy")
-        ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-                 label="Cum. explained variance")
+        if show_ev:
+            ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                    label="Cum. explained variance")
         ax1.set_ylabel("Score")
         ax1.set_title(f"{run_label} — {y_name} (binary) — Overall")
         ax1.set_ylim(0, 1.05)
@@ -53,8 +55,9 @@ def plot_logistic_metrics(results: list[dict], y_name: str, run_label: str,
 
         ax2.plot(n_dims, [r["recall"] for r in results], marker="o", label="Recall")
         ax2.plot(n_dims, [r["precision"] for r in results], marker="o", label="Precision")
-        ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-                 label="Cum. explained variance")
+        if show_ev:
+            ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                    label="Cum. explained variance")
         ax2.set_xlabel("Latent dimensions")
         ax2.set_ylabel("Score")
         ax2.set_title(f"{run_label} — {y_name} (binary) — Positive class")
@@ -67,8 +70,9 @@ def plot_logistic_metrics(results: list[dict], y_name: str, run_label: str,
         fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, figsize=(9, 14), sharex=True)
 
         ax1.plot(n_dims, accuracy, marker="o", label="Accuracy")
-        ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-                 label="Cum. explained variance")
+        if show_ev:
+            ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                    label="Cum. explained variance")
         ax1.set_ylabel("Score")
         ax1.set_title(f"{run_label} — {y_name} — Accuracy")
         ax1.set_ylim(0, 1.05)
@@ -78,8 +82,9 @@ def plot_logistic_metrics(results: list[dict], y_name: str, run_label: str,
         for cls in classes:
             vals = [r["recall_per_class"].get(cls, 0.0) for r in results]
             ax2.plot(n_dims, vals, marker="o", label=f"Recall {cls}")
-        ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-                 label="Cum. explained variance")
+        if show_ev:
+            ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                    label="Cum. explained variance")
         ax2.set_ylabel("Score")
         ax2.set_title(f"{run_label} — {y_name} — Recall per class")
         ax2.set_ylim(0, 1.05)
@@ -89,8 +94,9 @@ def plot_logistic_metrics(results: list[dict], y_name: str, run_label: str,
         for cls in classes:
             vals = [r["precision_per_class"].get(cls, 0.0) for r in results]
             ax3.plot(n_dims, vals, marker="o", label=f"Precision {cls}")
-        ax3.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-                 label="Cum. explained variance")
+        if show_ev:
+            ax3.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                    label="Cum. explained variance")
         ax3.set_xlabel("Latent dimensions")
         ax3.set_ylabel("Score")
         ax3.set_title(f"{run_label} — {y_name} — Precision per class")
@@ -122,13 +128,15 @@ def plot_linear_metrics(results: list[dict], y_name: str, run_label: str) -> Pat
     Path to saved figure.
     """
     n_dims = [r["n_dims"] for r in results]
-    ev = [r["explained_variance"] for r in results]
+    show_ev = results[0]["explained_variance"] is not None
+    ev = [r["explained_variance"] for r in results] if show_ev else None
 
     fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(8, 10), sharex=True)
 
     ax1.plot(n_dims, [r["r2"] for r in results], marker="o", label="R²")
-    ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-             label="Cum. explained variance")
+    if show_ev:
+        ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                label="Cum. explained variance")
     ax1.set_ylabel("Score")
     ax1.set_title(f"{run_label} — {y_name} — R²")
     ax1.grid(True, alpha=0.3)
@@ -136,8 +144,9 @@ def plot_linear_metrics(results: list[dict], y_name: str, run_label: str) -> Pat
 
     ax2.plot(n_dims, [r["rmse"] for r in results], marker="o", label="RMSE")
     ax2.plot(n_dims, [r["mae"] for r in results], marker="o", label="MAE")
-    ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-             label="Cum. explained variance")
+    if show_ev:
+        ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                label="Cum. explained variance")
     ax2.set_xlabel("Latent dimensions")
     ax2.set_ylabel(y_name)
     ax2.set_title(f"{run_label} — {y_name} — Prediction errors")
@@ -152,29 +161,28 @@ def plot_linear_metrics(results: list[dict], y_name: str, run_label: str) -> Pat
     return outpath
 
 
-def plot_confusion_matrix(result: dict, y_name: str, run_label: str) -> Path:
+def plot_confusion_matrix(result: dict, y_name: str, run_label: str, z: float = 1.96) -> Path:
     """
-    Plot a normalized confusion matrix from one result dict.
-
-    Parameters
-    ----------
-    result : dict
-        One dict from eval_logistic_binary or eval_logistic_multiclass.
-    y_name : str
-    run_label : str
-
-    Returns
-    -------
-    Path to saved figure.
+    Plot a normalized confusion matrix from one result dict, with per-cell
+    Wilson confidence intervals.
     """
     cm = result["confusion_matrix"].astype(float)
-    cm_norm = cm / cm.sum(axis=1, keepdims=True)
+    row_totals = cm.sum(axis=1, keepdims=True)
+    cm_norm = cm / row_totals
     classes = result["classes"]
     n_dims = result["n_dims"]
 
-    plt.figure(figsize=(6, 5))
-    sns.heatmap(cm_norm, annot=True, fmt=".2f", cmap="Blues",
-                xticklabels=classes, yticklabels=classes, vmin=0, vmax=1)
+    lo, hi = _wilson_interval(cm_norm, row_totals, z)
+
+    annot = np.empty(cm_norm.shape, dtype=object)
+    for i in range(cm_norm.shape[0]):
+        for j in range(cm_norm.shape[1]):
+            annot[i, j] = f"{cm_norm[i, j]:.2f}\n[{lo[i, j]:.2f},{hi[i, j]:.2f}]"
+
+    plt.figure(figsize=(6.5, 5.5))
+    sns.heatmap(cm_norm, annot=annot, fmt="", cmap="Blues",
+                xticklabels=classes, yticklabels=classes, vmin=0, vmax=1,
+                annot_kws={"fontsize": 9})
     plt.xlabel("Predicted class")
     plt.ylabel("True class")
     plt.title(f"{run_label} — {y_name} — Confusion matrix ({n_dims} dims)")
@@ -222,30 +230,32 @@ def plot_predicted_vs_true(result: dict, y_name: str, run_label: str) -> Path:
     plt.close()
     return outpath
 
-
 def plot_average_confusion_matrix(cms: list[np.ndarray], classes: list[str],
-                                  title: str, outpath: Path) -> Path:
+                                  title: str, outpath: Path, z: float = 1.96) -> Path:
     """
-    Average several row-normalized confusion matrices and plot the result.
-
-    Parameters
-    ----------
-    cms : list of np.ndarray
-        Raw (unnormalized) confusion matrices, all with same shape.
-    classes : list of str
-    title : str
-    outpath : Path
-
-    Returns
-    -------
-    outpath
+    Average several row-normalized confusion matrices and plot the result,
+    with per-cell Wilson confidence intervals computed on pooled counts.
     """
-    cms_norm = [cm.astype(float) / cm.sum(axis=1, keepdims=True) for cm in cms]
+    cms = [cm.astype(float) for cm in cms]
+    row_totals_list = [cm.sum(axis=1, keepdims=True) for cm in cms]
+    cms_norm = [cm / rt for cm, rt in zip(cms, row_totals_list)]
     cm_avg = np.mean(cms_norm, axis=0)
 
-    plt.figure(figsize=(6, 5))
-    sns.heatmap(cm_avg, annot=True, fmt=".2f", cmap="Blues",
-                xticklabels=classes, yticklabels=classes, vmin=0, vmax=1)
+    pooled_counts     = np.sum(cms, axis=0)
+    pooled_row_totals = np.sum(row_totals_list, axis=0)
+    p = pooled_counts / pooled_row_totals
+
+    lo, hi = _wilson_interval(p, pooled_row_totals, z)
+
+    annot = np.empty(cm_avg.shape, dtype=object)
+    for i in range(cm_avg.shape[0]):
+        for j in range(cm_avg.shape[1]):
+            annot[i, j] = f"{cm_avg[i, j]:.2f}\n[{lo[i, j]:.2f},{hi[i, j]:.2f}]"
+
+    plt.figure(figsize=(7, 6))
+    sns.heatmap(cm_avg, annot=annot, fmt="", cmap="Blues",
+                xticklabels=classes, yticklabels=classes, vmin=0, vmax=1,
+                annot_kws={"fontsize": 9})
     plt.xlabel("Predicted class")
     plt.ylabel("True class")
     plt.title(title)
@@ -263,3 +273,12 @@ def _set_xscale_log(ax, n_dims: list) -> None:
         ax.set_xscale("log")
         ax.set_xticks(n_dims)
         ax.set_xticklabels([str(x) for x in n_dims])
+
+def _wilson_interval(p: np.ndarray, n: np.ndarray, z: float = 1.96) -> tuple[np.ndarray, np.ndarray]:
+    """Wilson score interval bounds (lo, hi) for proportions p with sample sizes n."""
+    denom  = 1 + z**2 / n
+    center = (p + z**2 / (2 * n)) / denom
+    halfwidth = (z / denom) * np.sqrt(p * (1 - p) / n + z**2 / (4 * n**2))
+    lo = np.clip(center - halfwidth, 0, 1)
+    hi = np.clip(center + halfwidth, 0, 1)
+    return lo, hi

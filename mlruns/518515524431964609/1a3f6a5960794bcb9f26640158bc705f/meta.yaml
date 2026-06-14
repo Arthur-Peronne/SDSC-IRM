@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-arthur-project-1/mlruns/518515524431964609/1a3f6a5960794bcb9f26640158bc705f/artifacts
+end_time: 1781471058690
+entry_point_name: ''
+experiment_id: '518515524431964609'
+lifecycle_stage: active
+run_id: 1a3f6a5960794bcb9f26640158bc705f
+run_name: regression_ae_100patients_splitdefault_group_first_test_ae
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1781254297764
+status: 3
+tags: []
+user_id: renku

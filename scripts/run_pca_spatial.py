@@ -50,6 +50,7 @@ def main():
     n_val_images    = n_val   * 2 if use_both_frames else n_val
     recalculate     = cfg["recalculate_pca"]
     load_run_id     = cfg.get("load_run_id") if not recalculate else None
+    pc_max          = cfg["pc_max"]
 
     if not recalculate and not load_run_id:
         raise ValueError("recalculate_pca: false requires load_run_id in YAML")
@@ -64,6 +65,7 @@ def main():
         n_val=n_val,
         n_test=n_test,
         special_split=special_split,
+        stratify_ongroup=cfg.get("stratify_ongroup", False),
         use_both_frames=use_both_frames,
         frame_type=frame_type,
         image_roi_only=cfg["image_roi_only"],
@@ -87,6 +89,7 @@ def main():
                 "n_val":          n_val,
                 "n_test":         n_test,
                 "split_name":     split_name,
+                "stratify_ongroup": cfg.get("stratify_ongroup", False),
                 "frame_tag":      frame_tag,
                 "image_roi_only": cfg["image_roi_only"],
                 "mask_ys":        cfg["mask_ys"],
@@ -208,7 +211,6 @@ def main():
 
         # ── Plot : PC values in eigenbase ─────────────────────────────────────
         if cfg["plot_pc_values"]:
-            pc_max = cfg["pc_max"]
             if pc_max % 2 != 0:
                 raise ValueError(f"pc_max must be even, got {pc_max}")
             for i in range(0, min(pc_max, pca.n_components_ - 1), 2):
@@ -223,8 +225,10 @@ def main():
 
         # ── Plot : PC values colored by metadata ──────────────────────────────
         if cfg["plot_metadata"]:
-            for n1, n2 in [(cfg["pc_n1"], cfg["pc_n2"]), (2, 3), (4, 5), (6, 7), (8, 9)]:
-                pcs.plot_pca_patientmeta(X_train_pca, n1, n2)
+            for i in range(0, min(pc_max, pca.n_components_ - 1), 2):
+                paths = pcs.plot_pca_patientmeta(X_train_pca, i, i + 1, n_train)
+                for p in paths:
+                    tracking.log_artifact(p)
 
         # ── Plot : eigenvectors ───────────────────────────────────────────────
         if cfg["plot_eigenvectors"]:

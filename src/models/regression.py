@@ -19,14 +19,14 @@ from sklearn.metrics import (
 )
 
 
-def n_pc_for_variance(pca, threshold: float) -> int:
-    """
-    Return the number of PCs needed to reach a given cumulative explained
-    variance threshold.  threshold >= 1.0 (e.g. 2.0) returns all components.
-    """
-    cumulative = np.cumsum(pca.explained_variance_ratio_)
-    idx = np.where(cumulative >= threshold)[0]
-    return int(len(cumulative)) if len(idx) == 0 else int(idx[0] + 1)
+# def n_pc_for_variance(pca, threshold: float) -> int:
+#     """
+#     Return the number of PCs needed to reach a given cumulative explained
+#     variance threshold.  threshold >= 1.0 (e.g. 2.0) returns all components.
+#     """
+#     cumulative = np.cumsum(pca.explained_variance_ratio_)
+#     idx = np.where(cumulative >= threshold)[0]
+#     return int(len(cumulative)) if len(idx) == 0 else int(idx[0] + 1)
 
 
 def fit_scaler(X_train: np.ndarray) -> StandardScaler:
@@ -66,7 +66,7 @@ def fit_linear(X_train: np.ndarray, Y_train: np.ndarray) -> LinearRegression:
 
 
 def eval_logistic_binary(clf, X_test: np.ndarray, Y_test: np.ndarray,
-                         n_dims: int, explained_variance: float) -> dict:
+                         n_dims: int, explained_variance: float | None) -> dict:
     """
     Evaluate a binary logistic classifier and return metrics as a dict.
 
@@ -77,8 +77,8 @@ def eval_logistic_binary(clf, X_test: np.ndarray, Y_test: np.ndarray,
     Y_test : np.ndarray
     n_dims : int
         Number of latent dimensions used (for logging).
-    explained_variance : float
-        Cumulative explained variance kept (PCA); 1.0 for AE.
+    explained_variance : float | None
+        Cumulative explained variance kept (PCA); None for AE.
     """
     Y_pred = clf.predict(X_test)
     Y_prob = clf.predict_proba(X_test)[:, 1]
@@ -96,7 +96,7 @@ def eval_logistic_binary(clf, X_test: np.ndarray, Y_test: np.ndarray,
 
 
 def eval_logistic_multiclass(clf, X_test: np.ndarray, Y_test: np.ndarray,
-                              n_dims: int, explained_variance: float) -> dict:
+                              n_dims: int, explained_variance: float | None) -> dict:
     """
     Evaluate a multiclass logistic classifier and return metrics as a dict.
     """
@@ -123,7 +123,7 @@ def eval_logistic_multiclass(clf, X_test: np.ndarray, Y_test: np.ndarray,
 
 
 def eval_linear(reg, X_test: np.ndarray, Y_test: np.ndarray,
-                n_dims: int, explained_variance: float) -> dict:
+                n_dims: int, explained_variance: float | None) -> dict:
     """
     Evaluate a linear regression model and return metrics as a dict.
     """

@@ -1,23 +1,26 @@
 ======================================================================
 PROJECT ARBORESCENCE WITH MODULE DESCRIPTIONS
-Root : /home/arthur/Professionnel/SDSC/2_code/SDSC-IRM
+Root : /home/renku/work/SDSC-arthur-project-1
 ======================================================================
 
-SDSC-IRM/
+SDSC-arthur-project-1/
 ├── ai_assistance/
 │   ├── What the code must perform.txt
 │   ├── context_arborescence.txt
 │   ├── context_code.txt
+│   ├── context_yaml.txt
 │   └── dump_context.py
 ├── configs/
 │   ├── ae_optuna.yaml
 │   ├── autoencoder.yaml
 │   ├── comparison.yaml
+│   ├── comparison_aepca.yaml
 │   ├── pca_spatial.yaml
 │   ├── pca_temporal.yaml
 │   ├── registration.yaml
 │   ├── regression.yaml
-│   └── visualization.yaml
+│   ├── visualization.yaml
+│   └── visualize_latent.yaml
 ├── experiments/
 │   ├── pca_testiris.py  # Script to perform a simple PCA on the IRIS dataset
 │   └── regression_testscikit.py
@@ -26,17 +29,13 @@ SDSC-IRM/
 ├── scripts/
 │   ├── run_ae_optuna.py  # Optuna hyperparameter optimisation for 3D autoencoders.
 │   ├── run_autoencoder.py  # 3D autoencoder training and evaluation on cardiac MRI data.
-│   ├── run_comparison_aepca.py  # Comparison plots between AE architectures and PCA.
+│   ├── run_comparison_aepca.py  # Comparison plots: AE architectures and/or PCA spatial, metric vs latent dims.
 │   ├── run_pca_spatial.py  # Spatial PCA across patients.
 │   ├── run_pca_temporal.py  # Temporal PCA on a single patient's 4D cardiac MRI.
 │   ├── run_registration.py  # Preprocessing pipeline: resampling -> cropping -> registration.
-│   ├── run_regression.py  # Script for the functions for the PCA "each patient" and followed by the logistic regression with patient metadata
-│   └── run_visualize.py  # Visualize MRI NIfTI images (raw ACDC or processed).
-├── sdsc_arthur_project.egg-info/
-│   ├── PKG-INFO
-│   ├── SOURCES.txt
-│   ├── dependency_links.txt
-│   └── top_level.txt
+│   ├── run_regression.py  # Regression pipeline on PCA or AE latent representations.
+│   ├── run_visualize.py  # Visualize MRI NIfTI images (raw ACDC or processed).
+│   └── run_visualize_latent.py  # Visualize the latent space of a trained AE or VAE model.
 ├── src/
 │   ├── data/
 │   │   ├── __init__.py
@@ -52,7 +51,7 @@ SDSC-IRM/
 │   │   ├── ae_models.py  # 3D autoencoder architectures for cardiac MRI representation learning.
 │   │   ├── pca.py  # Functions to perform PCA — temporal and spatial utilities.
 │   │   ├── pca_spatial.py  # Script for the functions for the PCA "each patient"
-│   │   └── regression.py  # Data loading, split management, logistic and linear regression models
+│   │   └── regression.py  # Pure regression functions for PCA- and AE-based cardiac classification
 │   ├── sdsc_arthur_project.egg-info/
 │   │   ├── PKG-INFO
 │   │   ├── SOURCES.txt
@@ -68,15 +67,18 @@ SDSC-IRM/
 │   │   ├── mri_plots.py  # Functions to visualize MRI images
 │   │   ├── pca_plots.py  # PCA visualization functions — shared by the temporal and spatial pipelines.
 │   │   ├── plots.py  # Various plots, not direct MRI representations
-│   │   └── regression_plots.py  # Result parsing and plotting functions for logistic and linear regression
+│   │   └── regression_plots.py  # Plotting functions for logistic and linear regression results.
 │   ├── __init__.py
 │   ├── config.py  # Central configuration — paths loaded from environment variables.
 │   └── tracking.py  # MLflow utilities. All tracking interactions must go through this module.
 ├── CLAUDE.md
 ├── README.md
+├── backup_results.tar.gz
+├── optuna_fcdeepnew_MLflow_log.txt
 ├── pyproject.toml
 ├── requirements_locked.txt
-└── setup_env.sh
+├── setup_env.sh
+└── shortcut_AP.txt
 
 ======================================================================
 DETAILED DOCSTRINGS PER FILE
@@ -125,19 +127,22 @@ CALC mode: set recalculate_ae: true.
 
 # scripts/run_comparison_aepca.py
 """
-Comparison plots between AE architectures and PCA.
- 
-Plot 1 — AE vs AE (validation set):
-    Compare AE architectures against each other.
-    Use this plot to select the best AE architecture and latent dim.
- 
-Plot 2 — AE vs PCA (test set, informative only):
-    Compare best AE architectures against PCA.
-    Do NOT use this plot to select the AE model — use Plot 1 for that.
- 
-Plot 3 — AE n_patients comparison:
-    Compare AE architectures trained on different numbers of patients.
-    Helps assess the effect of data augmentation (e.g. ED vs ED+ES).
+Comparison plots: AE architectures and/or PCA spatial, metric vs latent dims.
+
+Reads configs/comparison_aepca.yaml.
+Output: one plot saved to results/ — no MLflow tracking.
+
+Each series is identified by model_name + experiment_tag (+ optional params_filter).
+  - model_name "PCA"  → reads from pca_spatial MLflow experiment (step = n_pcs)
+  - any other name    → reads from autoencoder MLflow experiment (one run per latent_dim)
+
+WARNINGs are printed (never blocking) when:
+  - multiple runs match the same latent_dim for a series → most recent is used
+  - key params differ within a series (potential data mix)
+  - key params differ between series (potential apples-to-oranges comparison)
+
+Usage:
+    python scripts/run_comparison_aepca.py
 """
 
 # scripts/run_pca_spatial.py
@@ -181,7 +186,20 @@ resample_all, crop_all, register_all to false.
 
 # scripts/run_regression.py
 """
-Script for the functions for the PCA "each patient" and followed by the logistic regression with patient metadata
+Regression pipeline on PCA or AE latent representations.
+
+Source PCA  : loads a pre-trained PCA from a pca_spatial MLflow run and sweeps
+              over cumvar_threshold_list → one regression per n_pc.
+Source AE   : finds all autoencoder MLflow runs matching model_name /
+              experiment_tag / split_name (+ optional params_filter), groups
+              them by latent_dimensions, and runs one regression per latent_dim.
+
+One MLflow run is created in the "regression" experiment per script execution.
+Metrics are logged with step = n_dims (n_pc for PCA, latent_dim for AE).
+Classifiers / regressors are saved as joblib artifacts inside that run.
+
+Usage:
+    python scripts/run_regression.py
 """
 
 # scripts/run_visualize.py
@@ -195,6 +213,18 @@ Supported sources:
   processed - resampled/cropped/registered files from PROCESSED_IMAGES_FOLDER
 
 Frame numbers (ED/ES) are read from each patient's Info.cfg.
+"""
+
+# scripts/run_visualize_latent.py
+"""
+Visualize the latent space of a trained AE or VAE model.
+
+Loads a model from an MLflow run, encodes all patients,
+projects latent vectors to 2D (PCA), colored by ACDC group.
+The plot is logged as artifact in the original MLflow run.
+
+Usage:
+    python scripts/run_visualize_latent.py
 """
 
 # src/__init__.py
@@ -304,8 +334,8 @@ Script for the functions for the PCA "each patient"
 
 # src/models/regression.py
 """
-Data loading, split management, logistic and linear regression models
-for PCA-based cardiac group classification and metadata prediction.
+Pure regression functions for PCA- and AE-based cardiac classification
+and metadata prediction. No file I/O — all results returned as dicts.
 """
 
 # src/tracking.py
@@ -381,6 +411,6 @@ Various plots, not direct MRI representations
 
 # src/visualization/regression_plots.py
 """
-Result parsing and plotting functions for logistic and linear regression
-on PCA-based cardiac representations.
+Plotting functions for logistic and linear regression results.
+All functions take in-memory result dicts — no file parsing.
 """

@@ -1,7 +1,7 @@
 ======================================================================
 YAML CONFIG FILES
-Root : /home/arthur/Professionnel/SDSC/2_code/SDSC-IRM
-Files: 8
+Root : /home/renku/work/SDSC-arthur-project-1
+Files: 10
 ======================================================================
 
 
@@ -15,9 +15,10 @@ Files: 8
 # MLflow archives this file as artifact at each run.
 
 # ── Optuna study ──────────────────────────────────────────────────────────────
-study_name: "test_1"
-n_trials: 2
+study_name: "vae_opt2"
+n_trials: 20
 plot_only: false                 # true = skip optimization, load existing study and replot
+load_run_id: "bb4862131791484289f38c3c6744f85f"   # required when plot_only: true
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 # source_folder ("registered_frames"), cache_folder ("X_vectors") and
@@ -35,24 +36,16 @@ n_test: 30
 special_split: null              # null = sequential "splitdefault"; e.g. "split42" for seeded
 
 # ── Fixed hyperparameters ─────────────────────────────────────────────────────
-model_name: "AE3dFCDeep"
+model_name: "AE3dFCDeep_VAE"
 latent_dimensions: 120
-n_epochs: 3
+n_epochs: 300
 batch_size: 1
+dropout_rate: 0.0
+noise_std: 0.0
 
 # ── Hyperparameter search ranges ──────────────────────────────────────────────
 # type: "float" → suggest_float (add log: true for log scale)
 # type: "int"   → suggest_int
-#
-# VAE-specific params can be added here when needed, e.g.:
-#   beta:
-#     type: float
-#     low: 0.5
-#     high: 5.0
-#   beta_warmup_epochs:
-#     type: int
-#     low: 5
-#     high: 50
 hp_ranges:
   lr:
     type: float
@@ -64,18 +57,29 @@ hp_ranges:
     low: 1.0e-7
     high: 1.0e-3
     log: true
-  dropout_rate:
-    type: float
-    low: 0.0
-    high: 0.3
-  noise_std:
-    type: float
-    low: 0.0
-    high: 0.005
+  # dropout_rate:
+  #   type: float
+  #   low: 0.0
+  #   high: 0.4
+  # noise_std:
+  #   type: float
+  #   low: 0.0
+  #   high: 0.005
   patience:
     type: int
     low: 20
     high: 80
+
+#VAE-specific params
+  beta:
+    type: float
+    low: 1e-4
+    high: 1
+    log: true
+  beta_warmup_epochs:
+    type: int
+    low: 5
+    high: 50
 
 # ── Initial trial (enqueued as trial 0 if the study is brand new) ─────────────
 hp_initial:
@@ -84,6 +88,10 @@ hp_initial:
   dropout_rate: 0.1
   noise_std: 0.003
   patience: 40
+
+  # VAE-specific params
+  beta: 5.0e-2
+  beta_warmup_epochs: 20
 
 
 
@@ -97,7 +105,7 @@ hp_initial:
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "optuna"       # "baseline", "optuna", or any custom label
+experiment_tag: "vae_optuna2"       # "baseline", "optuna", or any custom label
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
@@ -117,31 +125,30 @@ special_split: null              # null = sequential "splitdefault"; e.g. "split
 
 
 # ── Model ─────────────────────────────────────────────────────────────────────
-model_name: "AE3dConv"         # "AE3dFCDeep", "AE3dCurrent", "AE3dConv", "AE3dLinear", "AE3dFCDeep_VAE"
-latent_dimensions: 40
+model_name: "AE3dFCDeep_VAE"         # "AE3dFCDeep", "AE3dCurrent", "AE3dConv", "AE3dLinear", "AE3dFCDeep_VAE"
+latent_dimensions: 120
 multiple_models_and_dims: true  # true = loop over models_list × latdim_list
-models_list: ["AE3dFCDeep", "AE3dCurrent", "AE3dConv"]
-latdim_list: [4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
+models_list: ["AE3dFCDeep_VAE",]
+latdim_list: [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
 
 # ── Training ──────────────────────────────────────────────────────────────────
 recalculate_ae: true             # false = load existing model (requires load_run_id)
 load_run_id: null                # MLflow run ID — required when recalculate_ae: false
-n_epochs: 500                    # max epochs (early stopping triggers earlier if n_val > 0)
+n_epochs: 300                    # max epochs (early stopping triggers earlier if n_val > 0)
 batch_size: 1
-lr: 1e-5
-weight_decay: 6.47e-6              # L2 regularisation; optuna example: 6.47e-6
-dropout_rate: 0.3221                # 0.0 for AE3dConv and AE3dLinear; optuna example: 0.221
-noise_std: 0.002                   # 0.0 = no denoising; optuna example: 0.002
-patience: 40                     # early stopping patience (used only if n_val > 0)
+lr: 5e-5                         # Learning rate; AEoptuna: 1e-5, VAEoptuna: 5e-5
+weight_decay: 1e-7            # L2 regularisation; AEoptuna: 6.47e-6, VAEoptuna: 1e-7 
+dropout_rate: 0.0                # 0.0 for AE3dConv and AE3dLinear; AEoptuna: 0.221
+noise_std: 0.0                   # 0.0 = no denoising; AEoptuna: 0.002
+patience: 27                     # early stopping patience (used only if n_val > 0), VAEoptuna: 27
 patience_scheduler: null         # null = patience // 5
 
 # ── VAE parameters (AE3dFCDeep_VAE only) ──────────────────────────────────────
-beta: 1.0                        # KL weight in VAE loss
-beta_warmup_epochs: 20           # epochs to linearly ramp beta from 0 to target value
+beta: 0.00022                    # KL weight in VAE loss, VAEoptuna: 0.00022
+beta_warmup_epochs: 41           # epochs to linearly ramp beta from 0 to target value, VAEoptuna: 41
 
 # ── Reconstruction metrics ────────────────────────────────────────────────────
 compute_metrics: true
-plot_metrics: true               # save R²/MSE vs latent dim as PDF in results/
 
 # ── Plots : reconstruction ────────────────────────────────────────────────────
 plot_reconstruction: false
@@ -194,6 +201,63 @@ plot4_n_patients: 200
 # ── Shared plot options ───────────────────────────────────────────────────────
 metric: "R2"
 xscale: "log"
+
+
+
+######################################################################
+# FILE: configs/comparison_aepca.yaml
+######################################################################
+
+# configs/comparison_aepca.yaml
+# Parameters for scripts/run_comparison_aepca.py
+# Modify this file, then run: python scripts/run_comparison_aepca.py
+
+# ── Plot options ──────────────────────────────────────────────────────────────
+plotname: null           # null = auto-generated from series labels; set a string to override
+metrics: ["test_R2_mean","train_R2_mean"]
+xscale: "log"
+superpose_metrics: true     # false = one subplot per metric; true = all on one axes (linestyle encodes metric)
+
+# ── Series ────────────────────────────────────────────────────────────────────
+# Required per series: model_name + experiment_tag
+#   model_name "PCA"  → reads from the "pca_spatial" MLflow experiment
+#   any other name    → reads from "autoencoder" (one run per latent_dim)
+#.   Ex: "AE3dFCDeep", "AE3dCurrent", "AE3dConv", "AE3dLinear", "AE3dFCDeep_VAE"
+# params_filter (optional): extra MLflow param key/value pairs to disambiguate
+#   when model_name + experiment_tag alone match multiple unintended runs.
+#   Values are matched as strings (MLflow storage format).
+#   Example: {frame_tag: "ED", n_train: "100"}
+#
+# For AE: latent dims are auto-detected from all matching runs.
+# For PCA: one continuous curve (step = n_pcs), all available points.
+#
+# WARNINGs are printed (never blocking) when:
+#   - multiple runs match the same latent_dim  → most recent is used
+#   - key params (split_name, n_train, frame_tag) differ within a series
+#   - key params differ between series (potential apples-to-oranges comparison)
+
+series:
+  - model_name: AE3dFCDeep_VAE
+    experiment_tag: vae_optuna2
+
+  - model_name: AE3dFCDeep
+    experiment_tag: optuna
+  
+  - model_name: PCA
+    experiment_tag: baseline
+
+  # Example with params_filter override:
+  # - model_name: AE3dFCDeep
+  #   experiment_tag: optuna
+  #   params_filter:
+  #     frame_tag: "ED"
+
+# ── Early stopping epoch statistics ──────────────────────────────────────────
+run_stats_nepochs: false
+stats_model_name: AE3dFCDeep
+stats_experiment_tag: optuna
+# stats_params_filter:       # optional — same rules as params_filter above
+#   split_name: splitdefault
 
 
 
@@ -367,20 +431,54 @@ experiment_tag: "baseline"
 
 # ── Target variable ───────────────────────────────────────────────────────────
 y_name: "group"                  # "group", "height", "weight"
-group_binary: false              # true = binary classification (one class vs rest)
-group_bin_value: "RV"            # used only if group_binary = true; "DCM", "HCM", "MINF", "NOR", "RV"
+group_binary: false              # true = binary (one class vs rest); only if y_name = "group"
+group_bin_value: "NOR"           # used only if group_binary = true; "DCM", "HCM", "MINF", "NOR", "RV"
 
-# ── Data ──────────────────────────────────────────────────────────────────────
-source_folder: "registered_frames"
-pca_folder: "pca_allpatients_res"
-image_roi_only: true
-mask_ys: false
-mask_bin: false
-splitname: "split0"
+# ── Data split ────────────────────────────────────────────────────────────────
+n_train: 100                     # number of training patients (n_test = 150 - n_train)
+special_split: null              # null = sequential "splitdefault"; "split42" = seeded random
 
-# ── PCA dimensionality selection ──────────────────────────────────────────────
-cumvar_threshold: 1.0            # variance threshold for selecting n_components
-n_idealpc_confusion: 12          # n_components for confusion matrix plot
+# ── Source (pca or ae) ────────────────────────────────────────────────────────
+source_type: "pca"               # "pca" or "ae"
+
+# ── PCA source (used only if source_type = "pca") ─────────────────────────────
+pca_run_id: null                 # MLflow run_id of the pca_spatial run to load
+cumvar_threshold_list:           # sweep: one regression per threshold → n_pc determined at runtime
+  - 2.0                          # 2.0 = all components
+  - 0.99
+  - 0.98
+  - 0.965
+  - 0.95
+  - 0.92
+  - 0.9
+  - 0.87
+  - 0.85
+  - 0.82
+  - 0.78
+  - 0.74
+  - 0.7
+  - 0.68
+  - 0.65
+  - 0.5
+  - 0.4
+
+# ── AE source (used only if source_type = "ae") ───────────────────────────────
+# search_runs() selects all AE runs matching these criteria, grouped by latent_dimensions
+ae_source:
+  model_name: "AE3dFCDeep"       # model architecture name logged in MLflow
+  experiment_tag: "baseline"     # experiment_tag param logged in MLflow
+  split_name: "splitdefault"     # split_name param logged in MLflow
+  params_filter: {}              # optional extra MLflow param filters (e.g. frame_tag: "ED")
+
+# ── LOAD / plot-only mode ──────────────────────────────────────────────────────
+plot_only: false                 # true = skip regression, reload metrics from load_run_id and replot
+load_run_id: null                # MLflow run_id of a previous regression run (used if plot_only = true)
+
+# ── Regression hyperparameters ────────────────────────────────────────────────
+logistic_C: null                 # null = auto: 1.0 if ED only, 0.5 if ED+ES (corrects for correlated pairs)
+
+# ── Plots ──────────────────────────────────────────────────────────────────────
+n_pc_confusion: 12               # n_pc (or latent_dim) for which to plot the confusion matrix
 
 
 
@@ -431,3 +529,28 @@ plot_modes:
 
 # Max epochs to plot in all_epochs mode
 epoch_limit: 5
+
+
+
+######################################################################
+# FILE: configs/visualize_latent.yaml
+######################################################################
+
+# configs/visualize_latent.yaml
+# Parameters for run_visualize_latent.py
+# Modify this file, then run: python scripts/run_visualize_latent.py
+
+# ── Tracking ──────────────────────────────────────────────────────────────────
+load_run_id: ff88455bd0a645ed8b1491b1d4bd39af  # MLflow run ID of the trained AE/VAE model
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+use_both_frames: true            # true = ED+ES (300 points), false = ED only
+n_patients: 150                  # total patients to visualize (all 150 by default)
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+# model_name and latent_dimensions are read automatically from the MLflow run params
+
+# ── Visualization ─────────────────────────────────────────────────────────────
+projection: "pca"                # "pca" only for now
+use_tsne: false                  # true = also compute t-SNE (slow) — not yet implemented
+color_by: "group"                # "group" (ACDC classes) — extensible later

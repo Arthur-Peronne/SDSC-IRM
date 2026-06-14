@@ -47,12 +47,15 @@ def _derive_split_name(special_split):
 
 
 def _verify_split(run_id, expected: dict, client):
-    """Raise if any expected param differs from what is stored in the MLflow run."""
+    """Raise if any expected param differs from what is stored in the MLflow run.
+    Params absent from the stored run (e.g. older runs predating this param)
+    are skipped rather than treated as a mismatch.
+    """
     saved = client.get_run(run_id).data.params
     mismatches = [
         f"  {k}: stored={saved.get(k)!r}, expected={v!r}"
         for k, v in expected.items()
-        if saved.get(k) != str(v)
+        if k in saved and saved.get(k) != str(v)
     ]
     if mismatches:
         raise ValueError(
@@ -60,11 +63,13 @@ def _verify_split(run_id, expected: dict, client):
         )
 
 
-def _apply_split_to_Y(Y_full, n_train, n_test, special_split):
+def _apply_split_to_Y(Y_full, n_train, n_test, special_split, stratify_ongroup=False):
     """Return Y_train, Y_test using the same split logic as get_split_indices."""
+    strat = load_patient_metadata("group", N_PATIENTS) if stratify_ongroup else None
     train_idx, _, test_idx, _ = splt.get_split_indices(
         n_train=n_train, n_val=0, n_test=n_test,
         special_split=special_split,
+        stratify=strat,
         n_patients=N_PATIENTS,
     )
     return Y_full[train_idx], Y_full[test_idx]
@@ -158,6 +163,7 @@ def _run_pca_source(cfg, Y_full, client):
     frame_tag       = pca_params.get("frame_tag", "ED")
     use_both_frames = frame_tag == "ED+ES"
     frame_type      = "ED" if use_both_frames else frame_tag
+    stratify_ongroup = pca_params.get("stratify_ongroup", "False") == "True"
 
     # ── Load X ───────────────────────────────────────────────────────────────
     print("Loading image data...")
@@ -166,6 +172,7 @@ def _run_pca_source(cfg, Y_full, client):
         cache_folder=pca_params.get("cache_folder", "X_vectors"),
         n_train=n_train, n_val=0, n_test=n_test,
         special_split=special_split,
+        stratify_ongroup=stratify_ongroup,
         use_both_frames=use_both_frames,
         frame_type=frame_type,
         image_roi_only=pca_params.get("image_roi_only", "True") == "True",
@@ -190,7 +197,7 @@ def _run_pca_source(cfg, Y_full, client):
     X_test_pca  = pca.transform(X_test  - row_means_test)
 
     # ── Y (duplicate if both frames) ─────────────────────────────────────────
-    Y_train, Y_test = _apply_split_to_Y(Y_full, n_train, n_test, special_split)
+    Y_train, Y_test = _apply_split_to_Y(Y_full, n_train, n_test, special_split, stratify_ongroup)
     if use_both_frames:
         Y_train = np.concatenate([Y_train, Y_train])
         Y_test  = np.concatenate([Y_test,  Y_test])
@@ -202,18 +209,18 @@ def _run_pca_source(cfg, Y_full, client):
     logistic_C = cfg.get("logistic_C") or (0.5 if use_both_frames else 1.0)
 
     # ── Sweep over cumvar thresholds (deduplicate n_pc) ──────────────────────
-    thresholds     = cfg["cumvar_threshold_list"]
+    latent_dims_list = sorted(set(cfg["latent_dims_list"]))
     n_pc_confusion = cfg.get("n_pc_confusion", 12)
     run_label      = cfg.get("experiment_tag", "baseline")
 
-    # Map each threshold to its n_pc; skip duplicates (keep first occurrence)
-    seen_n_pc: set[int] = set()
-    threshold_n_pc_pairs: list[tuple[float, int]] = []
-    for threshold in thresholds:
-        n_pc = reg.n_pc_for_variance(pca, threshold)
-        if n_pc not in seen_n_pc:
-            seen_n_pc.add(n_pc)
-            threshold_n_pc_pairs.append((threshold, n_pc))
+    # # Map each threshold to its n_pc; skip duplicates (keep first occurrence)
+    # seen_n_pc: set[int] = set()
+    # threshold_n_pc_pairs: list[tuple[float, int]] = []
+    # for threshold in thresholds:
+    #     n_pc = reg.n_pc_for_variance(pca, threshold)
+    #     if n_pc not in seen_n_pc:
+    #         seen_n_pc.add(n_pc)
+    #         threshold_n_pc_pairs.append((threshold, n_pc))
 
     results_test_all  = []
     results_train_all = []
@@ -222,7 +229,11 @@ def _run_pca_source(cfg, Y_full, client):
         tracking.log_params(_build_params(cfg, split_name))
         tracking.log_artifact(CONFIG_PATH)
 
-        for threshold, n_pc in threshold_n_pc_pairs:
+        for n_pc in latent_dims_list:
+            if n_pc > pca.n_components_:
+                print(f"WARNING: n_pc={n_pc} > pca.n_components_={pca.n_components_}, skipping")
+                continue
+
             cumvar = float(np.sum(pca.explained_variance_ratio_[:n_pc]))
 
             Xtr = X_train_pca[:, :n_pc]
@@ -291,11 +302,12 @@ def _run_ae_source(cfg, Y_full, client):
     frame_type     = "ED" if use_both else frame_tag
     image_roi_only = ref_params.get("params.image_roi_only", "True") == "True"
     source_folder  = ref_params.get("params.source_folder", "registered_frames")
+    stratify_ongroup = ref_params.get("params.stratify_ongroup", "False") == "True"
 
     # Verify all AE runs share the same split
     for latdim in sorted_latdims:
         ae_run_id = runs_by_latdim[latdim][0]["run_id"]
-        _verify_split(ae_run_id, {"split_name": split_name, "n_train": n_train}, client)
+        _verify_split(ae_run_id, {"split_name": split_name, "n_train": n_train, "stratify_ongroup": stratify_ongroup}, client)
     print(f"Split verified against all {len(sorted_latdims)} AE runs ✓")
 
     # ── Load tensor datasets (same split as AE training) ─────────────────────
@@ -305,6 +317,7 @@ def _run_ae_source(cfg, Y_full, client):
         cache_folder="X_vectors",
         n_train=n_train, n_val=0, n_test=n_test,
         special_split=special_split,
+        stratify_ongroup=stratify_ongroup,
         use_both_frames=use_both,
         frame_type=frame_type,
         image_roi_only=image_roi_only,
@@ -313,7 +326,7 @@ def _run_ae_source(cfg, Y_full, client):
     print(f"Split: {split_name} | train={len(train_ds)} | test={len(test_ds)}")
 
     # ── Y (duplicate if both frames) ─────────────────────────────────────────
-    Y_train_base, Y_test_base = _apply_split_to_Y(Y_full, n_train, n_test, special_split)
+    Y_train_base, Y_test_base = _apply_split_to_Y(Y_full, n_train, n_test, special_split, stratify_ongroup)
     if use_both:
         Y_train_base = np.concatenate([Y_train_base, Y_train_base])
         Y_test_base  = np.concatenate([Y_test_base,  Y_test_base])
@@ -350,7 +363,7 @@ def _run_ae_source(cfg, Y_full, client):
 
             _, _, r_train, r_test = _run_one_step(
                 Z_train, Z_test, Y_train_base, Y_test_base,
-                latdim, 1.0, is_logistic, binary, logistic_C,
+                latdim, None, is_logistic, binary, logistic_C,
             )
             _log_step_metrics(r_train, r_test, step=latdim, is_logistic=is_logistic, binary=binary)
             _save_result_json(r_train, r_test, latdim, label="latdim")
@@ -381,13 +394,13 @@ def _result_to_serializable(r: dict) -> dict:
 
 def _save_result_json(r_train: dict, r_test: dict, n_dims: int, label: str):
     """Save train+test result dicts as a JSON artifact in the active MLflow run."""
-    stage = RESULTS_FOLDER / "tmp_artifacts"
-    stage.mkdir(parents=True, exist_ok=True)
-    path = stage / f"results_{n_dims}{label}.json"
-    with open(path, "w") as f:
-        json.dump({"train": _result_to_serializable(r_train),
-                   "test":  _result_to_serializable(r_test)}, f)
-    tracking.log_artifact(path)
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / f"results_{n_dims}{label}.json"
+        with open(path, "w") as f:
+            json.dump({"train": _result_to_serializable(r_train),
+                       "test":  _result_to_serializable(r_test)}, f)
+        tracking.log_artifact(path)
 
 
 def _load_result_json(run_id: str, n_dims: int, label: str, client) -> tuple[dict, dict]:
@@ -493,8 +506,8 @@ def _plot_only(cfg, client):
     binary       = run_params["group_binary"] == "True"
     is_logistic  = y_name == "group"
     run_label    = run_params.get("experiment_tag", "baseline")
-    n_pc_confusion = int(run_params.get("n_pc_confusion", 12))
-
+    n_pc_confusion = cfg.get("n_pc_confusion") or int(run_params.get("n_pc_confusion", 12))
+    
     label = "pc" if source_type == "pca" else "latdim"
     dims  = _list_result_dims(load_run_id, label, client)
     if not dims:
@@ -516,6 +529,82 @@ def _plot_only(cfg, client):
         _save_plots(results_train_all, results_test_all,
                     n_pc_confusion, y_name, run_label, is_logistic, binary)
 
+def _nearest_n_pc(available: list[int], target: int) -> int:
+    """Return the value in `available` closest to `target` on a log scale."""
+    return min(available, key=lambda n: abs(np.log(n) - np.log(target)))
+
+
+def _check_consistent_runs(runs_params: list[dict]):
+    """Warn (non-blocking) if loaded regression runs differ on params other than split."""
+    keys = ["n_train", "source_type"]
+    if runs_params[0].get("source_type") == "ae":
+        keys += ["ae_model_name", "ae_experiment_tag"]
+
+    for k in keys:
+        values = {p.get(k) for p in runs_params}
+        if len(values) > 1:
+            print(f"WARNING: param '{k}' differs across selected runs: {values}")
+
+def _plot_compare(cfg, client):
+    """Average confusion matrices from several regression runs (different splits)."""
+    run_ids     = cfg["load_run_ids"]
+    n_pc_target = cfg["n_pc_confusion"]
+
+    runs_params  = []
+    cms          = []
+    classes      = None
+    used_run_ids = []
+    label        = None
+
+    for run_id in run_ids:
+        run_params  = client.get_run(run_id).data.params
+        source_type = run_params.get("source_type")
+        run_label   = "pc" if source_type == "pca" else "latdim"
+
+        available = _list_result_dims(run_id, run_label, client)
+        if not available:
+            print(f"WARNING: run {run_id} has no saved results — skipped")
+            continue
+
+        chosen = n_pc_target if n_pc_target in available else _nearest_n_pc(available, n_pc_target)
+        if chosen != n_pc_target:
+            print(f"WARNING: run {run_id} has no n_pc={n_pc_target}, "
+                  f"using closest available: n_pc={chosen}")
+
+        _, r_test = _load_result_json(run_id, chosen, run_label, client)
+        if "confusion_matrix" not in r_test:
+            print(f"WARNING: run {run_id} (n_pc={chosen}) has no confusion matrix — skipped "
+                  f"(y_name must be 'group', non-binary)")
+            continue
+
+        if classes is None:
+            classes = r_test["classes"]
+            label   = run_label
+        elif classes != r_test["classes"]:
+            raise ValueError(f"Run {run_id} has classes {r_test['classes']} != {classes}")
+
+        cms.append(r_test["confusion_matrix"])
+        runs_params.append(run_params)
+        used_run_ids.append(run_id)
+
+    if not cms:
+        raise ValueError(f"No usable confusion matrices found for n_pc≈{n_pc_target} among {run_ids}")
+
+    _check_consistent_runs(runs_params)
+
+    y_name      = runs_params[0]["y_name"]
+    source_type = runs_params[0]["source_type"]
+    n_splits    = len(cms)
+    run_label_tag = cfg.get("experiment_tag", "compare")
+
+    print(f"compare_mode | {n_splits}/{len(run_ids)} runs used | "
+          f"source={source_type} | n_pc≈{n_pc_target} | y={y_name} | runs={used_run_ids}")
+
+    title   = f"Averaged confusion matrix — {y_name} — {source_type} — n_pc≈{n_pc_target} — {n_splits} splits"
+    outpath = RESULTS_FOLDER / f"confusionmatrix_average_{source_type}_{n_splits}splits_{n_pc_target}{label}_{run_label_tag}.png"
+
+    rgp.plot_average_confusion_matrix(cms, classes, title, outpath)
+    print(f"Saved: {outpath}")
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -531,6 +620,12 @@ def main():
     n_test  = N_PATIENTS - n_train
     special_split = cfg.get("special_split")
     split_name = _derive_split_name(special_split)
+
+    if cfg.get("compare_mode"):
+        if not cfg.get("load_run_ids"):
+            raise ValueError("compare_mode requires load_run_ids in regression.yaml")
+        _plot_compare(cfg, client)
+        return
 
     if cfg.get("plot_only"):
         if not cfg.get("load_run_id"):

@@ -18,7 +18,7 @@ from torch.utils.data import TensorDataset
 
 from src.data import splits as splt
 from src.models import pca_spatial as pcs
-
+from src.data.importdata import load_patient_metadata
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -82,6 +82,7 @@ def load_numpy_splits(
     n_val: int,
     n_test: int,
     special_split: str | None = None,
+    stratify_ongroup: bool = False,
     use_both_frames: bool = True,
     frame_type: str = "ED",
     image_roi_only: bool = True,
@@ -109,6 +110,9 @@ def load_numpy_splits(
     special_split : str or None
         None       → sequential split, logged as "splitdefault".
         "split42"  → seeded random split, logged under that name.
+    stratify_ongroup : bool
+        If True (and special_split is not None), stratify the split on the
+        ACDC group of each patient. Ignored for the sequential split.
     use_both_frames : bool
         True  → load ED and ES, concatenate within each split.
         False → load only frame_type.
@@ -148,9 +152,14 @@ def load_numpy_splits(
     elif frame_type != "ED":
         X_ED = _load_frame(frame_type=frame_type, **kwargs)
 
+    strat_array = (
+        load_patient_metadata("group", len(X_ED)) if stratify_ongroup else None
+    )
+
     train_idx, val_idx, test_idx, split_name = splt.get_split_indices(
         n_train=n_train, n_val=n_val, n_test=n_test,
         special_split=special_split,
+        stratify=strat_array,
         n_patients=len(X_ED),
     )
     X_train, X_val, X_test = _split_frames(X_ED, X_ES, train_idx, val_idx, test_idx)
@@ -164,6 +173,7 @@ def load_tensor_datasets(
     n_val: int,
     n_test: int,
     special_split: str | None = None,
+    stratify_ongroup: bool = False,
     use_both_frames: bool = True,
     frame_type: str = "ED",
     image_roi_only: bool = True,
@@ -193,6 +203,9 @@ def load_tensor_datasets(
     special_split : str or None
         None       → sequential split, logged as "splitdefault".
         "split42"  → seeded random split, logged under that name.
+    stratify_ongroup : bool
+        If True (and special_split is not None), stratify the split on the
+        ACDC group of each patient. Ignored for the sequential split.
     use_both_frames : bool
     frame_type : str
         "ED" or "ES" — used only if use_both_frames=False.
@@ -229,9 +242,14 @@ def load_tensor_datasets(
     elif frame_type != "ED":
         X_ED = _load_frame(frame_type=frame_type, **kwargs)
 
+    strat_array = (
+        load_patient_metadata("group", len(X_ED)) if stratify_ongroup else None
+    )
+
     train_idx, val_idx, test_idx, split_name = splt.get_split_indices(
         n_train=n_train, n_val=n_val, n_test=n_test,
         special_split=special_split,
+        stratify=strat_array,
         n_patients=len(X_ED),
     )
 

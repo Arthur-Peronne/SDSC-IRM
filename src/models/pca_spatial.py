@@ -9,6 +9,7 @@ import nibabel as nib
 import joblib
 from joblib import Parallel, delayed
 from sklearn.decomposition import PCA
+from pathlib import Path
 
 from src.config import PROCESSED_IMAGES_FOLDER
 from src.visualization import mri_plots as mrp
@@ -218,20 +219,26 @@ def patient_metalists(all_files, returnonlyone=False, whichtoreturn="group"):
         return group_list, height_list, weight_list
 
 
-def plot_pca_patientmeta(X_pca, pc_n1, pc_n2):
+def plot_pca_patientmeta(X_pca, pc_n1, pc_n2, n_patients: int) -> list[Path]:
     all_files = ipd.import_patientmetapaths(printinfos=False)
     group_list, height_list, weight_list = patient_metalists(all_files)
-    
-    # Truncate metadata to match X_pca size
-    n = X_pca.shape[0]
-    group_list  = group_list[:n]
-    height_list = height_list[:n]
-    weight_list = weight_list[:n]
-    
-    pcp.plot_pcvalues_2d_meta(X_pca, pc_n1, pc_n2, "Height", height_list)
-    pcp.plot_pcvalues_2d_meta(X_pca, pc_n1, pc_n2, "Weight", weight_list)
-    pcp.plot_pcvalues_2d_metacat(X_pca, pc_n1, pc_n2, "Group", group_list)
 
+    # Keep only the patients in the split
+    group_list  = group_list[:n_patients]
+    height_list = height_list[:n_patients]
+    weight_list = weight_list[:n_patients]
+
+    # Duplicate if ED+ES (each patient appears twice)
+    if X_pca.shape[0] == 2 * n_patients:
+        group_list  = group_list  + group_list
+        height_list = height_list + height_list
+        weight_list = weight_list + weight_list
+
+    paths = []
+    paths.append(pcp.plot_pcvalues_2d_meta(X_pca, pc_n1, pc_n2, "Height", height_list))
+    paths.append(pcp.plot_pcvalues_2d_meta(X_pca, pc_n1, pc_n2, "Weight", weight_list))
+    paths.append(pcp.plot_pcvalues_2d_metacat(X_pca, pc_n1, pc_n2, "Group", group_list))
+    return paths
 
 
 def pca_compute_metrics(
@@ -243,7 +250,6 @@ def pca_compute_metrics(
     pca_name,
     metrics_dataset,
     original_shape,
-    savemetrics=False,
 ):
     """
     Compute reconstruction metrics for a list of latent dimensions.
@@ -262,14 +268,10 @@ def pca_compute_metrics(
         Patient number offset for this split (0 for train, n_train_images for val, etc.)
     pca_name : str
         e.g. "PCA_200patients_split0_ED+ES"
-    metrics_dataset : str
-        "train", "validation", or "test"
     original_shape : tuple
         3D shape of images, e.g. (128, 128, 32).
     pca_folder : str
         Subfolder in PROCESSED_IMAGES_FOLDER for saving results.
-    savemetrics : bool
-        If True, save individual patient metrics to disk.
     """
  
     all_metrics = []
@@ -283,22 +285,10 @@ def pca_compute_metrics(
             x_true=x_patient_3d,
             x_pred=x_recon_3d,
             patient_number=offset + 1 + i,
-            simulation_name=pca_name,
-            n_epochs=None,
-            metrics_dataset=metrics_dataset,
-            savemetrics=savemetrics,
         )
         all_metrics.append(metrics)
 
-    summary = aet.ae_aggregate_metrics(
-        all_metrics,
-        simulation_name=pca_name,
-        experiment_name=f"{latent_dimensions}dims",
-        n_epochs=None,
-        metrics_dataset=metrics_dataset,
-        ae=False,
-        save_summary=False,
-    )
+        summary = aet.ae_aggregate_metrics(all_metrics)
 
     print(
         f"[PCA {latent_dimensions}dims | {metrics_dataset}] "

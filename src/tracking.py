@@ -82,7 +82,6 @@ def log_metrics(metrics: dict, step: int = None):
 
 def log_model_state_dict(model, filename: str = "model.pth"):
     """Save a PyTorch state dict as an MLflow artifact."""
-    _setup() 
     import torch
     import tempfile
     from pathlib import Path
@@ -95,7 +94,6 @@ def log_model_state_dict(model, filename: str = "model.pth"):
 
 def log_artifact(path):
     """Log a file (plot, summary, etc.) as an MLflow artifact."""
-    _setup() 
     mlflow.log_artifact(str(path))
 
 def log_sklearn_model(model, filename: str = "pca.joblib"):

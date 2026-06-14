@@ -1,7 +1,7 @@
 ======================================================================
 FULL PROJECT CODE — ALL .py FILES
-Root : /home/arthur/Professionnel/SDSC/2_code/SDSC-IRM
-Files: 35
+Root : /home/renku/work/SDSC-arthur-project-1
+Files: 36
 ======================================================================
 
 
@@ -279,11 +279,11 @@ def main():
     if cfg["n_val"] <= 0:
         raise ValueError("n_val must be > 0 for Optuna (early stopping requires a validation set)")
 
-    frame_tag      = "ED+ES" if cfg["use_both_frames"] else cfg["frame_type"]
-    n_train        = cfg["n_train"]
-    n_val          = cfg["n_val"]
+    frame_tag  = "ED+ES" if cfg["use_both_frames"] else cfg["frame_type"]
+    n_train    = cfg["n_train"]
+    n_val      = cfg["n_val"]
+    study_name = cfg["study_name"]
 
-    # Load data before opening the MLflow run (split_name needed for run_name)
     train_dataset, val_dataset, _, _, split_name = loader.load_tensor_datasets(
         source_folder="registered_frames",
         cache_folder="X_vectors",
@@ -300,58 +300,78 @@ def main():
     )
     print(f"Data loaded | train: {len(train_dataset)} | val: {len(val_dataset)} | split: {split_name}")
 
-    db_path    = RESULTS_FOLDER / "optuna" / f"{cfg['study_name']}.db"
-    study_name = cfg["study_name"]
-    run_name   = f"optuna_{study_name}_{split_name}"
-
+    run_name = f"optuna_{study_name}_{split_name}"
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    with tracking.start_run("ae_optuna", run_name):
-        tracking.log_artifact(CONFIG_PATH)
-        tracking.log_params({
-            "model_name":        cfg["model_name"],
-            "latent_dimensions": cfg["latent_dimensions"],
-            "n_train":           n_train,
-            "n_val":             n_val,
-            "n_test":            cfg["n_test"],
-            "split_name":        split_name,
-            "frame_tag":         frame_tag,
-            "image_roi_only":    cfg["image_roi_only"],
-            "mask_ys":           cfg["mask_ys"],
-            "mask_bin":          cfg["mask_bin"],
-            "n_epochs":          cfg["n_epochs"],
-            "batch_size":        cfg["batch_size"],
-            "study_name":        study_name,
-            "n_trials_target":   cfg["n_trials"],
-        })
+    if cfg["plot_only"]:
+        load_run_id = cfg.get("load_run_id")
+        if not load_run_id:
+            raise ValueError("plot_only: true requires load_run_id in the YAML")
+        db_path = tracking.download_artifact(load_run_id)
+        study = aeo.load_study(study_name, db_path)
+        print(f"Study loaded from DB: {len(study.trials)} trials")
 
-        if cfg["plot_only"]:
-            study = aeo.load_study(study_name, db_path)
-            print(f"Study loaded from DB: {len(study.trials)} trials")
-        else:
+        with tracking.resume_run(load_run_id):
+            tracking.log_artifact(CONFIG_PATH)
+            _log_and_plot(study, cfg, n_train, n_val, split_name, frame_tag, study_name)
+            
+    else:
+        mlflow_run, artifact_dir = tracking.start_run_and_get_id("ae_optuna", run_name)
+        with mlflow_run:
+            tracking.log_artifact(CONFIG_PATH)
+
+            tracking.log_params({
+                "model_name":        cfg["model_name"],
+                "latent_dimensions": cfg["latent_dimensions"],
+                "n_train":           n_train,
+                "n_val":             n_val,
+                "n_test":            cfg["n_test"],
+                "split_name":        split_name,
+                "frame_tag":         frame_tag,
+                "image_roi_only":    cfg["image_roi_only"],
+                "mask_ys":           cfg["mask_ys"],
+                "mask_bin":          cfg["mask_bin"],
+                "n_epochs":          cfg["n_epochs"],
+                "batch_size":        cfg["batch_size"],
+                "study_name":        study_name,
+                "n_trials_target":   cfg["n_trials"],
+            })
+            # Hyperparameter fixed 
+            fixed_hp_keys = {"lr", "weight_decay", "dropout_rate", "noise_std", "patience",
+                            "beta", "beta_warmup_epochs"}
+            fixed_params = {
+                k: cfg[k] for k in fixed_hp_keys
+                if k in cfg and k not in cfg.get("hp_ranges", {})
+            }
+            if fixed_params:
+                tracking.log_params(fixed_params)
+
+            db_path = artifact_dir / f"{study_name}.db"
             study = aeo.run_optuna(cfg, train_dataset, val_dataset, db_path)
+            _log_and_plot(study, cfg, n_train, n_val, split_name, frame_tag, study_name)
 
-        n_complete = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
-        tracking.log_metric("best_val_loss",      study.best_value)
-        tracking.log_metric("best_trial_number",  float(study.best_trial.number))
-        tracking.log_metric("n_trials_completed", float(n_complete))
-        for k, v in study.best_params.items():
-            tracking.log_metric(f"best_{k}", float(v))
 
-        plot_paths = aeo.plot_optuna_results(study, cfg, RESULTS_FOLDER)
-        for p in plot_paths:
-            tracking.log_artifact(p)
+def _log_and_plot(study, cfg, n_train, n_val, split_name, frame_tag, study_name):
+    """Log metrics, plots and summary for a completed or loaded Optuna study."""
+    n_complete = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
+    tracking.log_metric("best_val_loss",      study.best_value)
+    tracking.log_metric("best_trial_number",  float(study.best_trial.number))
+    tracking.log_metric("n_trials_completed", float(n_complete))
+    for k, v in study.best_params.items():
+        tracking.log_metric(f"best_{k}", float(v))
 
-        summary_path = aeo.save_optuna_summary(study, RESULTS_FOLDER)
-        tracking.log_artifact(summary_path)
+    plot_paths = aeo.plot_optuna_results(study, cfg, RESULTS_FOLDER)
+    for p in plot_paths:
+        tracking.log_artifact(p)
 
-        tracking.log_artifact(db_path)
+    summary_path = aeo.save_optuna_summary(study, RESULTS_FOLDER)
+    tracking.log_artifact(summary_path)
 
-        print(f"\nBest trial      : {study.best_trial.number}")
-        print(f"Best val_loss   : {study.best_value:.6f}")
-        print("Best params :")
-        for k, v in study.best_params.items():
-            print(f"  {k:>20} = {v}")
+    print(f"\nBest trial      : {study.best_trial.number}")
+    print(f"Best val loss   : {study.best_value:.6f}")
+    print("Best params :")
+    for k, v in study.best_params.items():
+        print(f"  {k:>20} = {v}")
 
 
 if __name__ == "__main__":
@@ -478,6 +498,20 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
                     noise_std=cfg["noise_std"],
                 )
                 best_epoch = cfg["n_epochs"]
+
+            # ── Log loss history in MLflow ────────────────────────────────────────────
+            for step, value in enumerate(loss_history.get("train", [])):
+                tracking.log_metric("train_loss", value, step=step + 1)
+            for step, value in enumerate(loss_history.get("validation", [])):
+                tracking.log_metric("val_loss", value, step=step + 1)
+            for step, value in enumerate(loss_history.get("train_mse", [])):
+                tracking.log_metric("train_mse", value, step=step + 1)
+            for step, value in enumerate(loss_history.get("train_kl", [])):
+                tracking.log_metric("train_kl", value, step=step + 1)
+            for step, value in enumerate(loss_history.get("val_mse", [])):
+                tracking.log_metric("val_mse", value, step=step + 1)
+            for step, value in enumerate(loss_history.get("val_kl", [])):
+                tracking.log_metric("val_kl", value, step=step + 1)
 
             # Save model artifact in MLflow
             tracking.log_model_state_dict(model, filename=f"model_{best_epoch}epochs.pth")
@@ -654,7 +688,6 @@ def main():
             train_dataset, val_dataset, test_dataset, X_maxnorm,
         )
 
-
 if __name__ == "__main__":
     main()
 
@@ -666,133 +699,262 @@ if __name__ == "__main__":
 
 # scripts/run_comparison_aepca.py
 """
-Comparison plots between AE architectures and PCA.
- 
-Plot 1 — AE vs AE (validation set):
-    Compare AE architectures against each other.
-    Use this plot to select the best AE architecture and latent dim.
- 
-Plot 2 — AE vs PCA (test set, informative only):
-    Compare best AE architectures against PCA.
-    Do NOT use this plot to select the AE model — use Plot 1 for that.
- 
-Plot 3 — AE n_patients comparison:
-    Compare AE architectures trained on different numbers of patients.
-    Helps assess the effect of data augmentation (e.g. ED vs ED+ES).
+Comparison plots: AE architectures and/or PCA spatial, metric vs latent dims.
+
+Reads configs/comparison_aepca.yaml.
+Output: one plot saved to results/ — no MLflow tracking.
+
+Each series is identified by model_name + experiment_tag (+ optional params_filter).
+  - model_name "PCA"  → reads from pca_spatial MLflow experiment (step = n_pcs)
+  - any other name    → reads from autoencoder MLflow experiment (one run per latent_dim)
+
+WARNINGs are printed (never blocking) when:
+  - multiple runs match the same latent_dim for a series → most recent is used
+  - key params differ within a series (potential data mix)
+  - key params differ between series (potential apples-to-oranges comparison)
+
+Usage:
+    python scripts/run_comparison_aepca.py
 """
- 
-from src.config import TEMPODATA_FOLDER, RESULTS_FOLDER
-from src.training import ae_training as aet
-from src.visualization import ae_plots as aep
 
-# ── User choices : WHICH PLOTS TO PRODUCE ────────────────────────────────────
-run_plot1_ae_comparison        = False   # AE vs AE, val set
-run_plot2_ae_vs_pca                 = False   # AE vs PCA, test set
-run_plot3_npatients                 = False   # AE 100 vs 200 patients comparison
-run_plot4_hyper_comparison =  False # AE hyperparameter trainings comparison (optuna/baseline)
-run_stats_nepochs                      = False 
+import yaml
+import mlflow
+import numpy as np
+import pandas as pd
+from pathlib import Path
 
-# ── User choices : DATA ───────────────────────────────────────────────────────
-splitname = "split0"
- 
-# ── User choices : AE (shared) ────────────────────────────────────────────────
-model_names    = ["AE3dFCDeep"] # ["AE3dCurrent", "AE3dFCDeep", "AE3dConv"]
-experiment_name = "optuna"
- 
-# ── User choices : PLOT 1 & 2 (single n_patients study) ──────────────────────
-frame_tag      = "ED+ES"            # "ED" or "ED+ES"
-n_patients     = 240                # n_train_images for this study
-latdim_list_ae = [1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 40, 60, 80, 100, 130, 160, 200, 240] # [4, 8, 12, 20, 28, 40, 60, 80, 100] or [4, 8, 12, 20, 28, 40, 60, 88, 120, 160]  ADD 200 later
- 
-# ── User choices : PLOT 2 — PCA ───────────────────────────────────────────────
-pca_name       = f"PCA_{n_patients}patients_{splitname}_{frame_tag}"
-latdim_list_pca = list(range(1, n_patients))
- 
-# ── User choices : PLOT 3 — n_patients comparison ────────────────────────────
-n_patients_list = [100, 200]
-latdim_lists = {
-    100: [4, 8, 12, 20, 28, 40, 60, 80, 100],
-    200: [4, 8, 12, 20, 28, 40, 60, 88, 120, 160, 200], # ADD 200 later
-}
-plot3_metrics_dataset = "validation"   # "train", "validation", or "test"
- 
-# ── User choices : PLOTS (shared) ────────────────────────────────────────────
-metric = "R2"
-xscale = "log"
- 
-# ── Paths ─────────────────────────────────────────────────────────────────────
-ae_results_folder  = TEMPODATA_FOLDER / "autoencoder"
-pca_results_folder = TEMPODATA_FOLDER / "pca_allpatients_res"
- 
-# ── Plot 1 — AE vs AE (validation set) ───────────────────────────────────────
-if run_plot1_ae_comparison:
-    aep.plot_ae_comparison(
-        results_folder=ae_results_folder,
-        model_names=model_names,
-        experiment_name=experiment_name,
-        splitname=splitname,
-        n_patients=n_patients,
-        latdim_list=latdim_list_ae,
-        metric=metric,
+from src.config import RESULTS_FOLDER
+from src import tracking
+from src.visualization.ae_plots import plot_comparison_curves
+
+CONFIG_PATH = Path(__file__).parent.parent / "configs" / "comparison_aepca.yaml"
+
+_KEY_PARAMS = ["split_name", "n_train", "frame_tag", "image_roi_only"]
+
+
+# ── MLflow query helpers ───────────────────────────────────────────────────────
+
+def _build_filter(model_name: str, experiment_tag: str, params_filter: dict | None) -> str:
+    parts = [f"params.experiment_tag = '{experiment_tag}'"]
+    if model_name != "PCA":
+        parts.append(f"params.model_name = '{model_name}'")
+    for k, v in (params_filter or {}).items():
+        parts.append(f"params.{k} = '{v}'")
+    return " and ".join(parts)
+
+
+def _warn_inconsistent_within(label: str, df: pd.DataFrame) -> None:
+    for param in _KEY_PARAMS:
+        col = f"params.{param}"
+        if col not in df.columns:
+            continue
+        unique_vals = df[col].dropna().unique()
+        if len(unique_vals) > 1:
+            print(f"  WARNING series '{label}': inconsistent '{param}': {list(unique_vals)}")
+
+
+def _warn_inconsistent_between(series_dfs: dict[str, pd.DataFrame]) -> None:
+    for param in _KEY_PARAMS:
+        col = f"params.{param}"
+        vals_per_series = {}
+        for label, df in series_dfs.items():
+            if col not in df.columns:
+                continue
+            unique_vals = df[col].dropna().unique()
+            if len(unique_vals) == 1:
+                vals_per_series[label] = unique_vals[0]
+        all_vals = set(vals_per_series.values())
+        if len(all_vals) > 1:
+            detail = ", ".join(f"{k}={v}" for k, v in vals_per_series.items())
+            print(f"  WARNING cross-series: '{param}' differs between series: {detail}")
+
+
+# ── Data loaders ──────────────────────────────────────────────────────────────
+
+def _load_ae_series(
+    label: str,
+    model_name: str,
+    experiment_tag: str,
+    params_filter: dict | None,
+    metrics: list[str],
+) -> dict[int, dict[str, float]]:
+    """Return {latent_dim: {metric_key: value}} from autoencoder MLflow experiment."""
+    filter_str = _build_filter(model_name, experiment_tag, params_filter)
+    df = tracking.search_runs("autoencoder", filter_string=filter_str)
+
+    if df.empty:
+        print(f"  WARNING series '{label}': no runs found")
+        return {}
+
+    _warn_inconsistent_within(label, df)
+
+    latdim_col = "params.latent_dimensions"
+    if latdim_col not in df.columns:
+        print(f"  WARNING series '{label}': 'latent_dimensions' param missing")
+        return {}
+
+    result: dict[int, dict[str, float]] = {}
+    for latdim_str, group in df.groupby(latdim_col):
+        try:
+            latdim = int(latdim_str)
+        except ValueError:
+            continue
+        if len(group) > 1:
+            print(f"  WARNING series '{label}': {len(group)} runs for latdim={latdim}, using most recent")
+        run = group.sort_values("start_time", ascending=False).iloc[0]
+        metric_values = {}
+        for m in metrics:
+            col = f"metrics.{m}"
+            if col in run.index and not pd.isna(run[col]):
+                metric_values[m] = float(run[col])
+        if metric_values:
+            result[latdim] = metric_values
+
+    return result
+
+
+def _load_pca_series(
+    label: str,
+    experiment_tag: str,
+    params_filter: dict | None,
+    metrics: list[str],
+) -> dict[int, dict[str, float]]:
+    """Return {n_pcs: {metric_key: value}} from pca_spatial MLflow experiment."""
+    filter_str = _build_filter("PCA", experiment_tag, params_filter)
+    df = tracking.search_runs("pca_spatial", filter_string=filter_str)
+
+    if df.empty:
+        print(f"  WARNING series '{label}': no PCA runs found")
+        return {}
+
+    _warn_inconsistent_within(label, df)
+
+    if len(df) > 1:
+        print(f"  WARNING series '{label}': {len(df)} PCA runs found, using most recent")
+
+    run_id = df.sort_values("start_time", ascending=False).iloc[0]["run_id"]
+    client = mlflow.MlflowClient()
+
+    result: dict[int, dict[str, float]] = {}
+    for m in metrics:
+        try:
+            history = client.get_metric_history(run_id, m)
+        except Exception:
+            print(f"  WARNING series '{label}': metric '{m}' not found in PCA run {run_id[:8]}")
+            continue
+        for entry in history:
+            n_pcs = entry.step
+            if n_pcs not in result:
+                result[n_pcs] = {}
+            result[n_pcs][m] = entry.value
+
+    return result
+
+
+# ── Early stopping stats ───────────────────────────────────────────────────────
+
+def _run_stats_nepochs(cfg: dict) -> None:
+    stats_model = cfg["stats_model_name"]
+    stats_tag = cfg["stats_experiment_tag"]
+    stats_filter = cfg.get("stats_params_filter")
+
+    filter_str = _build_filter(stats_model, stats_tag, stats_filter)
+    df = tracking.search_runs("autoencoder", filter_string=filter_str)
+
+    if df.empty:
+        print(f"  No runs found for {stats_model}/{stats_tag}")
+        return
+
+    _warn_inconsistent_within(f"stats {stats_model}/{stats_tag}", df)
+
+    stats: dict[int, dict] = {}
+    for latdim_str, group in df.groupby("params.latent_dimensions"):
+        try:
+            latdim = int(latdim_str)
+        except ValueError:
+            continue
+        epochs = [int(e) for e in group["params.best_epoch"].dropna()]
+        if not epochs:
+            continue
+        stats[latdim] = {
+            "epochs": epochs,
+            "mean":   float(np.mean(epochs)),
+            "median": float(np.median(epochs)),
+            "std":    float(np.std(epochs)),
+            "min":    int(np.min(epochs)),
+            "max":    int(np.max(epochs)),
+        }
+
+    from src.training.ae_training import print_and_save_best_epochs_stats
+    print_and_save_best_epochs_stats(stats, stats_model, stats_tag, RESULTS_FOLDER)
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    with open(CONFIG_PATH) as f:
+        cfg = yaml.safe_load(f)
+
+    metrics: list[str] = cfg["metrics"]
+    xscale: str = cfg.get("xscale", "log")
+    superpose_metrics: bool = cfg.get("superpose_metrics", False)
+    series_cfg: list[dict] = cfg["series"]
+    plotname: str | None = cfg.get("plotname")
+
+    print("=== Loading MLflow data ===")
+    all_series: list[dict] = []
+    series_dfs: dict[str, pd.DataFrame] = {}
+
+    for s in series_cfg:
+        model_name = s["model_name"]
+        experiment_tag = s["experiment_tag"]
+        params_filter = s.get("params_filter")
+
+        label = f"{model_name}/{experiment_tag}"
+        if params_filter:
+            label += "/" + "_".join(f"{k}={v}" for k, v in params_filter.items())
+
+        print(f"\nSeries: {label}")
+
+        if model_name == "PCA":
+            data = _load_pca_series(label, experiment_tag, params_filter, metrics)
+            df = tracking.search_runs("pca_spatial", filter_string=_build_filter("PCA", experiment_tag, params_filter))
+        else:
+            data = _load_ae_series(label, model_name, experiment_tag, params_filter, metrics)
+            df = tracking.search_runs("autoencoder", filter_string=_build_filter(model_name, experiment_tag, params_filter))
+
+        series_dfs[label] = df
+        print(f"  → {len(data)} data points")
+        all_series.append({"label": label, "data": data})
+
+    print("\n=== Cross-series consistency check ===")
+    _warn_inconsistent_between(series_dfs)
+
+    print("\n=== Generating plot ===")
+    if plotname:
+        save_path = RESULTS_FOLDER / f"{plotname}.png"
+    else:
+        labels_str = "_vs_".join(
+            s["model_name"] + "-" + s["experiment_tag"] for s in series_cfg
+        )[:80]
+        save_path = RESULTS_FOLDER / f"comparison_{labels_str}.png"
+
+    plot_comparison_curves(
+        series_data=all_series,
+        metrics=metrics,
         xscale=xscale,
-    )
- 
-# ── Plot 2 — AE vs PCA (test set, informative only) ──────────────────────────
-if run_plot2_ae_vs_pca:
-    aep.plot_ae_vs_pca(
-        ae_results_folder=ae_results_folder,
-        pca_results_folder=pca_results_folder,
-        model_names=model_names,
-        experiment_name=experiment_name,
-        pca_name=pca_name,
-        splitname=splitname,
-        n_patients=n_patients,
-        latdim_list_ae=latdim_list_ae,
-        latdim_list_pca=latdim_list_pca,
-        metric=metric,
-        xscale=xscale,
-    )
- 
-# ── Plot 3 — AE n_patients comparison ────────────────────────────────────────
-if run_plot3_npatients:
-    aep.plot_ae_npatients_comparison(
-        results_folder=ae_results_folder,
-        model_names=model_names,
-        experiment_name=experiment_name,
-        splitname=splitname,
-        n_patients_list=n_patients_list,
-        latdim_lists=latdim_lists,
-        metrics_dataset=plot3_metrics_dataset,
-        metric=metric,
-        xscale=xscale,
+        superpose_metrics=superpose_metrics,
+        save_path=save_path,
     )
 
-# ── Plot 4 — AE hyperparameter trainings comparison ────────────────────────────────────────
-if run_plot4_hyper_comparison:
-    aep.plot_ae_experiment_comparison(
-        results_folder=TEMPODATA_FOLDER / "autoencoder",
-        model_names=model_names,
-        experiment_names=["baseline", "optuna"],
-        splitname=splitname,
-        n_patients=200,
-        latdim_list=latdim_list_ae,
-        metrics_dataset="validation",
-        metric=metric,
-        xscale=xscale,
-    )
+    if cfg.get("run_stats_nepochs"):
+        print("\n=== Early stopping stats ===")
+        _run_stats_nepochs(cfg)
 
-# Stats on n_epochs from ae_training early stopping 
 
-if run_stats_nepochs:
-    stats = aet.get_best_epochs_stats(
-        results_folder=TEMPODATA_FOLDER / "autoencoder",
-        model_name="AE3dFCDeep",
-        n_patients_list=[n_patients],
-        splitname=splitname,
-        latdim_list=latdim_list_ae,
-        experiment_name=experiment_name,
-    )
-    aet.print_and_save_best_epochs_stats(stats,     model_name = "AE3dFCDeep", experiment_name = experiment_name)
+if __name__ == "__main__":
+    main()
+
 
 
 ######################################################################
@@ -1465,88 +1627,567 @@ if cfg["run_pipelinechecks"]:
 
 # scripts/run_regression.py
 """
-Script for the functions for the PCA "each patient" and followed by the logistic regression with patient metadata
+Regression pipeline on PCA or AE latent representations.
+
+Source PCA  : loads a pre-trained PCA from a pca_spatial MLflow run and sweeps
+              over cumvar_threshold_list → one regression per n_pc.
+Source AE   : finds all autoencoder MLflow runs matching model_name /
+              experiment_tag / split_name (+ optional params_filter), groups
+              them by latent_dimensions, and runs one regression per latent_dim.
+
+One MLflow run is created in the "regression" experiment per script execution.
+Metrics are logged with step = n_dims (n_pc for PCA, latent_dim for AE).
+Classifiers / regressors are saved as joblib artifacts inside that run.
+
+Usage:
+    python scripts/run_regression.py
 """
 
-import numpy as np 
+import re
+import json
+import yaml
+import joblib
+import numpy as np
+import mlflow
+import torch
+from pathlib import Path
 
-from src.config import TEMPODATA_FOLDER, RESULTS_FOLDER
+from src.config import RESULTS_FOLDER
+from src.data import loader, splits as splt
+from src.data.importdata import load_patient_metadata
 from src.models import regression as reg
+from src.models.ae_models import build_autoencoder
+from src.training import ae_training as aet
 from src.visualization import regression_plots as rgp
-from src.models import pca_spatial as pcs
+from src.visualization.ae_plots import collect_latent_vectors
+from src import tracking
 
- 
-# PARAMETERS
-# 1 / Global parameters
-Y_name = "group" # "group", "height", "weight"
-group_binYN = False
-group_binvalue = "RV" # 'DCM', 'HCM', "MINF", "NOR", "RV"
-# 0 / Pca parameters -> which PCA to do
-source_folder = "registered_framesBIS"
-pca_description = "REGvoxROI"
-maskYN, maskbinYN = False, False
-imageROIonlyYN = True
-pca_folder = "pca_allpatients_res"
-cumvar_threshold = 1.0 # 1.0, 0.99, 0.95, 0.9, 0.85, 0.8, 0.7, 0.6, 0.4
-cumvar_threshold_list = [2.0, 0.99, 0.98, 0.965, 0.95, 0.92, 0.9, 0.87, 0.85, 0.82, 0.78, 0.74, 0.7, 0.68, 0.65, 0.5, 0.4] # For PCA on voxROI images
-# cumvar_threshold_list = [2.0, 0.99, 0.97, 0.94, 0.9, 0.85, 0.8, 0.73, 0.64, 0.6, 0.56, 0.53, 0.5, 0.45, 0.4, 0.36, 0.3, 0.2] # For PCA on binary mask images
-n_idealpc_confusion = 12 
-# n_idealpc_regression = 7
-splitname = "split5"
+CONFIG_PATH = Path(__file__).parent.parent / "configs" / "regression.yaml"
 
-# # Load data: X and Y
-# X_train, X_test, Y_train, Y_test  = reg.load_xy(source_folder, "X_vectors", pca_folder, pca_description, maskYN, maskbinYN, imageROIonlyYN, Y_name, group_binYN, group_binvalue, recalculateXbase= False, defaultsplit = False, splitname = splitname)
+N_PATIENTS = 150
 
-# # PCA 
-# pca, X_train_pca, meta = pcs.pca_patients(X_train, pca_folder, pca_description, normalize_rows=not maskbinYN, recalculatePCA = False, addstring= "_" + splitname)
-# X_test_pca = pca.transform(X_test)
-# n_pc_tokeep = reg.n_pc_for_variance(pca, cumvar_threshold)
-# X_train_pca_n = np.asarray(X_train_pca[:, :n_pc_tokeep], dtype=np.float64, order="C") # Convert into float64, helps the logistic regression solver
-# X_test_pca_n  = np.asarray(X_test_pca[:, :n_pc_tokeep], dtype=np.float64, order="C")
 
-# # Logistic regression 
-# clf = reg.logisticreg(X_train_pca_n, Y_train, pca_folder, pca_description, Y_name, group_binvalue, n_pc_tokeep, multi_class = not group_binYN, recalculateLOGI=True)
-# if group_binYN: # binary regression
-#     results = reg.logistic_predictions_results(pca, clf, X_test_pca_n, Y_test, pca_description, pca_folder, n_pc_tokeep, Y_name, group_binYN, group_binvalue)
-# else: # multiclass regression 
-#     results = reg.logistic_predictions_results_mtc(pca, clf, X_test_pca_n, Y_test, pca_description, pca_folder, n_pc_tokeep, Y_name)
-# Linear regression 
-# reg = reg.linearreg(X_train_pca_n, Y_train, pca_folder, pca_description, Y_name, n_pc_tokeep, recalculateLIN=True)
-# results = reg.linear_predictions_results(pca, reg, X_test_pca_n, Y_test, pca_description, pca_folder, n_pc_tokeep, Y_name)
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-# # Do all pipeline with different cumvar thresholds
-# X_train, X_test, Y_train, Y_test  = reg.load_xy(source_folder, "X_vectors", pca_folder, pca_description, maskYN, maskbinYN, imageROIonlyYN, Y_name, group_binYN, group_binvalue, recalculateXbase= False, defaultsplit = False, splitname = splitname)
-# pca, X_train_pca, meta = pcs.pca_patients(X_train, pca_folder, pca_description, normalize_rows=not maskbinYN, recalculatePCA = True, addstring= "_" + splitname)
-# if not maskbinYN:
-#     X_test = X_test - X_test.mean(axis=1, keepdims=True)
-# X_test_pca = pca.transform(X_test)
-# for cumvar_threshold in cumvar_threshold_list:
-#     n_pc_tokeep = reg.n_pc_for_variance(pca, cumvar_threshold)
-#     X_train_pca_n = np.asarray(X_train_pca[:, :n_pc_tokeep], dtype=np.float64, order="C") # Convert into float64, helps the logistic regression solver
-#     X_test_pca_n  = np.asarray(X_test_pca[:, :n_pc_tokeep], dtype=np.float64, order="C")
-#     # Logistic regression
-#     clf = reg.logisticreg(X_train_pca_n, Y_train, pca_folder, pca_description, Y_name, group_binvalue, n_pc_tokeep, multi_class = not group_binYN, recalculateLOGI=True)
-#     if group_binYN: # binary regression
-#         results = reg.logistic_predictions_results(pca, clf, X_test_pca_n, Y_test, pca_description, pca_folder, n_pc_tokeep, Y_name, group_binYN, group_binvalue)
-#     else: # multiclass regression 
-#         results = reg.logistic_predictions_results_mtc(pca, clf, X_test_pca_n, Y_test, pca_description, pca_folder, n_pc_tokeep, Y_name, splitname= splitname)
-#     # Linear regression
-#     reg = reg.linearreg(X_train_pca_n, Y_train, pca_folder, pca_description, Y_name, n_pc_tokeep, recalculateLIN=True)
-#     results = reg.linear_predictions_results(pca, reg, X_test_pca_n, Y_test, pca_description, pca_folder, n_pc_tokeep, Y_name)
+def _derive_split_name(special_split):
+    return splt.DEFAULT_SPLIT_NAME if special_split is None else special_split
 
-# # Plot all results
-# if group_binYN: # binary regression
-#     rgp.plot_prediction_results(pca_folder, pca_description,Y_name, group_binvalue)
-# else:
-#     rgp.plot_prediction_results_mtc(pca_folder, pca_description, Y_name, splitname= splitname)
-#     rgp.plot_confusion_matrix_mtc(pca_folder, pca_description, Y_name, n_idealpc_confusion, splitname= splitname)
-# rgp.plot_regression_results(pca_folder, pca_description, Y_name)
-# rgp.plot_regression_predicted_vs_true(reg, X_test_pca_n, Y_test, pca_description, Y_name, n_idealpc_regression) # WARNING: change n_pc_tokeep = n_idealpc_regression to get the right X_test_pca_n !!!
 
-# Average confusion matrix
-filepaths = reg.get_mtc_result_files(TEMPODATA_FOLDER / pca_folder)
-print(filepaths)  # optional check
-rgp.plot_average_confusion_matrix_mtc_simple(filepaths=filepaths, outpath=RESULTS_FOLDER / "REGvoxROI_group_avg_confusionmatrix.png")
+def _verify_split(run_id, expected: dict, client):
+    """Raise if any expected param differs from what is stored in the MLflow run."""
+    saved = client.get_run(run_id).data.params
+    mismatches = [
+        f"  {k}: stored={saved.get(k)!r}, expected={v!r}"
+        for k, v in expected.items()
+        if saved.get(k) != str(v)
+    ]
+    if mismatches:
+        raise ValueError(
+            f"Split / data mismatch with MLflow run {run_id}:\n" + "\n".join(mismatches)
+        )
+
+
+def _apply_split_to_Y(Y_full, n_train, n_test, special_split):
+    """Return Y_train, Y_test using the same split logic as get_split_indices."""
+    train_idx, _, test_idx, _ = splt.get_split_indices(
+        n_train=n_train, n_val=0, n_test=n_test,
+        special_split=special_split,
+        n_patients=N_PATIENTS,
+    )
+    return Y_full[train_idx], Y_full[test_idx]
+
+
+def _build_ae_filter(model_name, experiment_tag, split_name, params_filter):
+    parts = [
+        f"params.model_name = '{model_name}'",
+        f"params.experiment_tag = '{experiment_tag}'",
+        f"params.split_name = '{split_name}'",
+    ]
+    for k, v in (params_filter or {}).items():
+        parts.append(f"params.{k} = '{v}'")
+    return " and ".join(parts)
+
+
+def _load_ae_model(run_id, model_name, latent_dim, dropout_rate, best_epoch, device, client):
+    local_path = client.download_artifacts(run_id, f"model_{best_epoch}epochs.pth")
+    model = build_autoencoder(model_name, latent_dim, dropout_rate=dropout_rate).to(device)
+    model.load_state_dict(torch.load(local_path, map_location=device))
+    model.eval()
+    return model
+
+
+def _encode_dataset(model, dataset, device):
+    """Return latent vectors as float64 numpy array (n_samples, latent_dim)."""
+    return collect_latent_vectors(model, dataset, device).astype(np.float64)
+
+
+def _run_one_step(X_train, X_test, Y_train, Y_test,
+                  n_dims, explained_variance, is_logistic, binary, logistic_C=1.0):
+    """Standardize, fit, evaluate. Return (clf_or_reg, scaler, results_train, results_test)."""
+    scaler = reg.fit_scaler(X_train)
+    Xtr = scaler.transform(X_train).astype(np.float64)
+    Xte = scaler.transform(X_test).astype(np.float64)
+
+    if is_logistic:
+        multi_class = not binary
+        clf = reg.fit_logistic(Xtr, Y_train, multi_class=multi_class, C=logistic_C)
+        eval_fn = reg.eval_logistic_binary if binary else reg.eval_logistic_multiclass
+        r_train = eval_fn(clf, Xtr, Y_train, n_dims, explained_variance)
+        r_test  = eval_fn(clf, Xte, Y_test,  n_dims, explained_variance)
+        return clf, scaler, r_train, r_test
+    else:
+        model = reg.fit_linear(Xtr, Y_train)
+        r_train = reg.eval_linear(model, Xtr, Y_train, n_dims, explained_variance)
+        r_test  = reg.eval_linear(model, Xte, Y_test,  n_dims, explained_variance)
+        return model, scaler, r_train, r_test
+
+
+def _log_step_metrics(r_train, r_test, step, is_logistic, binary):
+    if is_logistic:
+        if binary:
+            tracking.log_metric("accuracy_train",        r_train["accuracy"],  step=step)
+            tracking.log_metric("roc_auc_train",         r_train["roc_auc"],   step=step)
+            tracking.log_metric("precision_train",       r_train["precision"], step=step)
+            tracking.log_metric("recall_train",          r_train["recall"],    step=step)
+            tracking.log_metric("accuracy_test",         r_test["accuracy"],   step=step)
+            tracking.log_metric("roc_auc_test",          r_test["roc_auc"],    step=step)
+            tracking.log_metric("precision_test",        r_test["precision"],  step=step)
+            tracking.log_metric("recall_test",           r_test["recall"],     step=step)
+        else:
+            tracking.log_metric("accuracy_train",        r_train["accuracy"],        step=step)
+            tracking.log_metric("precision_macro_train", r_train["precision_macro"], step=step)
+            tracking.log_metric("recall_macro_train",    r_train["recall_macro"],    step=step)
+            tracking.log_metric("accuracy_test",         r_test["accuracy"],         step=step)
+            tracking.log_metric("precision_macro_test",  r_test["precision_macro"],  step=step)
+            tracking.log_metric("recall_macro_test",     r_test["recall_macro"],     step=step)
+    else:
+        tracking.log_metric("r2_train",   r_train["r2"],   step=step)
+        tracking.log_metric("rmse_train", r_train["rmse"], step=step)
+        tracking.log_metric("mae_train",  r_train["mae"],  step=step)
+        tracking.log_metric("r2_test",    r_test["r2"],    step=step)
+        tracking.log_metric("rmse_test",  r_test["rmse"],  step=step)
+        tracking.log_metric("mae_test",   r_test["mae"],   step=step)
+
+
+# ── PCA source ────────────────────────────────────────────────────────────────
+
+def _run_pca_source(cfg, Y_full, client):
+    n_train    = cfg["n_train"]
+    n_test     = N_PATIENTS - n_train
+    special_split = cfg.get("special_split")
+    pca_run_id = cfg["pca_run_id"]
+    y_name     = cfg["y_name"]
+    binary     = cfg.get("group_binary", False) and y_name == "group"
+    is_logistic = y_name == "group"
+
+    # ── Read params from PCA run once (avoid redundant API calls) ────────────
+    pca_params      = client.get_run(pca_run_id).data.params
+    frame_tag       = pca_params.get("frame_tag", "ED")
+    use_both_frames = frame_tag == "ED+ES"
+    frame_type      = "ED" if use_both_frames else frame_tag
+
+    # ── Load X ───────────────────────────────────────────────────────────────
+    print("Loading image data...")
+    X_train, _, X_test, split_name = loader.load_numpy_splits(
+        source_folder=pca_params["source_folder"],
+        cache_folder=pca_params.get("cache_folder", "X_vectors"),
+        n_train=n_train, n_val=0, n_test=n_test,
+        special_split=special_split,
+        use_both_frames=use_both_frames,
+        frame_type=frame_type,
+        image_roi_only=pca_params.get("image_roi_only", "True") == "True",
+        recalculate=False,
+    )
+    print(f"Split: {split_name} | train={len(X_train)} | test={len(X_test)}")
+
+    # ── Verify split against PCA run ─────────────────────────────────────────
+    _verify_split(pca_run_id, {"split_name": split_name, "n_train": n_train}, client)
+    print(f"Split verified against PCA run {pca_run_id} ✓")
+
+    # ── Load PCA ──────────────────────────────────────────────────────────────
+    pca_filename = f"pca_{frame_tag}.joblib"
+    local_path   = client.download_artifacts(pca_run_id, pca_filename)
+    pca          = joblib.load(local_path)
+    print(f"PCA loaded ({pca.n_components_} components) from run {pca_run_id}")
+
+    # ── Row-centre X (same preprocessing as run_pca_spatial.py) ──────────────
+    row_means_train = X_train.mean(axis=1, keepdims=True)
+    row_means_test  = X_test.mean(axis=1, keepdims=True)
+    X_train_pca = pca.transform(X_train - row_means_train)
+    X_test_pca  = pca.transform(X_test  - row_means_test)
+
+    # ── Y (duplicate if both frames) ─────────────────────────────────────────
+    Y_train, Y_test = _apply_split_to_Y(Y_full, n_train, n_test, special_split)
+    if use_both_frames:
+        Y_train = np.concatenate([Y_train, Y_train])
+        Y_test  = np.concatenate([Y_test,  Y_test])
+    if binary:
+        bin_val = cfg["group_bin_value"]
+        Y_train = (Y_train == bin_val).astype(int)
+        Y_test  = (Y_test  == bin_val).astype(int)
+
+    logistic_C = cfg.get("logistic_C") or (0.5 if use_both_frames else 1.0)
+
+    # ── Sweep over cumvar thresholds (deduplicate n_pc) ──────────────────────
+    thresholds     = cfg["cumvar_threshold_list"]
+    n_pc_confusion = cfg.get("n_pc_confusion", 12)
+    run_label      = cfg.get("experiment_tag", "baseline")
+
+    # Map each threshold to its n_pc; skip duplicates (keep first occurrence)
+    seen_n_pc: set[int] = set()
+    threshold_n_pc_pairs: list[tuple[float, int]] = []
+    for threshold in thresholds:
+        n_pc = reg.n_pc_for_variance(pca, threshold)
+        if n_pc not in seen_n_pc:
+            seen_n_pc.add(n_pc)
+            threshold_n_pc_pairs.append((threshold, n_pc))
+
+    results_test_all  = []
+    results_train_all = []
+
+    with tracking.start_run("regression", _run_name(cfg, split_name)):
+        tracking.log_params(_build_params(cfg, split_name))
+        tracking.log_artifact(CONFIG_PATH)
+
+        for threshold, n_pc in threshold_n_pc_pairs:
+            cumvar = float(np.sum(pca.explained_variance_ratio_[:n_pc]))
+
+            Xtr = X_train_pca[:, :n_pc]
+            Xte = X_test_pca[:,  :n_pc]
+
+            _, _, r_train, r_test = _run_one_step(
+                Xtr, Xte, Y_train, Y_test,
+                n_pc, cumvar, is_logistic, binary, logistic_C,
+            )
+            _log_step_metrics(r_train, r_test, step=n_pc, is_logistic=is_logistic, binary=binary)
+            _save_result_json(r_train, r_test, n_pc, label="pc")
+
+            results_train_all.append(r_train)
+            results_test_all.append(r_test)
+            print(f"  n_pc={n_pc:4d} | cumvar={cumvar:.3f} | "
+                  + _result_summary(r_test, is_logistic, binary))
+
+        results_train_all.sort(key=lambda r: r["n_dims"])
+        results_test_all.sort(key=lambda r: r["n_dims"])
+
+        # ── Plots ─────────────────────────────────────────────────────────────
+        _save_plots(results_train_all, results_test_all,
+                    n_pc_confusion, y_name, run_label, is_logistic, binary)
+
+
+# ── AE source ─────────────────────────────────────────────────────────────────
+
+def _run_ae_source(cfg, Y_full, client):
+    n_train       = cfg["n_train"]
+    n_test        = N_PATIENTS - n_train
+    special_split = cfg.get("special_split")
+    split_name    = _derive_split_name(special_split)
+    y_name        = cfg["y_name"]
+    binary        = cfg.get("group_binary", False) and y_name == "group"
+    is_logistic   = y_name == "group"
+    ae_cfg        = cfg["ae_source"]
+
+    # ── Search AE runs ────────────────────────────────────────────────────────
+    filter_str = _build_ae_filter(
+        ae_cfg["model_name"], ae_cfg["experiment_tag"],
+        ae_cfg.get("split_name", split_name),
+        ae_cfg.get("params_filter"),
+    )
+    df = tracking.search_runs("autoencoder", filter_string=filter_str)
+    if df.empty:
+        raise ValueError(f"No autoencoder runs found matching: {filter_str}")
+
+    # Group by latent_dimensions; warn if ambiguous
+    runs_by_latdim = {}
+    for _, row in df.iterrows():
+        latdim = int(row["params.latent_dimensions"])
+        runs_by_latdim.setdefault(latdim, []).append(row)
+
+    for latdim, rows in runs_by_latdim.items():
+        if len(rows) > 1:
+            print(f"WARNING: {len(rows)} runs found for latent_dim={latdim} — "
+                  f"using most recent: {rows[0]['run_id']}")
+
+    sorted_latdims = sorted(runs_by_latdim.keys())
+    print(f"Found {len(sorted_latdims)} latent_dim(s): {sorted_latdims}")
+
+    # ── Read data loading params from the first AE run ───────────────────────
+    ref_params     = runs_by_latdim[sorted_latdims[0]][0]
+    frame_tag      = ref_params.get("params.frame_tag", "ED")
+    use_both       = frame_tag == "ED+ES"
+    frame_type     = "ED" if use_both else frame_tag
+    image_roi_only = ref_params.get("params.image_roi_only", "True") == "True"
+    source_folder  = ref_params.get("params.source_folder", "registered_frames")
+
+    # Verify all AE runs share the same split
+    for latdim in sorted_latdims:
+        ae_run_id = runs_by_latdim[latdim][0]["run_id"]
+        _verify_split(ae_run_id, {"split_name": split_name, "n_train": n_train}, client)
+    print(f"Split verified against all {len(sorted_latdims)} AE runs ✓")
+
+    # ── Load tensor datasets (same split as AE training) ─────────────────────
+    print("Loading image data (tensor format for AE encoding)...")
+    train_ds, _, test_ds, _, _ = loader.load_tensor_datasets(
+        source_folder=source_folder,
+        cache_folder="X_vectors",
+        n_train=n_train, n_val=0, n_test=n_test,
+        special_split=special_split,
+        use_both_frames=use_both,
+        frame_type=frame_type,
+        image_roi_only=image_roi_only,
+        recalculate=False,
+    )
+    print(f"Split: {split_name} | train={len(train_ds)} | test={len(test_ds)}")
+
+    # ── Y (duplicate if both frames) ─────────────────────────────────────────
+    Y_train_base, Y_test_base = _apply_split_to_Y(Y_full, n_train, n_test, special_split)
+    if use_both:
+        Y_train_base = np.concatenate([Y_train_base, Y_train_base])
+        Y_test_base  = np.concatenate([Y_test_base,  Y_test_base])
+    if binary:
+        bin_val = cfg["group_bin_value"]
+        Y_train_base = (Y_train_base == bin_val).astype(int)
+        Y_test_base  = (Y_test_base  == bin_val).astype(int)
+
+    logistic_C = cfg.get("logistic_C") or (0.5 if use_both else 1.0)
+    device = aet.get_device()
+    n_pc_confusion = cfg.get("n_pc_confusion", sorted_latdims[len(sorted_latdims) // 2])
+    run_label = cfg.get("experiment_tag", "baseline")
+
+    results_train_all = []
+    results_test_all  = []
+
+    with tracking.start_run("regression", _run_name(cfg, split_name)):
+        tracking.log_params(_build_params(cfg, split_name))
+        tracking.log_artifact(CONFIG_PATH)
+
+        for latdim in sorted_latdims:
+            ae_run_id  = runs_by_latdim[latdim][0]["run_id"]
+            ae_row     = runs_by_latdim[latdim][0]
+            model_name = ae_row["params.model_name"]
+            dropout    = float(ae_row.get("params.dropout_rate", 0.0))
+            best_epoch = int(
+                ae_row.get("params.best_epoch") or ae_row.get("params.n_epochs", 100)
+            )
+
+            model = _load_ae_model(ae_run_id, model_name, latdim, dropout, best_epoch, device, client)
+            Z_train = _encode_dataset(model, train_ds, device)
+            Z_test  = _encode_dataset(model, test_ds,  device)
+            print(f"  latent_dim={latdim} | encoded train={Z_train.shape} test={Z_test.shape}")
+
+            _, _, r_train, r_test = _run_one_step(
+                Z_train, Z_test, Y_train_base, Y_test_base,
+                latdim, 1.0, is_logistic, binary, logistic_C,
+            )
+            _log_step_metrics(r_train, r_test, step=latdim, is_logistic=is_logistic, binary=binary)
+            _save_result_json(r_train, r_test, latdim, label="latdim")
+
+            results_train_all.append(r_train)
+            results_test_all.append(r_test)
+            print(f"  latent_dim={latdim:3d} | " + _result_summary(r_test, is_logistic, binary))
+
+        # ── Plots ─────────────────────────────────────────────────────────────
+        _save_plots(results_train_all, results_test_all,
+                    n_pc_confusion, y_name, run_label, is_logistic, binary)
+
+
+# ── Result JSON helpers (committed to git via mlruns/) ────────────────────────
+
+def _result_to_serializable(r: dict) -> dict:
+    """Convert numpy arrays in a result dict to JSON-serializable types."""
+    out = {}
+    for k, v in r.items():
+        if isinstance(v, np.ndarray):
+            out[k] = v.tolist()
+        elif isinstance(v, dict):
+            out[k] = {str(kk): float(vv) for kk, vv in v.items()}
+        else:
+            out[k] = v
+    return out
+
+
+def _save_result_json(r_train: dict, r_test: dict, n_dims: int, label: str):
+    """Save train+test result dicts as a JSON artifact in the active MLflow run."""
+    stage = RESULTS_FOLDER / "tmp_artifacts"
+    stage.mkdir(parents=True, exist_ok=True)
+    path = stage / f"results_{n_dims}{label}.json"
+    with open(path, "w") as f:
+        json.dump({"train": _result_to_serializable(r_train),
+                   "test":  _result_to_serializable(r_test)}, f)
+    tracking.log_artifact(path)
+
+
+def _load_result_json(run_id: str, n_dims: int, label: str, client) -> tuple[dict, dict]:
+    """Download and deserialize a result JSON artifact; restore numpy arrays."""
+    local_path = client.download_artifacts(run_id, f"results_{n_dims}{label}.json")
+    with open(local_path) as f:
+        data = json.load(f)
+    for r in [data["train"], data["test"]]:
+        if "confusion_matrix" in r:
+            r["confusion_matrix"] = np.array(r["confusion_matrix"])
+        if "Y_pred" in r:
+            r["Y_pred"] = np.array(r["Y_pred"])
+        if "Y_test" in r:
+            r["Y_test"] = np.array(r["Y_test"])
+    return data["train"], data["test"]
+
+
+def _list_result_dims(run_id: str, label: str, client) -> list[int]:
+    """Return sorted list of n_dims for which result JSON artifacts exist."""
+    artifacts = client.list_artifacts(run_id)
+    dims = []
+    for a in artifacts:
+        m = re.match(rf"results_(\d+){re.escape(label)}\.json", Path(a.path).name)
+        if m:
+            dims.append(int(m.group(1)))
+    return sorted(dims)
+
+
+# ── Shared plot helper ────────────────────────────────────────────────────────
+
+def _save_plots(results_train, results_test,
+                n_dims_confusion, y_name, run_label, is_logistic, binary):
+    available = [r["n_dims"] for r in results_test]
+
+    if is_logistic:
+        p_train = rgp.plot_logistic_metrics(results_train, y_name, run_label + "_train", binary)
+        p_test  = rgp.plot_logistic_metrics(results_test,  y_name, run_label + "_test",  binary)
+        tracking.log_artifact(p_train)
+        tracking.log_artifact(p_test)
+
+        cm_dims   = min(available, key=lambda x: abs(x - n_dims_confusion))
+        cm_result = next(r for r in results_test if r["n_dims"] == cm_dims)
+        p_cm = rgp.plot_confusion_matrix(cm_result, y_name, run_label)
+        tracking.log_artifact(p_cm)
+    else:
+        p_train = rgp.plot_linear_metrics(results_train, y_name, run_label + "_train")
+        p_test  = rgp.plot_linear_metrics(results_test,  y_name, run_label + "_test")
+        tracking.log_artifact(p_train)
+        tracking.log_artifact(p_test)
+
+        pvt_dims   = min(available, key=lambda x: abs(x - n_dims_confusion))
+        pvt_result = next(r for r in results_test if r["n_dims"] == pvt_dims)
+        p_pvt = rgp.plot_predicted_vs_true(pvt_result, y_name, run_label)
+        tracking.log_artifact(p_pvt)
+
+
+def _result_summary(r, is_logistic, binary):
+    if is_logistic:
+        if binary:
+            return f"acc={r['accuracy']:.3f}  auc={r['roc_auc']:.3f}"
+        return f"acc={r['accuracy']:.3f}  prec_macro={r['precision_macro']:.3f}"
+    return f"r2={r['r2']:.3f}  rmse={r['rmse']:.2f}"
+
+
+def _run_name(cfg, split_name):
+    src = cfg["source_type"]
+    tag = cfg.get("experiment_tag", "baseline")
+    y   = cfg["y_name"]
+    return f"regression_{src}_{cfg['n_train']}patients_{split_name}_{y}_{tag}"
+
+
+def _build_params(cfg, split_name):
+    params = {
+        "source_type":    cfg["source_type"],
+        "y_name":         cfg["y_name"],
+        "group_binary":   str(cfg.get("group_binary", False)),
+        "group_bin_value": cfg.get("group_bin_value", ""),
+        "n_train":        cfg["n_train"],
+        "n_test":         N_PATIENTS - cfg["n_train"],
+        "split_name":     split_name,
+        "experiment_tag": cfg.get("experiment_tag", "baseline"),
+        "n_pc_confusion": cfg.get("n_pc_confusion", 12),
+    }
+    if cfg["source_type"] == "pca":
+        params["pca_run_id"] = cfg["pca_run_id"]
+    else:
+        ae = cfg["ae_source"]
+        params["ae_model_name"]      = ae["model_name"]
+        params["ae_experiment_tag"]  = ae["experiment_tag"]
+        params["ae_split_name"]      = ae.get("split_name", split_name)
+    return params
+
+
+# ── Plot-only mode ────────────────────────────────────────────────────────────
+
+def _plot_only(cfg, client):
+    """Reload result JSON artifacts from a previous run and regenerate plots."""
+    load_run_id  = cfg["load_run_id"]
+    run_params   = client.get_run(load_run_id).data.params
+
+    source_type  = run_params["source_type"]
+    y_name       = run_params["y_name"]
+    binary       = run_params["group_binary"] == "True"
+    is_logistic  = y_name == "group"
+    run_label    = run_params.get("experiment_tag", "baseline")
+    n_pc_confusion = int(run_params.get("n_pc_confusion", 12))
+
+    label = "pc" if source_type == "pca" else "latdim"
+    dims  = _list_result_dims(load_run_id, label, client)
+    if not dims:
+        raise ValueError(
+            f"No result JSON artifacts found in run {load_run_id}. "
+            "Run in CALC mode first."
+        )
+
+    print(f"plot_only | run={load_run_id} | source={source_type} | "
+          f"y={y_name} | dims={dims}")
+
+    results_train_all, results_test_all = [], []
+    for n_dims in dims:
+        r_train, r_test = _load_result_json(load_run_id, n_dims, label, client)
+        results_train_all.append(r_train)
+        results_test_all.append(r_test)
+
+    with tracking.resume_run(load_run_id):
+        _save_plots(results_train_all, results_test_all,
+                    n_pc_confusion, y_name, run_label, is_logistic, binary)
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    with open(CONFIG_PATH) as f:
+        cfg = yaml.safe_load(f)
+
+    tracking._setup()
+    client = mlflow.MlflowClient()
+
+    y_name = cfg["y_name"]
+    n_train = cfg["n_train"]
+    n_test  = N_PATIENTS - n_train
+    special_split = cfg.get("special_split")
+    split_name = _derive_split_name(special_split)
+
+    if cfg.get("plot_only"):
+        if not cfg.get("load_run_id"):
+            raise ValueError("plot_only requires load_run_id in regression.yaml")
+        _plot_only(cfg, client)
+        return
+
+    print(f"Regression | source={cfg['source_type']} | y={y_name} | "
+          f"n_train={n_train} | split={split_name}")
+
+    # ── Load Y (all patients, split applied inside each source function) ──────
+    Y_full = load_patient_metadata(y_name, N_PATIENTS)
+    print(f"Y loaded: {y_name}, {len(Y_full)} patients")
+
+    if cfg["source_type"] == "pca":
+        if not cfg.get("pca_run_id"):
+            raise ValueError("pca_run_id must be set in regression.yaml for source_type='pca'")
+        _run_pca_source(cfg, Y_full, client)
+
+    elif cfg["source_type"] == "ae":
+        if not cfg.get("ae_source"):
+            raise ValueError("ae_source must be set in regression.yaml for source_type='ae'")
+        _run_ae_source(cfg, Y_full, client)
+
+    else:
+        raise ValueError(f"Unknown source_type: {cfg['source_type']!r}. Use 'pca' or 'ae'.")
+
+
+if __name__ == "__main__":
+    main()
 
 
 
@@ -1696,6 +2337,108 @@ def main():
 if __name__ == "__main__":
     main()
 
+
+
+######################################################################
+# FILE: scripts/run_visualize_latent.py
+######################################################################
+
+# scripts/run_visualize_latent.py
+"""
+Visualize the latent space of a trained AE or VAE model.
+
+Loads a model from an MLflow run, encodes all patients,
+projects latent vectors to 2D (PCA), colored by ACDC group.
+The plot is logged as artifact in the original MLflow run.
+
+Usage:
+    python scripts/run_visualize_latent.py
+"""
+
+import yaml
+import torch
+import mlflow
+from pathlib import Path
+
+from src.config import RESULTS_FOLDER
+from src.data import loader
+from src.data.importdata import load_acdc_groups
+from src.models.ae_models import build_autoencoder
+from src.training import ae_training as aet
+from src.visualization import ae_plots as aep
+from src import tracking
+
+CONFIG_PATH = Path(__file__).parent.parent / "configs" / "visualize_latent.yaml"
+
+
+def main():
+    with open(CONFIG_PATH) as f:
+        cfg = yaml.safe_load(f)
+
+    load_run_id = cfg["load_run_id"]
+    if not load_run_id:
+        raise ValueError("load_run_id must be set in visualize_latent.yaml")
+
+    # ── Load run params from MLflow ───────────────────────────────────────────
+    tracking._setup()
+    client = mlflow.MlflowClient()
+    run       = client.get_run(load_run_id)
+    params    = run.data.params
+    run_name  = run.info.run_name
+
+    model_name        = params["model_name"]
+    latent_dimensions = int(params["latent_dimensions"])
+    dropout_rate      = float(params.get("dropout_rate", 0.0))
+    best_epoch        = int(params["best_epoch"])
+    print(f"Run: {run_name} | {model_name} | latent_dim={latent_dimensions} | epoch={best_epoch}")
+
+    # ── Load model ────────────────────────────────────────────────────────────
+    device     = aet.get_device()
+    local_path = client.download_artifacts(load_run_id, f"model_{best_epoch}epochs.pth")
+    model      = build_autoencoder(model_name, latent_dimensions,
+                                   dropout_rate=dropout_rate).to(device)
+    model.load_state_dict(torch.load(local_path, map_location=device))
+    model.eval()
+
+    # ── Load data ─────────────────────────────────────────────────────────────
+    n_patients      = cfg["n_patients"]
+    use_both_frames = cfg["use_both_frames"]
+
+    all_dataset, _, _, _, _ = loader.load_tensor_datasets(
+        source_folder="registered_frames",
+        cache_folder="X_vectors",
+        n_train=n_patients,
+        n_val=0,
+        n_test=0,
+        special_split=None,
+        use_both_frames=use_both_frames,
+        frame_type="ED",
+        image_roi_only=True,
+        mask=False,
+        binary_mask=False,
+        recalculate=False,
+    )
+
+    # ── Labels ────────────────────────────────────────────────────────────────
+    groups = load_acdc_groups(n_patients)
+    labels = groups + groups if use_both_frames else groups
+
+    # ── Encode + Plot ─────────────────────────────────────────────────────────
+    print("Encoding all patients...")
+    mus = aep.collect_latent_vectors(model, all_dataset, device)
+    print(f"Latent vectors: {mus.shape}")
+
+    save_path = RESULTS_FOLDER / f"{run_name}_latent_pca.png"
+    aep.plot_latent_pca(mus, labels, run_name, use_both_frames, save_path)
+
+    # ── Log dans MLflow ───────────────────────────────────────────────────────
+    with tracking.resume_run(load_run_id):
+        tracking.log_artifact(save_path)
+    print(f"Logged to MLflow run {load_run_id}")
+
+
+if __name__ == "__main__":
+    main()
 
 
 ######################################################################
@@ -2201,6 +2944,7 @@ Functions to import data
 
 import nibabel as nib
 import glob
+import numpy as np
 from pathlib import Path
 
 from src.config import DATADIR, PROCESSED_IMAGES_FOLDER
@@ -2491,6 +3235,47 @@ def get_patient_modified_path(patient_id, folder, file_type="frame", frame_type=
         raise FileNotFoundError(f"File not found: {full_path}")
 
     return full_path
+
+def load_patient_metadata(y_name: str, n_patients: int = 150) -> np.ndarray:
+    """
+    Load patient metadata for one target variable.
+
+    Parameters
+    ----------
+    y_name : str
+        "group"  → ACDC cardiac group (str: "NOR", "DCM", "HCM", "MINF", "RV")
+        "height" → patient height in cm (float)
+        "weight" → patient weight in kg (float)
+    n_patients : int
+        Number of patients to load (1 to n_patients, in order). Default 150.
+        Order matches get_vectorsarray() / load_allframes_registered().
+
+    Returns
+    -------
+    np.ndarray, shape (n_patients,)
+        String dtype for "group", float64 for "height" / "weight".
+    """
+    key_map = {"group": "Group", "height": "Height", "weight": "Weight"}
+    if y_name not in key_map:
+        raise ValueError(f"y_name must be 'group', 'height', or 'weight'. Got: {y_name!r}")
+
+    cfg_key = key_map[y_name]
+    values = []
+    for patient_id in range(1, n_patients + 1):
+        subset = "training" if patient_id <= 100 else "testing"
+        cfg_path = DATADIR / subset / f"patient{patient_id:03d}" / "Info.cfg"
+        info = read_info_cfg(cfg_path)
+        values.append(info[cfg_key])
+
+    return np.asarray(values)
+
+
+def load_acdc_groups(n_patients: int) -> list[str]:
+    """
+    Load ACDC group label for each patient (1 to n_patients).
+    Returns list of strings e.g. ["NOR", "DCM", "HCM", ...]
+    """
+    return load_patient_metadata("group", n_patients).tolist()
 
 
 ######################################################################
@@ -4416,12 +5201,13 @@ def pca_compute_metrics(
 
 # src/models/regression.py
 """
-Data loading, split management, logistic and linear regression models
-for PCA-based cardiac group classification and metadata prediction.
+Pure regression functions for PCA- and AE-based cardiac classification
+and metadata prediction. No file I/O — all results returned as dicts.
 """
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import (
     accuracy_score,
     roc_auc_score,
@@ -4432,281 +5218,128 @@ from sklearn.metrics import (
     mean_squared_error,
     mean_absolute_error,
 )
-from sklearn.model_selection import train_test_split
-import joblib
-import hashlib
-
-from src.config import TEMPODATA_FOLDER
-from src.models import pca_spatial as pcs
-from src.data import importdata as ipd
 
 
-def splitname_to_seed(splitname, modulo=2**32):
-    digest = hashlib.sha256(splitname.encode("utf-8")).hexdigest()
-    return int(digest[:8], 16) % modulo
-
-
-def get_or_create_split_indices(n_samples, y, splitname, test_size=50, save_folder=None):
+def n_pc_for_variance(pca, threshold: float) -> int:
     """
-    Load a previously saved split if it exists, otherwise create it from the
-    split name, save it, and return train/test indices.
-    """
-    if save_folder is None:
-        save_folder = TEMPODATA_FOLDER
-
-    save_folder.mkdir(parents=True, exist_ok=True)
-
-    split_path = save_folder / f"{splitname}_splitindices.joblib"
-
-    if split_path.exists():
-        split_data = joblib.load(split_path)
-
-        train_idx = np.asarray(split_data["train_idx"], dtype=int)
-        test_idx = np.asarray(split_data["test_idx"], dtype=int)
-
-        if len(train_idx) + len(test_idx) != n_samples:
-            raise ValueError(
-                f"Saved split '{splitname}' is incompatible with current dataset size: "
-                f"{len(train_idx)} + {len(test_idx)} != {n_samples}"
-            )
-
-        return train_idx, test_idx
-
-    seed = splitname_to_seed(splitname)
-
-    all_idx = np.arange(n_samples)
-    train_idx, test_idx = train_test_split(
-        all_idx,
-        test_size=test_size,
-        stratify=y,
-        random_state=seed,
-        shuffle=True,
-    )
-
-    split_data = {
-        "splitname": splitname,
-        "seed": seed,
-        "n_samples": int(n_samples),
-        "train_idx": np.asarray(train_idx, dtype=int),
-        "test_idx": np.asarray(test_idx, dtype=int),
-    }
-
-    joblib.dump(split_data, split_path, compress=3)
-
-    return np.asarray(train_idx, dtype=int), np.asarray(test_idx, dtype=int)
-
-
-def load_xy(source_folder, X_folder, savepca_folder, pca_description, maskYN, maskbinYN, imageROIonlyYN, whichtoreturn, group_binYN, group_binvalue, ntraining=100, recalculateXbase=False, defaultsplit=True, splitname=None):
-    """
-    Load image data (X) and patient metadata (Y), and split into train/test sets.
-    """
-    # Load X (patient images or mask)
-    X = pcs.get_vectorsarray(source_folder, X_folder, details_str=pca_description, mask=maskYN, binary_mask=maskbinYN, image_roi_only=imageROIonlyYN, recalculate=recalculateXbase)
-    # Load Y (patient metadata)
-    all_files = ipd.import_patientmetapaths(printinfos=False)
-    Y = pcs.patient_metalists(all_files, returnonlyone=True, whichtoreturn=whichtoreturn)
-    if group_binYN:
-        Y = [int(val == group_binvalue) for val in Y]
-    Y = np.asarray(Y)
-    # Split
-    if defaultsplit:
-        X_train, X_test = X[:ntraining], X[ntraining:]
-        Y_train, Y_test = np.asarray(Y[:ntraining]), np.asarray(Y[ntraining:])
-    else:
-        if splitname is None:
-            raise ValueError("splitname must be provided when defaultsplit=False")
-        split_folder = TEMPODATA_FOLDER / savepca_folder
-        train_idx, test_idx = get_or_create_split_indices(n_samples=len(X), y=Y, splitname=splitname, test_size=50, save_folder=split_folder)
-        X_train, X_test = X[train_idx], X[test_idx]
-        Y_train, Y_test = Y[train_idx], Y[test_idx]
-    return X_train, X_test, Y_train, Y_test
-
-
-def n_pc_for_variance(pca, threshold):
-    """
-    Return the number of PCs needed to reach a given cumulative explained variance threshold.
+    Return the number of PCs needed to reach a given cumulative explained
+    variance threshold.  threshold >= 1.0 (e.g. 2.0) returns all components.
     """
     cumulative = np.cumsum(pca.explained_variance_ratio_)
     idx = np.where(cumulative >= threshold)[0]
     return int(len(cumulative)) if len(idx) == 0 else int(idx[0] + 1)
 
 
-def logisticreg(X_train_pca, Y_train, pca_folder, pca_description, Y_name, group_binvalue, n_pc_tokeep, multi_class, recalculateLOGI=True, save=False):
-    """
-    Train or load a logistic regression classifier (binary or multiclass).
-    """
-    if multi_class:
-        mtc_savestring = "_mtc"
-        groupname = ""
-        max_iter = 30000
-    else:
-        mtc_savestring = ""
-        groupname = group_binvalue
-        max_iter = 10000
+def fit_scaler(X_train: np.ndarray) -> StandardScaler:
+    """Fit a StandardScaler on X_train and return it."""
+    scaler = StandardScaler()
+    scaler.fit(X_train)
+    return scaler
 
-    if recalculateLOGI:
-        clf = LogisticRegression(max_iter=max_iter, random_state=42, solver="newton-cg")
-        clf.fit(X_train_pca, Y_train)
-        if save:
-            joblib.dump(clf, TEMPODATA_FOLDER / pca_folder + "/" + pca_description + "_" + Y_name + groupname + "_" + repr(n_pc_tokeep) + "pc" + mtc_savestring + "_clf.joblib", compress=3)
-    else:
-        clf = joblib.load(TEMPODATA_FOLDER / pca_folder + "/" + pca_description + "_" + Y_name + groupname + "_" + repr(n_pc_tokeep) + "pc" + mtc_savestring + "_clf.joblib")
+
+def fit_logistic(X_train: np.ndarray, Y_train: np.ndarray,
+                 multi_class: bool = True, C: float = 1.0) -> LogisticRegression:
+    """
+    Train a logistic regression classifier (binary or multiclass).
+
+    Parameters
+    ----------
+    X_train : np.ndarray, shape (n, n_features), float64
+    Y_train : np.ndarray, shape (n,)
+    multi_class : bool
+        True  → multinomial (5 ACDC groups).
+        False → binary (one class vs rest).
+    C : float
+        Inverse of regularization strength. Use 0.5 when training on ED+ES
+        (correlated pairs) to compensate for the inflated apparent sample size.
+    """
+    max_iter = 30000 if multi_class else 10000
+    clf = LogisticRegression(C=C, max_iter=max_iter, random_state=42, solver="newton-cg")
+    clf.fit(X_train, Y_train)
     return clf
 
 
-def logistic_predictions_results(pca, clf, X_test_pca, Y_test, pca_description, pca_folder, n_pc_tokeep, Y_name, group_binYN, group_binvalue, addstring=""):
-    """
-    Compute binary logistic regression metrics and save them to a txt file.
-    """
-    Y_pred = clf.predict(X_test_pca)
-    Y_prob = clf.predict_proba(X_test_pca)[:, 1]
-
-    acc = accuracy_score(Y_test, Y_pred)
-    auc = roc_auc_score(Y_test, Y_prob)
-    precision = precision_score(Y_test, Y_pred, zero_division=0)
-    recall = recall_score(Y_test, Y_pred, zero_division=0)
-    cm = confusion_matrix(Y_test, Y_pred)
-
-    results = {
-        "PCA_description": pca_description,
-        "n_components_kept": n_pc_tokeep,
-        "Y_name": Y_name,
-        "Group_binary_YN": group_binYN,
-        "Group_binary_chosen": group_binvalue,
-        "explained_variance_kept": np.sum(pca.explained_variance_ratio_),
-        "accuracy": acc,
-        "roc_auc": auc,
-        "precision": precision,
-        "recall": recall,
-        "confusion_matrix": cm,
-    }
-
-    with open(TEMPODATA_FOLDER / pca_folder + "/" + pca_description + "_" + Y_name + group_binvalue + "_" + repr(n_pc_tokeep) + "pc_predictionresults" + addstring + ".txt", "w") as f:
-        f.write("\n========================================\n")
-        f.write(f"PCA description: {pca_description}\n")
-        f.write(f"Target variable: {Y_name}\n")
-        f.write(f"Group_binary_YN: {group_binYN}\n")
-        f.write(f"Group value chosen to be =1: {group_binvalue}\n")
-        f.write(f"Number of PCs: {n_pc_tokeep}\n")
-        f.write(f"Explained variance kept: {np.sum(pca.explained_variance_ratio_[:n_pc_tokeep]):.6f}\n")
-        f.write(f"Accuracy: {acc:.3f}\n")
-        f.write(f"ROC AUC: {auc:.3f}\n")
-        f.write(f"Precision: {precision:.3f}\n")
-        f.write(f"Recall: {recall:.3f}\n")
-        f.write("Confusion matrix:\n")
-        f.write(f"{cm}\n")
-
-    return results
-
-
-def logistic_predictions_results_mtc(pca, clf, X_test_pca, Y_test, pca_description, pca_folder, n_pc_tokeep, Y_name, splitname=""):
-    """
-    Compute multiclass logistic regression metrics and save them to a txt file.
-    """
-    Y_pred = clf.predict(X_test_pca)
-
-    acc = accuracy_score(Y_test, Y_pred)
-    precision_macro = precision_score(Y_test, Y_pred, average="macro", zero_division=0)
-    recall_macro = recall_score(Y_test, Y_pred, average="macro", zero_division=0)
-    cm = confusion_matrix(Y_test, Y_pred, labels=clf.classes_)
-
-    precision_per_class = precision_score(Y_test, Y_pred, average=None, labels=clf.classes_, zero_division=0)
-    recall_per_class = recall_score(Y_test, Y_pred, average=None, labels=clf.classes_, zero_division=0)
-
-    explained_variance_kept = np.sum(pca.explained_variance_ratio_[:n_pc_tokeep])
-
-    results = {
-        "PCA_description": pca_description,
-        "n_components_kept": n_pc_tokeep,
-        "Y_name": Y_name,
-        "explained_variance_kept": explained_variance_kept,
-        "accuracy": acc,
-        "precision_macro": precision_macro,
-        "recall_macro": recall_macro,
-        "classes": [str(c) for c in clf.classes_],
-        "precision_per_class": precision_per_class,
-        "recall_per_class": recall_per_class,
-        "confusion_matrix": cm,
-    }
-
-    with open(TEMPODATA_FOLDER / pca_folder + "/" + pca_description + "_" + splitname + "_" + Y_name + "_" + repr(n_pc_tokeep) + "pc_mtc_predictionresults.txt", "w") as f:
-        f.write("\n========================================\n")
-        f.write(f"PCA description: {pca_description}\n")
-        f.write(f"Target variable: {Y_name}\n")
-        f.write(f"Number of PCs: {n_pc_tokeep}\n")
-        f.write(f"Explained variance kept: {explained_variance_kept:.6f}\n")
-        f.write(f"Accuracy: {acc:.3f}\n")
-        f.write(f"Precision macro: {precision_macro:.3f}\n")
-        f.write(f"Recall macro: {recall_macro:.3f}\n")
-        classes_clean = [str(c) for c in clf.classes_]
-        f.write(f"Classes: {classes_clean}\n")
-        f.write("Precision per class:\n")
-        for cls, val in zip(clf.classes_, precision_per_class):
-            f.write(f"{str(cls)}: {val:.3f}\n")
-        f.write("Recall per class:\n")
-        for cls, val in zip(clf.classes_, recall_per_class):
-            f.write(f"{str(cls)}: {val:.3f}\n")
-        f.write("Confusion matrix:\n")
-        f.write(f"{cm}\n")
-
-    return results
-
-
-def linearreg(X_train_pca, Y_train, pca_folder, pca_description, Y_name, n_pc_tokeep, recalculateLIN=True, save=False):
-    """
-    Train or load a linear regression model.
-    """
-    filename = (
-        TEMPODATA_FOLDER / pca_folder + "/" + pca_description + "_"
-        + Y_name + "_" + repr(n_pc_tokeep) + "pc_reg.joblib"
-    )
-    if recalculateLIN:
-        reg = LinearRegression()
-        reg.fit(X_train_pca, Y_train)
-        if save:
-            joblib.dump(reg, filename, compress=3)
-    else:
-        reg = joblib.load(filename)
-
+def fit_linear(X_train: np.ndarray, Y_train: np.ndarray) -> LinearRegression:
+    """Train a linear regression model."""
+    reg = LinearRegression()
+    reg.fit(X_train, Y_train)
     return reg
 
 
-def linear_predictions_results(pca, reg, X_test_pca, Y_test, pca_description, pca_folder, n_pc_tokeep, Y_name):
+def eval_logistic_binary(clf, X_test: np.ndarray, Y_test: np.ndarray,
+                         n_dims: int, explained_variance: float) -> dict:
     """
-    Compute linear regression evaluation metrics and save them to a txt file.
+    Evaluate a binary logistic classifier and return metrics as a dict.
+
+    Parameters
+    ----------
+    clf : fitted LogisticRegression
+    X_test : np.ndarray
+    Y_test : np.ndarray
+    n_dims : int
+        Number of latent dimensions used (for logging).
+    explained_variance : float
+        Cumulative explained variance kept (PCA); 1.0 for AE.
     """
-    Y_pred = reg.predict(X_test_pca)
+    Y_pred = clf.predict(X_test)
+    Y_prob = clf.predict_proba(X_test)[:, 1]
 
-    r2 = r2_score(Y_test, Y_pred)
-    rmse = np.sqrt(mean_squared_error(Y_test, Y_pred))
-    mae = mean_absolute_error(Y_test, Y_pred)
-
-    explained_variance_kept = np.sum(pca.explained_variance_ratio_[:n_pc_tokeep])
-
-    results = {
-        "PCA_description": pca_description,
-        "n_components_kept": n_pc_tokeep,
-        "Y_name": Y_name,
-        "explained_variance_kept": explained_variance_kept,
-        "r2": r2,
-        "rmse": rmse,
-        "mae": mae,
+    return {
+        "n_dims": n_dims,
+        "explained_variance": explained_variance,
+        "accuracy": float(accuracy_score(Y_test, Y_pred)),
+        "roc_auc": float(roc_auc_score(Y_test, Y_prob)),
+        "precision": float(precision_score(Y_test, Y_pred, zero_division=0)),
+        "recall": float(recall_score(Y_test, Y_pred, zero_division=0)),
+        "confusion_matrix": confusion_matrix(Y_test, Y_pred),
+        "classes": [int(c) for c in clf.classes_],
     }
 
-    with open(
-        TEMPODATA_FOLDER / pca_folder + "/" + pca_description + "_" + Y_name + "_" + repr(n_pc_tokeep) + "pc_regressionresults.txt",
-        "w"
-    ) as f:
-        f.write("\n========================================\n")
-        f.write(f"PCA description: {pca_description}\n")
-        f.write(f"Target variable: {Y_name}\n")
-        f.write(f"Number of PCs: {n_pc_tokeep}\n")
-        f.write(f"Explained variance kept: {explained_variance_kept:.6f}\n")
-        f.write(f"R2: {r2:.6f}\n")
-        f.write(f"RMSE: {rmse:.6f}\n")
-        f.write(f"MAE: {mae:.6f}\n")
 
-    return results
+def eval_logistic_multiclass(clf, X_test: np.ndarray, Y_test: np.ndarray,
+                              n_dims: int, explained_variance: float) -> dict:
+    """
+    Evaluate a multiclass logistic classifier and return metrics as a dict.
+    """
+    Y_pred = clf.predict(X_test)
+
+    precision_per_class = precision_score(
+        Y_test, Y_pred, average=None, labels=clf.classes_, zero_division=0
+    )
+    recall_per_class = recall_score(
+        Y_test, Y_pred, average=None, labels=clf.classes_, zero_division=0
+    )
+
+    return {
+        "n_dims": n_dims,
+        "explained_variance": explained_variance,
+        "accuracy": float(accuracy_score(Y_test, Y_pred)),
+        "precision_macro": float(precision_score(Y_test, Y_pred, average="macro", zero_division=0)),
+        "recall_macro": float(recall_score(Y_test, Y_pred, average="macro", zero_division=0)),
+        "precision_per_class": {str(c): float(v) for c, v in zip(clf.classes_, precision_per_class)},
+        "recall_per_class": {str(c): float(v) for c, v in zip(clf.classes_, recall_per_class)},
+        "confusion_matrix": confusion_matrix(Y_test, Y_pred, labels=clf.classes_),
+        "classes": [str(c) for c in clf.classes_],
+    }
+
+
+def eval_linear(reg, X_test: np.ndarray, Y_test: np.ndarray,
+                n_dims: int, explained_variance: float) -> dict:
+    """
+    Evaluate a linear regression model and return metrics as a dict.
+    """
+    Y_pred = reg.predict(X_test)
+
+    return {
+        "n_dims": n_dims,
+        "explained_variance": explained_variance,
+        "r2": float(r2_score(Y_test, Y_pred)),
+        "rmse": float(np.sqrt(mean_squared_error(Y_test, Y_pred))),
+        "mae": float(mean_absolute_error(Y_test, Y_pred)),
+        "Y_pred": Y_pred,
+        "Y_test": Y_test,
+    }
+
 
 
 ######################################################################
@@ -4739,13 +5372,17 @@ run_name : "{simulation_name}_{experiment_tag}"
 import warnings
 import mlflow
 from contextlib import contextmanager
+from pathlib import Path
+import os
 
 from src.config import MLRUNS_FOLDER
 
+_PROJECT_ROOT = Path(__file__).parent.parent
 
 def _setup():
     warnings.filterwarnings("ignore", category=FutureWarning, module="mlflow")
-    mlflow.set_tracking_uri("mlruns")
+    os.chdir(_PROJECT_ROOT)
+    mlflow.set_tracking_uri(str(_PROJECT_ROOT / "mlruns"))
 
 
 @contextmanager
@@ -4793,6 +5430,7 @@ def log_metrics(metrics: dict, step: int = None):
 
 def log_model_state_dict(model, filename: str = "model.pth"):
     """Save a PyTorch state dict as an MLflow artifact."""
+    _setup() 
     import torch
     import tempfile
     from pathlib import Path
@@ -4805,8 +5443,8 @@ def log_model_state_dict(model, filename: str = "model.pth"):
 
 def log_artifact(path):
     """Log a file (plot, summary, etc.) as an MLflow artifact."""
+    _setup() 
     mlflow.log_artifact(str(path))
-
 
 def log_sklearn_model(model, filename: str = "pca.joblib"):
     """Save a sklearn model as an MLflow artifact using joblib serialization."""
@@ -4851,6 +5489,34 @@ def search_runs(experiment_name: str, filter_string: str = "", order_by: list = 
         order_by=order_by or [],
     )
 
+def start_run_and_get_id(experiment_name: str, run_name: str, tags: dict = None) -> tuple:
+    """
+    Start an MLflow run and return (run_id, artifact_dir) immediately.
+    Use when the artifact path is needed before the run context closes.
+    """
+    _setup()
+    mlflow.set_experiment(experiment_name)
+    run = mlflow.start_run(run_name=run_name, tags=tags)
+    artifact_dir = _PROJECT_ROOT / "mlruns" / run.info.experiment_id / run.info.run_id / "artifacts"
+    return run, artifact_dir
+
+
+def download_artifact(run_id: str) -> Path:
+    """
+    Copy the .db artifact from an MLflow run into a temp directory.
+    Returns the local path of the .db file.
+    """
+    import tempfile
+    import shutil
+
+    db_files = list((_PROJECT_ROOT / "mlruns").glob(f"*/{run_id}/artifacts/*.db"))
+    if not db_files:
+        raise FileNotFoundError(f"No .db file found in artifacts of run {run_id}")
+
+    tmp_dir = Path(tempfile.mkdtemp())
+    dst = tmp_dir / db_files[0].name
+    shutil.copy2(db_files[0], dst)
+    return dst
 
 
 ######################################################################
@@ -4892,6 +5558,9 @@ def objective(
     """Sample one set of hyperparams and return the best validation loss."""
     hp = {}
     for name, bounds in config["hp_ranges"].items():
+        # Skip VAE-specific params if model is not VAE
+        if name in ("beta", "beta_warmup_epochs") and config["model_name"] != "AE3dFCDeep_VAE":
+            continue
         if bounds["type"] == "int":
             hp[name] = trial.suggest_int(name, int(bounds["low"]), int(bounds["high"]))
         else:
@@ -4923,15 +5592,15 @@ def objective(
         print(f"Trial {trial.number} failed: {e}")
         raise optuna.exceptions.TrialPruned()
 
-    best_val_loss = min(loss_history["validation"])
+    best_val_mse = min(loss_history["val_mse"])
     trial.set_user_attr("best_epoch", best_epoch)
 
     hp_str = " | ".join(
         f"{k}={v:.2e}" if isinstance(v, float) else f"{k}={v}"
         for k, v in hp.items()
     )
-    print(f"Trial {trial.number:>3} | val_loss={best_val_loss:.6f} | epoch={best_epoch:>4} | {hp_str}")
-    return best_val_loss
+    print(f"Trial {trial.number:>3} | val_mse_loss={best_val_mse:.6f} | epoch={best_epoch:>4} | {hp_str}")
+    return best_val_mse
 
 
 def load_study(study_name: str, db_path: Path) -> optuna.Study:
@@ -5010,7 +5679,7 @@ def plot_optuna_results(study: optuna.Study, config: dict, save_dir: Path) -> li
                linestyle="--", label=f"Best trial ({best_trial})")
     ax.scatter([best_trial], [min(val_losses)], color="#E24B4A", s=60, zorder=5)
     ax.set_xlabel("Trial number")
-    ax.set_ylabel("Val loss")
+    ax.set_ylabel("Val MSE (reconstruction loss)")
     ax.set_title(f"Optuna — optimization history\n{study_name}")
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
@@ -5055,6 +5724,45 @@ def plot_optuna_results(study: optuna.Study, config: dict, save_dir: Path) -> li
     print(f"Saved: {p2}")
     saved_paths.append(p2)
 
+# ── Plot 3: Val loss vs hyperparameter value ────────────────────────────────
+    fig, axes = plt.subplots(n_hp, 1, figsize=(10, 3 * n_hp), sharex=False)
+    if n_hp == 1:
+        axes = [axes]
+
+    best_val_loss = min(val_losses)
+
+    for ax, hp_name, color in zip(axes, hp_names, _COLORS):
+        values = [t.params.get(hp_name) for t in completed]
+        is_best = [v == best_val_loss for v in val_losses]
+
+        ax.scatter(
+            [v for v, b in zip(values, is_best) if not b],
+            [l for l, b in zip(val_losses, is_best) if not b],
+            color=color, alpha=0.7, s=30, zorder=3,
+        )
+        ax.scatter(
+            [v for v, b in zip(values, is_best) if b],
+            [l for l, b in zip(val_losses, is_best) if b],
+            color="#E24B4A", s=80, zorder=5, label="Best trial",
+        )
+        ax.axhline(y=best_val_loss, color="#E24B4A", linewidth=1.2,
+                   linestyle="--", alpha=0.7)
+        ax.set_xlabel(hp_name, fontsize=9)
+        ax.set_ylabel("val MSE", fontsize=9)
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8)
+
+        if config["hp_ranges"][hp_name].get("log", False):
+            ax.set_xscale("log")
+
+    fig.suptitle(f"Optuna — val MSE vs hyperparameter value\n{study_name}", fontsize=11)
+    fig.tight_layout()
+    p3 = save_dir / f"optuna_{study_name}_hp_vs_loss.png"
+    fig.savefig(p3, dpi=150)
+    plt.close(fig)
+    print(f"Saved: {p3}")
+    saved_paths.append(p3)
+    
     return saved_paths
 
 
@@ -5068,7 +5776,7 @@ def save_optuna_summary(study: optuna.Study, save_dir: Path) -> Path:
     lines.append("=" * 60)
     lines.append(f"Optuna Study : {study.study_name}")
     lines.append(f"Trials completed : {len(completed)}")
-    lines.append(f"Best val loss    : {study.best_value:.6f}")
+    lines.append(f"Best val MSE    : {study.best_value:.6f}")
     lines.append("")
     lines.append("Best hyperparameters :")
     for k, v in study.best_params.items():
@@ -5283,30 +5991,31 @@ def ae_aggregate_metrics(all_metrics):
 
 
 def _compute_validation_loss(model, validation_dataset, batch_size, device, criterion, beta=1.0):
-    """Compute mean reconstruction loss on the validation set (no gradients)."""
-    val_loader = DataLoader(
-        validation_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        pin_memory=(device.type == "cuda"),
-    )
-
+    val_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False,
+                            pin_memory=(device.type == "cuda"))
     model.eval()
     total_loss = 0.0
+    total_mse  = 0.0
+    total_kl   = 0.0
 
     with torch.no_grad():
         for (x_batch,) in val_loader:
             x_batch = x_batch.to(device, non_blocking=(device.type == "cuda"))
             output = model(x_batch)
-            if len(output) == 4:
+            if len(output) == 4:   # VAE
                 x_recon, _, mu, logvar = output
-                loss, _, _ = _vae_loss(x_recon, x_batch, mu, logvar, beta)
-            else:
+                loss, mse, kl = _vae_loss(x_recon, x_batch, mu, logvar, beta)
+                total_mse += mse.item()
+                total_kl  += kl.item()
+            else:                  # AE classique
                 x_recon, _ = output
                 loss = criterion(x_recon, x_batch)
+                total_mse += loss.item()  # pour AE classique, mse = loss totale
+
             total_loss += loss.item()
 
-    return total_loss / len(val_loader)
+    n = len(val_loader)
+    return total_loss / n, total_mse / n, total_kl / n
 
 
 def _vae_loss(x_recon, x_target, mu, logvar, beta):
@@ -5363,7 +6072,7 @@ def ae_training_early_stopping(
         optimizer, mode="min", factor=0.5, patience=patience_scheduler,
     )
 
-    loss_history = {"train": [], "validation": []}
+    loss_history = {"train": [], "validation": [], "train_mse": [], "train_kl": [],  "val_mse": [], "val_kl": []}
     best_val_loss = float("inf")
     best_epoch = -1
     epochs_without_improvement = 0
@@ -5387,7 +6096,9 @@ def ae_training_early_stopping(
 
         # ── Training pass ─────────────────────────────────────────────────────
         model.train()
-        epoch_train_loss = 0.0
+        epoch_train_loss = 0.0             
+        epoch_train_mse = 0.0
+        epoch_train_kl  = 0.0
 
         for (x_batch,) in train_loader:
             x_batch = x_batch.to(device, non_blocking=(device.type == "cuda"))
@@ -5401,7 +6112,9 @@ def ae_training_early_stopping(
             output = model(x_noisy)
             if len(output) == 4:
                 x_recon, _, mu, logvar = output
-                loss, _, _ = _vae_loss(x_recon, x_batch, mu, logvar, beta_current)
+                loss, mse, kl = _vae_loss(x_recon, x_batch, mu, logvar, beta_current)
+                epoch_train_mse += mse.item()
+                epoch_train_kl  += kl.item()
             else:
                 x_recon, _ = output
                 loss = criterion(x_recon, x_batch)
@@ -5411,15 +6124,21 @@ def ae_training_early_stopping(
             epoch_train_loss += loss.item()
 
         avg_train_loss = epoch_train_loss / len(train_loader)
+        avg_train_mse = epoch_train_mse / len(train_loader)
+        avg_train_kl  = epoch_train_kl  / len(train_loader)
         loss_history["train"].append(avg_train_loss)
+        loss_history["train_mse"].append(avg_train_mse)
+        loss_history["train_kl"].append(avg_train_kl)
 
         # ── Validation pass ───────────────────────────────────────────────────
-        avg_val_loss = _compute_validation_loss(
+        avg_val_loss, avg_val_mse, avg_val_kl = _compute_validation_loss(
             model, validation_dataset, batch_size, device, criterion, beta=beta_current,
         )
         scheduler.step(avg_val_loss)
         current_lr = optimizer.param_groups[0]["lr"]
         loss_history["validation"].append(avg_val_loss)
+        loss_history["val_mse"].append(avg_val_mse)
+        loss_history["val_kl"].append(avg_val_kl)
 
         current_epoch = epoch + 1
         is_best = avg_val_loss < best_val_loss
@@ -6627,54 +7346,54 @@ def plot_train_val_loss(
     simulation_name,
     save_path=None,
 ):
-    """
-    Plot training and validation loss curves from ae_training_early_stopping.
-
-    Parameters
-    ----------
-    loss_history : dict
-        {"train": [float, ...], "validation": [float, ...]}
-    best_epoch : int
-        Epoch at which the best validation loss was reached.
-    simulation_name : str
-        Used for the plot title and default save filename.
-    save_path : Path or str or None
-        If None, saves as {RESULTS_FOLDER}/{simulation_name}_train_val_loss.png
-
-    Returns
-    -------
-    save_path : Path
-    """
-    train_losses = np.array(loss_history["train"], dtype=float)
+    train_losses = np.array(loss_history.get("train", []), dtype=float)
     epochs = np.arange(1, len(train_losses) + 1)
+
+    has_val = bool(loss_history.get("validation"))
+    has_vae = bool(loss_history.get("train_mse"))
 
     if save_path is None:
         save_path = RESULTS_FOLDER / f"{simulation_name}_train_val_loss.png"
     save_path = Path(save_path)
 
-    fig, ax = plt.subplots(figsize=(9, 5))
+    n_plots = 2 if has_vae else 1
+    fig, axes = plt.subplots(n_plots, 1, figsize=(9, 4 * n_plots), sharex=True)
+    if n_plots == 1:
+        axes = [axes]
 
-    ax.plot(epochs, train_losses, linewidth=1.5, label="Train loss")
-
-    if "validation" in loss_history and len(loss_history["validation"]) > 0:
+    # ── Plot 1 : total loss ───────────────────────────────────────────────────
+    ax = axes[0]
+    ax.plot(epochs, train_losses, linewidth=1.5, color="steelblue",label="Train loss (total)")
+    if has_val:
         val_losses = np.array(loss_history["validation"], dtype=float)
-        ax.plot(epochs, val_losses, linewidth=1.5, label="Validation loss")
-        ax.axvline(
-            x=best_epoch,
-            color="red",
-            linestyle="--",
-            linewidth=1.2,
-            label=f"Best epoch ({best_epoch})",
-        )
-
+        ax.plot(epochs, val_losses, linewidth=1.5, color="forestgreen", label="Validation loss (total)")
+        ax.axvline(x=best_epoch, color="red", linestyle="--",
+                   linewidth=1.2, label=f"Best epoch ({best_epoch})")
     ax.set_yscale("log")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("MSE loss (log scale)")
+    ax.set_ylabel("Loss (log scale)")
     ax.set_title(f"Train / validation loss — {simulation_name}")
     ax.legend()
     ax.grid(True, which="both", alpha=0.3)
-    fig.tight_layout()
 
+    # ── Plot 2 : MSE et KL separately (for VAE only) ────────────────────────
+    if has_vae:
+        ax2 = axes[1]
+        train_mse = np.array(loss_history["train_mse"], dtype=float)
+        train_kl  = np.array(loss_history["train_kl"],  dtype=float)
+        ax2.plot(epochs, train_mse, linewidth=1.5, color="darkorange",  label="Train MSE")
+        ax2.plot(epochs, train_kl,  linewidth=1.5, color="indianred", label="Train KL")
+        ax2.axvline(x=best_epoch, color="red", linestyle="--",
+                    linewidth=1.2, label=f"Best epoch ({best_epoch})")
+        ax2.set_yscale("log")
+        ax2.set_xlabel("Epoch")
+        ax2.set_ylabel("Loss (log scale)")
+        ax2.set_title("VAE loss decomposition — MSE vs KL")
+        ax2.legend()
+        ax2.grid(True, which="both", alpha=0.3)
+    else:
+        axes[0].set_xlabel("Epoch")
+
+    fig.tight_layout()
     fig.savefig(save_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     print(f"Loss plot saved: {save_path}")
@@ -7322,6 +8041,199 @@ def ae_select_representative_patients(
  
     return selected
 
+def collect_latent_vectors(model, dataset, device) -> np.ndarray:
+    """
+    Run encoder on all images and collect latent vectors.
+    VAE: returns mu (deterministic). AE: returns z.
+    Returns array of shape (n_images, latent_dim).
+    """
+    import torch
+    from torch.utils.data import DataLoader
+
+    model.eval()
+    vectors = []
+    with torch.no_grad():
+        for (x,) in DataLoader(dataset, batch_size=1, shuffle=False):
+            x = x.to(device)
+            output = model.encode(x)
+            z = output[0] if isinstance(output, tuple) else output
+            vectors.append(z.cpu().numpy().squeeze())
+    return np.array(vectors)
+
+
+def plot_latent_pca(
+    mus: np.ndarray,
+    labels: list[str],
+    run_name: str,
+    use_both_frames: bool,
+    save_path: Path,
+) -> Path:
+    """
+    Project latent vectors to 2D via PCA and plot colored by ACDC group.
+    """
+    from sklearn.decomposition import PCA
+    import matplotlib.patches as mpatches
+
+    pca = PCA(n_components=2)
+    mus_2d = pca.fit_transform(mus)
+    var_explained = pca.explained_variance_ratio_
+
+    group_colors = {
+        "NOR":  "#1D9E75",
+        "DCM":  "#534AB7",
+        "HCM":  "#D85A30",
+        "RV":   "#378ADD",
+        "MINF": "#E24B4A",
+    }
+    markers = {"ED": "o", "ES": "s"}
+    n_patients = len(labels) // 2 if use_both_frames else len(labels)
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+
+    for i, (group, (x, y)) in enumerate(zip(labels, mus_2d)):
+        color = group_colors.get(group, "gray")
+        marker = markers["ED" if i < n_patients else "ES"] if use_both_frames else "o"
+        ax.scatter(x, y, color=color, marker=marker,
+                   s=30, alpha=0.75, linewidths=0)
+
+    group_patches = [
+        mpatches.Patch(color=c, label=g)
+        for g, c in group_colors.items()
+    ]
+    frame_handles = []
+    if use_both_frames:
+        frame_handles = [
+            plt.Line2D([0], [0], marker="o", color="gray",
+                       linestyle="", markersize=7, label="ED"),
+            plt.Line2D([0], [0], marker="s", color="gray",
+                       linestyle="", markersize=7, label="ES"),
+        ]
+
+    ax.legend(handles=group_patches + frame_handles,
+              loc="best", fontsize=9, framealpha=0.8)
+    ax.set_xlabel(f"PC1 ({var_explained[0]*100:.1f}% var)", fontsize=10)
+    ax.set_ylabel(f"PC2 ({var_explained[1]*100:.1f}% var)", fontsize=10)
+    ax.set_title(f"Latent space — PCA 2D\n{run_name}", fontsize=11)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Plot saved: {save_path}")
+    return save_path
+
+
+# ── New MLflow-based comparison plot ──────────────────────────────────────────
+
+_COMPARISON_COLORS = [
+    "#534AB7", "#1D9E75", "#D85A30", "#BA7517",
+    "#378ADD", "#E24B4A", "#8B4513", "#9467bd",
+]
+
+_MAX_XTICKS = 30
+
+
+_METRIC_LINESTYLES = ["-", "--", ":", "-."]
+
+
+def plot_comparison_curves(
+    series_data: list[dict],
+    metrics: list[str],
+    xscale: str = "log",
+    superpose_metrics: bool = False,
+    save_path: "Path | None" = None,
+) -> "Path | None":
+    """
+    Plot metric vs latent_dim for multiple series (AE and/or PCA).
+
+    Parameters
+    ----------
+    series_data       : list of {"label": str, "data": {latent_dim (int): {metric_key: value}}}
+    metrics           : metric keys to plot
+    xscale            : "log" or "linear"
+    superpose_metrics : if False (default), one subplot per metric;
+                        if True, all metrics on a single axes — color encodes series,
+                        linestyle encodes metric (solid / dashed / dotted / dashdot)
+    save_path         : where to save; auto-generated in RESULTS_FOLDER if None
+    """
+    if not series_data:
+        print("plot_comparison_curves: no series data — nothing to plot.")
+        return None
+
+    all_x: list[int] = []
+
+    if superpose_metrics:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        axes = [ax]
+
+        for series, color in zip(series_data, _COMPARISON_COLORS):
+            data = series["data"]
+            is_pca = series["label"].startswith("PCA/")
+            marker = "" if is_pca else "o"
+            markersize = 0 if is_pca else 4
+            c = "black" if is_pca else color
+            for i, (metric, linestyle) in enumerate(zip(metrics, _METRIC_LINESTYLES)):
+                pts = [(k, v[metric]) for k, v in sorted(data.items()) if metric in v]
+                if not pts:
+                    continue
+                xs, ys = zip(*pts)
+                all_x.extend(xs)
+                ax.plot(xs, ys, color=c, linestyle=linestyle,
+                        marker=marker, markersize=markersize, 
+                        linewidth=1.8 if i == 0 else 1.0,
+                        label=f"{series['label']} — {metric}")
+
+        ax.set_ylabel(" / ".join(metrics))
+        ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8)
+        ax.set_xscale(xscale)
+
+    else:
+        n_metrics = len(metrics)
+        fig, axes = plt.subplots(n_metrics, 1, figsize=(10, 4 * n_metrics), sharex=True)
+        if n_metrics == 1:
+            axes = [axes]
+
+        for ax, metric in zip(axes, metrics):
+            for series, color in zip(series_data, _COMPARISON_COLORS):
+                data = series["data"]
+                is_pca = series["label"].startswith("PCA/")
+                c = "black" if is_pca else color
+                marker, markersize = ("", 0) if is_pca else ("o", 4)
+                pts = [(k, v[metric]) for k, v in sorted(data.items()) if metric in v]
+                if not pts:
+                    continue
+                xs, ys = zip(*pts)
+                all_x.extend(xs)
+                ax.plot(xs, ys, color=c, 
+                        marker=marker, markersize=markersize, 
+                        linewidth=1.8, label=series["label"])
+
+            ax.set_ylabel(metric)
+            ax.grid(True, alpha=0.3)
+            ax.legend(fontsize=8)
+            ax.set_xscale(xscale)
+
+    # X-ticks: show all unique values only when there are few enough
+    unique_x = sorted(set(all_x))
+    if len(unique_x) <= _MAX_XTICKS:
+        axes[-1].set_xticks(unique_x)
+        axes[-1].set_xticklabels([str(x) for x in unique_x], rotation=45, fontsize=7)
+    else:
+        for ax in axes:
+            ax.xaxis.set_major_formatter(plt.matplotlib.ticker.ScalarFormatter())
+            ax.xaxis.get_major_formatter().set_scientific(False)
+
+    axes[-1].set_xlabel("Latent dimension / number of principal components")
+    fig.tight_layout()
+
+    if save_path is None:
+        save_path = RESULTS_FOLDER / "comparison_curves.png"
+    save_path = Path(save_path)
+    fig.savefig(save_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Plot saved: {save_path}")
+    return save_path
+
 
 ######################################################################
 # FILE: src/visualization/mri_plots.py
@@ -7891,420 +8803,210 @@ def plot_centroid_distributions(list3D, datatype="Centroid"):
 
 # src/visualization/regression_plots.py
 """
-Result parsing and plotting functions for logistic and linear regression
-on PCA-based cardiac representations.
+Plotting functions for logistic and linear regression results.
+All functions take in-memory result dicts — no file parsing.
 """
 
 import numpy as np
-import re
-import glob
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 
-from src.config import TEMPODATA_FOLDER, RESULTS_FOLDER
+from src.config import RESULTS_FOLDER
 
 
-def parse_prediction_result_file(filepath):
+def plot_logistic_metrics(results: list[dict], y_name: str, run_label: str,
+                          binary: bool = False) -> Path:
     """
-    Read one *_predictionresults.txt file and extract binary classification metrics.
+    Plot classification metrics vs number of latent dimensions.
+
+    Parameters
+    ----------
+    results : list of dict
+        Each dict from eval_logistic_binary or eval_logistic_multiclass,
+        sorted by n_dims.
+    y_name : str
+        Target variable name (used in title).
+    run_label : str
+        Short label for the run (used in filename and title).
+    binary : bool
+        True → binary metrics (AUC, precision, recall).
+        False → multiclass metrics (accuracy, precision_macro, recall_macro).
+
+    Returns
+    -------
+    Path to saved figure.
     """
-    results = {}
+    n_dims = [r["n_dims"] for r in results]
+    accuracy = [r["accuracy"] for r in results]
+    ev = [r["explained_variance"] for r in results]
 
-    filename = Path(filepath).name
-    match = re.search(r'_(\d+)pc_predictionresults\.txt$', filename)
-    if match is None:
-        raise ValueError(f"Could not extract number of PCs from filename: {filename}")
-    results["n_pc"] = int(match.group(1))
+    if binary:
+        fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(8, 10), sharex=True)
 
-    with open(filepath, "r") as f:
-        text = f.read()
+        ax1.plot(n_dims, [r["roc_auc"] for r in results], marker="o", label="ROC AUC")
+        ax1.plot(n_dims, accuracy, marker="o", label="Accuracy")
+        ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                 label="Cum. explained variance")
+        ax1.set_ylabel("Score")
+        ax1.set_title(f"{run_label} — {y_name} (binary) — Overall")
+        ax1.set_ylim(0, 1.05)
+        ax1.grid(True, alpha=0.3)
+        ax1.legend()
 
-    patterns = {
-        "accuracy": r"Accuracy:\s*([0-9.]+)",
-        "roc_auc": r"ROC AUC:\s*([0-9.]+)",
-        "precision": r"Precision:\s*([0-9.]+)",
-        "recall": r"Recall:\s*([0-9.]+)",
-        "explained_variance_kept": r"Explained variance kept:\s*([0-9.]+)",
-    }
+        ax2.plot(n_dims, [r["recall"] for r in results], marker="o", label="Recall")
+        ax2.plot(n_dims, [r["precision"] for r in results], marker="o", label="Precision")
+        ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                 label="Cum. explained variance")
+        ax2.set_xlabel("Latent dimensions")
+        ax2.set_ylabel("Score")
+        ax2.set_title(f"{run_label} — {y_name} (binary) — Positive class")
+        ax2.set_ylim(0, 1.05)
+        ax2.grid(True, alpha=0.3)
+        ax2.legend()
 
-    for key, pattern in patterns.items():
-        m = re.search(pattern, text)
-        if m is None:
-            raise ValueError(f"Could not find '{key}' in file: {filename}")
-        results[key] = float(m.group(1))
+    else:
+        classes = results[0]["classes"]
+        fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, figsize=(9, 14), sharex=True)
 
-    return results
+        ax1.plot(n_dims, accuracy, marker="o", label="Accuracy")
+        ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                 label="Cum. explained variance")
+        ax1.set_ylabel("Score")
+        ax1.set_title(f"{run_label} — {y_name} — Accuracy")
+        ax1.set_ylim(0, 1.05)
+        ax1.grid(True, alpha=0.3)
+        ax1.legend()
+
+        for cls in classes:
+            vals = [r["recall_per_class"].get(cls, 0.0) for r in results]
+            ax2.plot(n_dims, vals, marker="o", label=f"Recall {cls}")
+        ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                 label="Cum. explained variance")
+        ax2.set_ylabel("Score")
+        ax2.set_title(f"{run_label} — {y_name} — Recall per class")
+        ax2.set_ylim(0, 1.05)
+        ax2.grid(True, alpha=0.3)
+        ax2.legend()
+
+        for cls in classes:
+            vals = [r["precision_per_class"].get(cls, 0.0) for r in results]
+            ax3.plot(n_dims, vals, marker="o", label=f"Precision {cls}")
+        ax3.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                 label="Cum. explained variance")
+        ax3.set_xlabel("Latent dimensions")
+        ax3.set_ylabel("Score")
+        ax3.set_title(f"{run_label} — {y_name} — Precision per class")
+        ax3.set_ylim(0, 1.05)
+        ax3.grid(True, alpha=0.3)
+        ax3.legend()
+
+    _set_xscale_log(ax1 if binary else ax3, n_dims)
+    plt.tight_layout()
+    outpath = RESULTS_FOLDER / f"{run_label}_{y_name}_classification.png"
+    plt.savefig(outpath, dpi=200)
+    plt.close()
+    return outpath
 
 
-def plot_prediction_results(pca_folder, pca_description, Y_name, group_binvalue, addstring=""):
+def plot_linear_metrics(results: list[dict], y_name: str, run_label: str) -> Path:
     """
-    Plot binary logistic regression metrics (AUC, accuracy, precision, recall)
-    vs number of PCs, from saved txt result files.
+    Plot linear regression metrics (R², RMSE, MAE) vs number of latent dimensions.
+
+    Parameters
+    ----------
+    results : list of dict
+        Each dict from eval_linear, sorted by n_dims.
+    y_name : str
+    run_label : str
+
+    Returns
+    -------
+    Path to saved figure.
     """
-    results_folder = TEMPODATA_FOLDER / pca_folder
-    pattern = str(results_folder / f"{pca_description}_{Y_name}{group_binvalue}_*pc_predictionresults.txt")
-    files = glob.glob(pattern)
-
-    if len(files) == 0:
-        raise FileNotFoundError(f"No files found matching: {pattern}")
-
-    all_results = []
-    for filepath in files:
-        try:
-            all_results.append(parse_prediction_result_file(filepath))
-        except Exception as e:
-            print(f"Skipping {filepath}: {e}")
-
-    if len(all_results) == 0:
-        raise ValueError("No valid result files could be parsed.")
-
-    all_results.sort(key=lambda d: d["n_pc"])
-
-    n_pc = [d["n_pc"] for d in all_results]
-    accuracy = [d["accuracy"] for d in all_results]
-    roc_auc = [d["roc_auc"] for d in all_results]
-    precision = [d["precision"] for d in all_results]
-    recall = [d["recall"] for d in all_results]
-    explained_variance_kept = [d["explained_variance_kept"] for d in all_results]
+    n_dims = [r["n_dims"] for r in results]
+    ev = [r["explained_variance"] for r in results]
 
     fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(8, 10), sharex=True)
 
-    ax1.plot(n_pc, roc_auc, marker="o", label="ROC AUC")
-    ax1.plot(n_pc, accuracy, marker="o", label="Accuracy")
-    ax1.plot(n_pc, explained_variance_kept, marker="o", linestyle="--", color="gray", alpha=0.35, label="Cum. explained variance")
-    ax1.set_xscale("log")
-    ax1.set_xticks(n_pc)
-    ax1.set_xticklabels([str(x) for x in n_pc])
+    ax1.plot(n_dims, [r["r2"] for r in results], marker="o", label="R²")
+    ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+             label="Cum. explained variance")
     ax1.set_ylabel("Score")
-    ax1.set_title(f"{pca_description}_{Y_name}{group_binvalue} - Overall performance")
-    ax1.set_ylim(0, 1.05)
+    ax1.set_title(f"{run_label} — {y_name} — R²")
     ax1.grid(True, alpha=0.3)
     ax1.legend()
 
-    ax2.plot(n_pc, recall, marker="o", label="Recall")
-    ax2.plot(n_pc, precision, marker="o", label="Precision")
-    ax2.plot(n_pc, explained_variance_kept, marker="o", linestyle="--", color="gray", alpha=0.35, label="Cum. explained variance")
-    ax2.set_xscale("log")
-    ax2.set_xticks(n_pc)
-    ax2.set_xticklabels([str(x) for x in n_pc])
-    ax2.set_xlabel("Number of PCs")
-    ax2.set_ylabel("Score")
-    ax2.set_title(f"{pca_description}_{Y_name}{group_binvalue} - Positive class behavior")
-    ax2.set_ylim(0, 1.05)
+    ax2.plot(n_dims, [r["rmse"] for r in results], marker="o", label="RMSE")
+    ax2.plot(n_dims, [r["mae"] for r in results], marker="o", label="MAE")
+    ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+             label="Cum. explained variance")
+    ax2.set_xlabel("Latent dimensions")
+    ax2.set_ylabel(y_name)
+    ax2.set_title(f"{run_label} — {y_name} — Prediction errors")
     ax2.grid(True, alpha=0.3)
     ax2.legend()
 
+    _set_xscale_log(ax2, n_dims)
     plt.tight_layout()
-
-    outpath = RESULTS_FOLDER / f"{pca_description}_{Y_name}{group_binvalue}_predictionresults{addstring}.png"
+    outpath = RESULTS_FOLDER / f"{run_label}_{y_name}_linear.png"
     plt.savefig(outpath, dpi=200)
     plt.close()
+    return outpath
 
-    print(f"Saved plot to: {outpath}")
 
-
-def parse_prediction_result_file_mtc(filepath):
+def plot_confusion_matrix(result: dict, y_name: str, run_label: str) -> Path:
     """
-    Read one *pc_mtc_predictionresults.txt file and extract multiclass metrics.
+    Plot a normalized confusion matrix from one result dict.
+
+    Parameters
+    ----------
+    result : dict
+        One dict from eval_logistic_binary or eval_logistic_multiclass.
+    y_name : str
+    run_label : str
+
+    Returns
+    -------
+    Path to saved figure.
     """
-    results = {}
-
-    filename = Path(filepath).name
-    match = re.search(r'_(\d+)pc_mtc_predictionresults(?:_.*)?\.txt$', filename)
-    if match is None:
-        raise ValueError(f"Could not extract number of PCs from filename: {filename}")
-    results["n_pc"] = int(match.group(1))
-
-    with open(filepath, "r") as f:
-        text = f.read()
-
-    patterns = {
-        "accuracy": r"Accuracy:\s*([0-9.]+)",
-        "precision_macro": r"Precision macro:\s*([0-9.]+)",
-        "recall_macro": r"Recall macro:\s*([0-9.]+)",
-        "explained_variance_kept": r"Explained variance kept:\s*([0-9.]+)",
-    }
-
-    for key, pattern in patterns.items():
-        m = re.search(pattern, text)
-        if m is None:
-            raise ValueError(f"Could not find '{key}' in file: {filename}")
-        results[key] = float(m.group(1))
-
-    m = re.search(r"Classes:\s*\[(.*?)\]", text)
-    if m is None:
-        raise ValueError(f"Could not find 'Classes' in file: {filename}")
-
-    classes_str = m.group(1)
-    classes = []
-    for c in classes_str.split(","):
-        c = c.strip()
-        if c.startswith("np.str_(") and c.endswith(")"):
-            c = c[len("np.str_("):-1].strip()
-        c = c.strip("'").strip('"')
-        classes.append(c)
-    results["classes"] = classes
-
-    m = re.search(r"Precision per class:\n(.*?)Recall per class:", text, re.S)
-    if m is None:
-        raise ValueError(f"Could not find 'Precision per class' block in file: {filename}")
-    precision_block = m.group(1)
-
-    precision_per_class = {}
-    for line in precision_block.strip().splitlines():
-        cls, val = line.split(":")
-        precision_per_class[cls.strip()] = float(val.strip())
-    results["precision_per_class"] = precision_per_class
-
-    m = re.search(r"Recall per class:\n(.*?)Confusion matrix:", text, re.S)
-    if m is None:
-        raise ValueError(f"Could not find 'Recall per class' block in file: {filename}")
-    recall_block = m.group(1)
-
-    recall_per_class = {}
-    for line in recall_block.strip().splitlines():
-        cls, val = line.split(":")
-        recall_per_class[cls.strip()] = float(val.strip())
-    results["recall_per_class"] = recall_per_class
-
-    return results
-
-
-def plot_prediction_results_mtc(pca_folder, pca_description, Y_name, splitname=""):
-    """
-    Plot multiclass logistic regression metrics (accuracy, recall, precision per class)
-    vs number of PCs, from saved txt result files.
-    """
-    results_folder = TEMPODATA_FOLDER / pca_folder
-    pattern = str(results_folder / f"{pca_description}_{splitname}_{Y_name}_*pc_mtc_predictionresults.txt")
-    files = glob.glob(pattern)
-
-    if len(files) == 0:
-        raise FileNotFoundError(f"No files found matching: {pattern}")
-
-    all_results = []
-    for filepath in files:
-        try:
-            all_results.append(parse_prediction_result_file_mtc(filepath))
-        except Exception as e:
-            print(f"Skipping {filepath}: {e}")
-
-    if len(all_results) == 0:
-        raise ValueError("No valid multiclass result files could be parsed.")
-
-    all_results.sort(key=lambda d: d["n_pc"])
-
-    n_pc = [d["n_pc"] for d in all_results]
-    accuracy = [d["accuracy"] for d in all_results]
-    explained_variance_kept = [d["explained_variance_kept"] for d in all_results]
-    classes = all_results[0]["classes"]
-
-    fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, figsize=(9, 14), sharex=True)
-
-    ax1.plot(n_pc, accuracy, marker="o", label="Accuracy")
-    ax1.plot(n_pc, explained_variance_kept, linestyle="--", color="gray", alpha=0.35, label="Cum. explained variance")
-    ax1.set_xscale("log")
-    ax1.set_xticks(n_pc)
-    ax1.set_xticklabels([str(x) for x in n_pc])
-    ax1.set_ylabel("Score")
-    ax1.set_title(f"{pca_description}_{Y_name} - Accuracy")
-    ax1.set_ylim(0, 1.05)
-    ax1.grid(True, alpha=0.3)
-    ax1.legend()
-
-    for cls in classes:
-        values = [d["recall_per_class"][cls] for d in all_results]
-        ax2.plot(n_pc, values, marker="o", label=f"Recall {cls}")
-    ax2.plot(n_pc, explained_variance_kept, linestyle="--", color="gray", alpha=0.35, label="Cum. explained variance")
-    ax2.set_xscale("log")
-    ax2.set_xticks(n_pc)
-    ax2.set_xticklabels([str(x) for x in n_pc])
-    ax2.set_ylabel("Score")
-    ax2.set_title(f"{pca_description}_{Y_name} - Recall per class")
-    ax2.set_ylim(0, 1.05)
-    ax2.grid(True, alpha=0.3)
-    ax2.legend()
-
-    for cls in classes:
-        values = [d["precision_per_class"][cls] for d in all_results]
-        ax3.plot(n_pc, values, marker="o", label=f"Precision {cls}")
-    ax3.plot(n_pc, explained_variance_kept, linestyle="--", color="gray", alpha=0.35, label="Cum. explained variance")
-    ax3.set_xscale("log")
-    ax3.set_xticks(n_pc)
-    ax3.set_xticklabels([str(x) for x in n_pc])
-    ax3.set_xlabel("Number of PCs")
-    ax3.set_ylabel("Score")
-    ax3.set_title(f"{pca_description}_{Y_name} - Precision per class")
-    ax3.set_ylim(0, 1.05)
-    ax3.grid(True, alpha=0.3)
-    ax3.legend()
-
-    plt.tight_layout()
-
-    outpath = RESULTS_FOLDER / f"{pca_description}_{splitname}_{Y_name}_mtc_predictionresults.png"
-    plt.savefig(outpath, dpi=200)
-    plt.close()
-
-    print(f"Saved plot to: {outpath}")
-
-
-def plot_confusion_matrix_mtc(pca_folder, pca_description, Y_name, n_pc, splitname=""):
-    """
-    Plot the normalized confusion matrix for a chosen number of PCs
-    from the saved multiclass prediction results.
-    """
-    results_folder = TEMPODATA_FOLDER / pca_folder
-    filepath = results_folder / f"{pca_description}_{splitname}_{Y_name}_{n_pc}pc_mtc_predictionresults.txt"
-
-    if not filepath.exists():
-        raise FileNotFoundError(f"File not found: {filepath}")
-
-    with open(filepath, "r") as f:
-        text = f.read()
-
-    match = re.search(r"Classes:\s*\[(.*?)\]", text)
-    if match is None:
-        raise ValueError("Could not find class list in file")
-    classes = [c.strip().strip("'") for c in match.group(1).split(",")]
-
-    match = re.search(r"Confusion matrix:\n([\s\S]*?\]\])", text)
-    if match is None:
-        raise ValueError("Could not find confusion matrix in file")
-
-    cm_str = match.group(1)
-    rows = []
-    for line in cm_str.strip().split("\n"):
-        line = line.replace("[", "").replace("]", "").strip()
-        if line:
-            rows.append([int(x) for x in line.split()])
-
-    cm = np.array(rows)
-    cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
+    cm = result["confusion_matrix"].astype(float)
+    cm_norm = cm / cm.sum(axis=1, keepdims=True)
+    classes = result["classes"]
+    n_dims = result["n_dims"]
 
     plt.figure(figsize=(6, 5))
-    sns.heatmap(
-        cm_norm,
-        annot=True,
-        fmt=".2f",
-        cmap="Blues",
-        xticklabels=classes,
-        yticklabels=classes,
-        vmin=0,
-        vmax=1
-    )
-
+    sns.heatmap(cm_norm, annot=True, fmt=".2f", cmap="Blues",
+                xticklabels=classes, yticklabels=classes, vmin=0, vmax=1)
     plt.xlabel("Predicted class")
     plt.ylabel("True class")
-    plt.title(f"{pca_description}_{Y_name} – Confusion matrix ({n_pc} PCs)")
+    plt.title(f"{run_label} — {y_name} — Confusion matrix ({n_dims} dims)")
     plt.tight_layout()
 
-    outpath = RESULTS_FOLDER / f"{pca_description}_{splitname}_{Y_name}_{n_pc}pc_confusionmatrix.png"
+    outpath = RESULTS_FOLDER / f"{run_label}_{y_name}_{n_dims}dims_confusion.png"
     plt.savefig(outpath, dpi=200)
     plt.close()
+    return outpath
 
-    print(f"Saved confusion matrix to: {outpath}")
 
-
-def parse_regression_result_file(filepath):
+def plot_predicted_vs_true(result: dict, y_name: str, run_label: str) -> Path:
     """
-    Read one *pc_regressionresults.txt file and extract regression metrics.
+    Scatter plot of predicted vs true values for linear regression.
+
+    Parameters
+    ----------
+    result : dict
+        One dict from eval_linear.
+    y_name : str
+    run_label : str
+
+    Returns
+    -------
+    Path to saved figure.
     """
-    results = {}
-
-    filename = Path(filepath).name
-    match = re.search(r'_(\d+)pc_regressionresults\.txt$', filename)
-    if match is None:
-        raise ValueError(f"Could not extract number of PCs from filename: {filename}")
-    results["n_pc"] = int(match.group(1))
-
-    with open(filepath, "r") as f:
-        text = f.read()
-
-    patterns = {
-        "explained_variance_kept": r"Explained variance kept:\s*([0-9eE+.\-]+)",
-        "r2": r"R2:\s*([0-9eE+.\-]+)",
-        "rmse": r"RMSE:\s*([0-9eE+.\-]+)",
-        "mae": r"MAE:\s*([0-9eE+.\-]+)",
-    }
-
-    for key, pattern in patterns.items():
-        m = re.search(pattern, text)
-        if m is None:
-            raise ValueError(f"Could not find '{key}' in file: {filename}")
-        results[key] = float(m.group(1))
-
-    return results
-
-
-def plot_regression_results(pca_folder, pca_description, Y_name):
-    """
-    Plot regression metrics (R2, RMSE, MAE) vs number of PCs,
-    from saved txt result files.
-    """
-    results_folder = TEMPODATA_FOLDER / pca_folder
-    pattern = str(results_folder / f"{pca_description}_{Y_name}_*pc_regressionresults.txt")
-    files = glob.glob(pattern)
-
-    if len(files) == 0:
-        raise FileNotFoundError(f"No files found matching: {pattern}")
-
-    all_results = []
-    for filepath in files:
-        try:
-            all_results.append(parse_regression_result_file(filepath))
-        except Exception as e:
-            print(f"Skipping {filepath}: {e}")
-
-    if len(all_results) == 0:
-        raise ValueError("No valid regression result files could be parsed.")
-
-    all_results.sort(key=lambda d: d["n_pc"])
-
-    n_pc = [d["n_pc"] for d in all_results]
-    r2 = [d["r2"] for d in all_results]
-    rmse = [d["rmse"] for d in all_results]
-    mae = [d["mae"] for d in all_results]
-    explained_variance_kept = [d["explained_variance_kept"] for d in all_results]
-
-    fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(8, 10), sharex=True)
-
-    ax1.plot(n_pc, r2, marker="o", label="R²")
-    ax1.plot(n_pc, explained_variance_kept, marker="o", linestyle="--", color="gray", alpha=0.35, label="Cum. explained variance")
-    ax1.set_xscale("log")
-    ax1.set_xticks(n_pc)
-    ax1.set_xticklabels([str(x) for x in n_pc])
-    ax1.set_ylabel("Score")
-    ax1.set_title(f"{pca_description}_{Y_name} - R²")
-    ax1.grid(True, alpha=0.3)
-    ax1.legend()
-
-    ax2.plot(n_pc, rmse, marker="o", label="RMSE")
-    ax2.plot(n_pc, mae, marker="o", label="MAE")
-    ax2.plot(n_pc, explained_variance_kept, marker="o", linestyle="--", color="gray", alpha=0.35, label="Cum. explained variance")
-    ax2.set_xscale("log")
-    ax2.set_xticks(n_pc)
-    ax2.set_xticklabels([str(x) for x in n_pc])
-    ax2.set_xlabel("Number of PCs")
-    ax2.set_ylabel(Y_name)
-    ax2.set_title(f"{pca_description}_{Y_name} - Prediction errors")
-    ax2.grid(True, alpha=0.3)
-    ax2.legend()
-
-    plt.tight_layout()
-
-    outpath = RESULTS_FOLDER / f"{pca_description}_{Y_name}_regressionresults.png"
-    plt.savefig(outpath, dpi=200)
-    plt.close()
-
-    print(f"Saved regression plots to: {outpath}")
-
-
-def plot_regression_predicted_vs_true(reg, X_test_pca, Y_test, pca_description, Y_name, n_pc_tokeep):
-    """
-    Plot predicted vs true values for a chosen regression model.
-    """
-    Y_pred = reg.predict(X_test_pca)
+    Y_test = result["Y_test"]
+    Y_pred = result["Y_pred"]
+    n_dims = result["n_dims"]
 
     y_min = min(np.min(Y_test), np.min(Y_pred))
     y_max = max(np.max(Y_test), np.max(Y_pred))
@@ -8312,113 +9014,55 @@ def plot_regression_predicted_vs_true(reg, X_test_pca, Y_test, pca_description, 
     plt.figure(figsize=(6, 6))
     plt.scatter(Y_test, Y_pred, alpha=0.8)
     plt.plot([y_min, y_max], [y_min, y_max], linestyle="--", color="gray", alpha=0.7)
-
-    plt.xlabel(f"True {Y_name}")
-    plt.ylabel(f"Predicted {Y_name}")
-    plt.title(f"{pca_description}_{Y_name} - Predicted vs True ({n_pc_tokeep} PCs)")
+    plt.xlabel(f"True {y_name}")
+    plt.ylabel(f"Predicted {y_name}")
+    plt.title(f"{run_label} — {y_name} — Predicted vs True ({n_dims} dims)")
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
 
-    outpath = RESULTS_FOLDER / f"{pca_description}_{Y_name}_{n_pc_tokeep}pc_predicted_vs_true.png"
+    outpath = RESULTS_FOLDER / f"{run_label}_{y_name}_{n_dims}dims_pred_vs_true.png"
     plt.savefig(outpath, dpi=200)
     plt.close()
+    return outpath
 
-    print(f"Saved predicted-vs-true plot to: {outpath}")
 
-
-def plot_average_confusion_matrix_mtc_simple(filepaths, outpath, title="Average confusion matrix"):
+def plot_average_confusion_matrix(cms: list[np.ndarray], classes: list[str],
+                                  title: str, outpath: Path) -> Path:
     """
-    Load several multiclass result txt files, average their row-normalized
-    confusion matrices, and plot the result.
+    Average several row-normalized confusion matrices and plot the result.
 
     Parameters
     ----------
-    filepaths : list of str
-        List of txt result files containing a confusion matrix.
-    outpath : str or Path
-        Path to save the output figure.
+    cms : list of np.ndarray
+        Raw (unnormalized) confusion matrices, all with same shape.
+    classes : list of str
     title : str
-        Plot title.
+    outpath : Path
+
+    Returns
+    -------
+    outpath
     """
-    cms = []
-    classes_ref = None
-
-    for filepath in filepaths:
-        with open(filepath, "r") as f:
-            text = f.read()
-
-        match = re.search(r"Classes:\s*\[(.*?)\]", text)
-        if match is None:
-            raise ValueError(f"Could not find class list in file: {filepath}")
-        classes = [c.strip().strip("'").strip('"') for c in match.group(1).split(",")]
-
-        match = re.search(r"Confusion matrix:\n([\s\S]*?\]\])", text)
-        if match is None:
-            raise ValueError(f"Could not find confusion matrix in file: {filepath}")
-
-        cm_str = match.group(1)
-        rows = []
-        for line in cm_str.strip().split("\n"):
-            line = line.replace("[", "").replace("]", "").strip()
-            if line:
-                rows.append([int(x) for x in line.split()])
-
-        cm = np.array(rows, dtype=float)
-        cm = cm / cm.sum(axis=1, keepdims=True)
-
-        if classes_ref is None:
-            classes_ref = classes
-        elif classes != classes_ref:
-            raise ValueError(
-                f"Class order mismatch in file {filepath}\n"
-                f"Expected: {classes_ref}\n"
-                f"Found: {classes}"
-            )
-
-        cms.append(cm)
-
-    cm_avg = np.mean(cms, axis=0)
+    cms_norm = [cm.astype(float) / cm.sum(axis=1, keepdims=True) for cm in cms]
+    cm_avg = np.mean(cms_norm, axis=0)
 
     plt.figure(figsize=(6, 5))
-    sns.heatmap(
-        cm_avg,
-        annot=True,
-        fmt=".2f",
-        cmap="Blues",
-        xticklabels=classes_ref,
-        yticklabels=classes_ref,
-        vmin=0,
-        vmax=1
-    )
-
+    sns.heatmap(cm_avg, annot=True, fmt=".2f", cmap="Blues",
+                xticklabels=classes, yticklabels=classes, vmin=0, vmax=1)
     plt.xlabel("Predicted class")
     plt.ylabel("True class")
     plt.title(title)
     plt.tight_layout()
     plt.savefig(outpath, dpi=200)
     plt.close()
+    return outpath
 
-    print(f"Saved average confusion matrix to: {outpath}")
 
+# ── Internal helper ───────────────────────────────────────────────────────────
 
-def get_mtc_result_files(results_folder):
-    """
-    Return all multiclass prediction result files in a folder.
-
-    Parameters
-    ----------
-    results_folder : str or Path
-        Folder containing the txt result files.
-
-    Returns
-    -------
-    list of str
-        Sorted list of filepaths.
-    """
-    pattern = str(Path(results_folder) / "*mtc_predictionresults*.txt")
-    files = glob.glob(pattern)
-
-    if len(files) == 0:
-        raise FileNotFoundError(f"No mtc_predictionresults files found in: {results_folder}")
-
-    return sorted(files)
+def _set_xscale_log(ax, n_dims: list) -> None:
+    """Apply log x-scale with explicit tick labels when there are enough points."""
+    if len(n_dims) > 3:
+        ax.set_xscale("log")
+        ax.set_xticks(n_dims)
+        ax.set_xticklabels([str(x) for x in n_dims])

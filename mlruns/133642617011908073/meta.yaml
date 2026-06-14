@@ -1,0 +1,8 @@
+artifact_location: /home/renku/work/SDSC-arthur-project-1/mlruns/133642617011908073
+creation_time: 1781247891578
+experiment_id: '133642617011908073'
+last_update_time: 1781247891578
+lifecycle_stage: active
+name: pca_spatial
+trace_location: null
+workspace: default

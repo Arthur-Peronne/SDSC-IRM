@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "baseline"
+experiment_tag: "pca_split2_strat"
 
 # ── Target variable ───────────────────────────────────────────────────────────
 y_name: "group"                  # "group", "height", "weight"
@@ -13,46 +13,49 @@ group_bin_value: "NOR"           # used only if group_binary = true; "DCM", "HCM
 
 # ── Data split ────────────────────────────────────────────────────────────────
 n_train: 100                     # number of training patients (n_test = 150 - n_train)
-special_split: null              # null = sequential "splitdefault"; "split42" = seeded random
+special_split: "split2"              # null = sequential "splitdefault"; "split42" = seeded random
 
 # ── Source (pca or ae) ────────────────────────────────────────────────────────
 source_type: "pca"               # "pca" or "ae"
 
 # ── PCA source (used only if source_type = "pca") ─────────────────────────────
-pca_run_id: null                 # MLflow run_id of the pca_spatial run to load
-cumvar_threshold_list:           # sweep: one regression per threshold → n_pc determined at runtime
-  - 2.0                          # 2.0 = all components
-  - 0.99
-  - 0.98
-  - 0.965
-  - 0.95
-  - 0.92
-  - 0.9
-  - 0.87
-  - 0.85
-  - 0.82
-  - 0.78
-  - 0.74
-  - 0.7
-  - 0.68
-  - 0.65
-  - 0.5
-  - 0.4
+pca_run_id: "c2d0133a17824f61ad2d688f88b24885" # MLflow run_id "" of the pca_spatial run to load
+latent_dims_list:                # one regression per n_pc
+  - 1
+  - 2
+  - 4
+  - 6
+  - 8
+  - 12
+  - 16
+  - 20
+  - 28
+  - 40
+  - 60 
+  - 80
+  - 100
+  - 120
+  - 160
+  - 200
 
 # ── AE source (used only if source_type = "ae") ───────────────────────────────
 # search_runs() selects all AE runs matching these criteria, grouped by latent_dimensions
 ae_source:
   model_name: "AE3dFCDeep"       # model architecture name logged in MLflow
-  experiment_tag: "baseline"     # experiment_tag param logged in MLflow
+  experiment_tag: "optuna"     # experiment_tag param logged in MLflow
   split_name: "splitdefault"     # split_name param logged in MLflow
   params_filter: {}              # optional extra MLflow param filters (e.g. frame_tag: "ED")
 
 # ── LOAD / plot-only mode ──────────────────────────────────────────────────────
-plot_only: false                 # true = skip regression, reload metrics from load_run_id and replot
-load_run_id: null                # MLflow run_id of a previous regression run (used if plot_only = true)
+plot_only: true                 # true = skip regression, reload metrics from load_run_id and replot
+load_run_id: "65c6312b3ff14a9f87952109452fd7d0" # MLflow run_id of a previous regression run (used if plot_only = true)
 
 # ── Regression hyperparameters ────────────────────────────────────────────────
 logistic_C: null                 # null = auto: 1.0 if ED only, 0.5 if ED+ES (corrects for correlated pairs)
 
 # ── Plots ──────────────────────────────────────────────────────────────────────
-n_pc_confusion: 12               # n_pc (or latent_dim) for which to plot the confusion matrix
+n_pc_confusion: 16               # n_pc (or latent_dim) for which to plot the confusion matrix
+
+# ── Compare mode (averaged confusion matrix across splits) ────────────────────
+compare_mode: false
+load_run_ids: ["a727f062adc149e4a65f7299db8528dd","f6673a190ff44f37b0e240ef93f1b38d","65c6312b3ff14a9f87952109452fd7d0"]                 # list of regression run_ids to average (must have y_name="group", non-binary)

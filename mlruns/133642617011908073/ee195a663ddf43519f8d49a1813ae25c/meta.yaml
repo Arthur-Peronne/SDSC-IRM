@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-arthur-project-1/mlruns/133642617011908073/ee195a663ddf43519f8d49a1813ae25c/artifacts
+end_time: 1781250692047
+entry_point_name: ''
+experiment_id: '133642617011908073'
+lifecycle_stage: active
+run_id: ee195a663ddf43519f8d49a1813ae25c
+run_name: PCA_200patients_splitdefault_ED+ES_baseline
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1781248132414
+status: 3
+tags: []
+user_id: renku

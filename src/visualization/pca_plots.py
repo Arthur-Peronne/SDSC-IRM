@@ -72,7 +72,7 @@ def plot_pcvalues_2d(X_reduced, pc_n1, pc_n2, patient_str, details_str,
 # ── PC values colored by patient metadata ─────────────────────────────────────
 
 def plot_pcvalues_2d_meta(X_reduced, pc_n1, pc_n2, metainfo_str, metainfo_list,
-                          axisscale_fixed=True, extremes_toremove=15):
+                          axisscale_fixed=True, extremes_toremove=15) -> Path:
     fig, ax1 = plt.subplots(1, 1)
     botlimit = sorted(metainfo_list)[extremes_toremove]
     toplimit = sorted(metainfo_list)[-extremes_toremove]
@@ -93,12 +93,14 @@ def plot_pcvalues_2d_meta(X_reduced, pc_n1, pc_n2, metainfo_str, metainfo_list,
     max_y = max(abs(X_reduced[:, axis2].min()), abs(X_reduced[:, axis2].max()))
     ax1.set_xticks(np.linspace(-max_x, max_x, 7))
     ax1.set_yticks(np.linspace(-max_y, max_y, 7))
-    plt.savefig(RESULTS_FOLDER / f"pc_allpatientsepoch0_{metainfo_str}_{pc_n1+1}and{pc_n2+1}.png")
+    outpath = RESULTS_FOLDER / f"pc_allpatientsepoch0_{metainfo_str}_{pc_n1+1}and{pc_n2+1}.png"
+    plt.savefig(outpath)
     plt.close()
+    return outpath
 
 
 def plot_pcvalues_2d_metacat(X_reduced, pc_n1, pc_n2, metainfo_str, metainfo_list,
-                             axisscale_fixed=True):
+                             axisscale_fixed=True) -> Path:
     fig, ax1 = plt.subplots(1, 1)
     groups_unique = sorted(set(metainfo_list))
     cmap = plt.get_cmap("tab10")
@@ -118,8 +120,10 @@ def plot_pcvalues_2d_metacat(X_reduced, pc_n1, pc_n2, metainfo_str, metainfo_lis
     max_y = max(abs(X_reduced[:, axis2].min()), abs(X_reduced[:, axis2].max()))
     ax1.set_xticks(np.linspace(-max_x, max_x, 7))
     ax1.set_yticks(np.linspace(-max_y, max_y, 7))
-    plt.savefig(RESULTS_FOLDER / f"pc_allpatientsepoch0_{metainfo_str}_{pc_n1+1}and{pc_n2+1}.png")
+    outpath = RESULTS_FOLDER / f"pc_allpatientsepoch0_{metainfo_str}_{pc_n1+1}and{pc_n2+1}.png"
+    plt.savefig(outpath)
     plt.close()
+    return outpath
 
 
 # ── Reconstruction comparison (selected patients) ─────────────────────────────

@@ -23,6 +23,7 @@ n_train: 100
 n_val: 20                        # must be > 0 (Optuna requires a validation set)
 n_test: 30
 special_split: null              # null = sequential "splitdefault"; e.g. "split42" for seeded
+stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
 
 # ── Fixed hyperparameters ─────────────────────────────────────────────────────
 model_name: "AE3dFCDeep_VAE"
