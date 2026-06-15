@@ -291,6 +291,7 @@ def main():
         n_val=n_val,
         n_test=cfg["n_test"],
         special_split=cfg.get("special_split"),
+        stratify_ongroup=cfg.get("stratify_ongroup", False),
         use_both_frames=cfg["use_both_frames"],
         frame_type=cfg["frame_type"],
         image_roi_only=cfg["image_roi_only"],
@@ -328,6 +329,7 @@ def main():
                 "n_test":            cfg["n_test"],
                 "split_name":        split_name,
                 "frame_tag":         frame_tag,
+                "stratify_ongroup":  cfg.get("stratify_ongroup", False),
                 "image_roi_only":    cfg["image_roi_only"],
                 "mask_ys":           cfg["mask_ys"],
                 "mask_bin":          cfg["mask_bin"],
@@ -452,6 +454,7 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
                 "n_val":            n_val,
                 "n_test":           cfg["n_test"],
                 "split_name":       split_name,
+                "stratify_ongroup": cfg.get("stratify_ongroup", False),
                 "frame_tag":        frame_tag,
                 "image_roi_only":   cfg["image_roi_only"],
                 "mask_ys":          cfg["mask_ys"],
@@ -656,6 +659,7 @@ def main():
         n_val=n_val,
         n_test=cfg["n_test"],
         special_split=cfg.get("special_split"),
+        stratify_ongroup=cfg.get("stratify_ongroup", False),
         use_both_frames=use_both_frames,
         frame_type=cfg["frame_type"],
         image_roi_only=cfg["image_roi_only"],
@@ -1013,6 +1017,7 @@ def main():
     n_val_images    = n_val   * 2 if use_both_frames else n_val
     recalculate     = cfg["recalculate_pca"]
     load_run_id     = cfg.get("load_run_id") if not recalculate else None
+    pc_max          = cfg["pc_max"]
 
     if not recalculate and not load_run_id:
         raise ValueError("recalculate_pca: false requires load_run_id in YAML")
@@ -1027,6 +1032,7 @@ def main():
         n_val=n_val,
         n_test=n_test,
         special_split=special_split,
+        stratify_ongroup=cfg.get("stratify_ongroup", False),
         use_both_frames=use_both_frames,
         frame_type=frame_type,
         image_roi_only=cfg["image_roi_only"],
@@ -1050,6 +1056,7 @@ def main():
                 "n_val":          n_val,
                 "n_test":         n_test,
                 "split_name":     split_name,
+                "stratify_ongroup": cfg.get("stratify_ongroup", False),
                 "frame_tag":      frame_tag,
                 "image_roi_only": cfg["image_roi_only"],
                 "mask_ys":        cfg["mask_ys"],
@@ -1171,7 +1178,6 @@ def main():
 
         # ── Plot : PC values in eigenbase ─────────────────────────────────────
         if cfg["plot_pc_values"]:
-            pc_max = cfg["pc_max"]
             if pc_max % 2 != 0:
                 raise ValueError(f"pc_max must be even, got {pc_max}")
             for i in range(0, min(pc_max, pca.n_components_ - 1), 2):
@@ -1186,8 +1192,10 @@ def main():
 
         # ── Plot : PC values colored by metadata ──────────────────────────────
         if cfg["plot_metadata"]:
-            for n1, n2 in [(cfg["pc_n1"], cfg["pc_n2"]), (2, 3), (4, 5), (6, 7), (8, 9)]:
-                pcs.plot_pca_patientmeta(X_train_pca, n1, n2)
+            for i in range(0, min(pc_max, pca.n_components_ - 1), 2):
+                paths = pcs.plot_pca_patientmeta(X_train_pca, i, i + 1, n_train)
+                for p in paths:
+                    tracking.log_artifact(p)
 
         # ── Plot : eigenvectors ───────────────────────────────────────────────
         if cfg["plot_eigenvectors"]:
@@ -1674,12 +1682,15 @@ def _derive_split_name(special_split):
 
 
 def _verify_split(run_id, expected: dict, client):
-    """Raise if any expected param differs from what is stored in the MLflow run."""
+    """Raise if any expected param differs from what is stored in the MLflow run.
+    Params absent from the stored run (e.g. older runs predating this param)
+    are skipped rather than treated as a mismatch.
+    """
     saved = client.get_run(run_id).data.params
     mismatches = [
         f"  {k}: stored={saved.get(k)!r}, expected={v!r}"
         for k, v in expected.items()
-        if saved.get(k) != str(v)
+        if k in saved and saved.get(k) != str(v)
     ]
     if mismatches:
         raise ValueError(
@@ -1687,11 +1698,13 @@ def _verify_split(run_id, expected: dict, client):
         )
 
 
-def _apply_split_to_Y(Y_full, n_train, n_test, special_split):
+def _apply_split_to_Y(Y_full, n_train, n_test, special_split, stratify_ongroup=False):
     """Return Y_train, Y_test using the same split logic as get_split_indices."""
+    strat = load_patient_metadata("group", N_PATIENTS) if stratify_ongroup else None
     train_idx, _, test_idx, _ = splt.get_split_indices(
         n_train=n_train, n_val=0, n_test=n_test,
         special_split=special_split,
+        stratify=strat,
         n_patients=N_PATIENTS,
     )
     return Y_full[train_idx], Y_full[test_idx]
@@ -1785,6 +1798,7 @@ def _run_pca_source(cfg, Y_full, client):
     frame_tag       = pca_params.get("frame_tag", "ED")
     use_both_frames = frame_tag == "ED+ES"
     frame_type      = "ED" if use_both_frames else frame_tag
+    stratify_ongroup = pca_params.get("stratify_ongroup", "False") == "True"
 
     # ── Load X ───────────────────────────────────────────────────────────────
     print("Loading image data...")
@@ -1793,6 +1807,7 @@ def _run_pca_source(cfg, Y_full, client):
         cache_folder=pca_params.get("cache_folder", "X_vectors"),
         n_train=n_train, n_val=0, n_test=n_test,
         special_split=special_split,
+        stratify_ongroup=stratify_ongroup,
         use_both_frames=use_both_frames,
         frame_type=frame_type,
         image_roi_only=pca_params.get("image_roi_only", "True") == "True",
@@ -1817,7 +1832,7 @@ def _run_pca_source(cfg, Y_full, client):
     X_test_pca  = pca.transform(X_test  - row_means_test)
 
     # ── Y (duplicate if both frames) ─────────────────────────────────────────
-    Y_train, Y_test = _apply_split_to_Y(Y_full, n_train, n_test, special_split)
+    Y_train, Y_test = _apply_split_to_Y(Y_full, n_train, n_test, special_split, stratify_ongroup)
     if use_both_frames:
         Y_train = np.concatenate([Y_train, Y_train])
         Y_test  = np.concatenate([Y_test,  Y_test])
@@ -1829,18 +1844,18 @@ def _run_pca_source(cfg, Y_full, client):
     logistic_C = cfg.get("logistic_C") or (0.5 if use_both_frames else 1.0)
 
     # ── Sweep over cumvar thresholds (deduplicate n_pc) ──────────────────────
-    thresholds     = cfg["cumvar_threshold_list"]
+    latent_dims_list = sorted(set(cfg["latent_dims_list"]))
     n_pc_confusion = cfg.get("n_pc_confusion", 12)
     run_label      = cfg.get("experiment_tag", "baseline")
 
-    # Map each threshold to its n_pc; skip duplicates (keep first occurrence)
-    seen_n_pc: set[int] = set()
-    threshold_n_pc_pairs: list[tuple[float, int]] = []
-    for threshold in thresholds:
-        n_pc = reg.n_pc_for_variance(pca, threshold)
-        if n_pc not in seen_n_pc:
-            seen_n_pc.add(n_pc)
-            threshold_n_pc_pairs.append((threshold, n_pc))
+    # # Map each threshold to its n_pc; skip duplicates (keep first occurrence)
+    # seen_n_pc: set[int] = set()
+    # threshold_n_pc_pairs: list[tuple[float, int]] = []
+    # for threshold in thresholds:
+    #     n_pc = reg.n_pc_for_variance(pca, threshold)
+    #     if n_pc not in seen_n_pc:
+    #         seen_n_pc.add(n_pc)
+    #         threshold_n_pc_pairs.append((threshold, n_pc))
 
     results_test_all  = []
     results_train_all = []
@@ -1849,7 +1864,11 @@ def _run_pca_source(cfg, Y_full, client):
         tracking.log_params(_build_params(cfg, split_name))
         tracking.log_artifact(CONFIG_PATH)
 
-        for threshold, n_pc in threshold_n_pc_pairs:
+        for n_pc in latent_dims_list:
+            if n_pc > pca.n_components_:
+                print(f"WARNING: n_pc={n_pc} > pca.n_components_={pca.n_components_}, skipping")
+                continue
+
             cumvar = float(np.sum(pca.explained_variance_ratio_[:n_pc]))
 
             Xtr = X_train_pca[:, :n_pc]
@@ -1918,11 +1937,12 @@ def _run_ae_source(cfg, Y_full, client):
     frame_type     = "ED" if use_both else frame_tag
     image_roi_only = ref_params.get("params.image_roi_only", "True") == "True"
     source_folder  = ref_params.get("params.source_folder", "registered_frames")
+    stratify_ongroup = ref_params.get("params.stratify_ongroup", "False") == "True"
 
     # Verify all AE runs share the same split
     for latdim in sorted_latdims:
         ae_run_id = runs_by_latdim[latdim][0]["run_id"]
-        _verify_split(ae_run_id, {"split_name": split_name, "n_train": n_train}, client)
+        _verify_split(ae_run_id, {"split_name": split_name, "n_train": n_train, "stratify_ongroup": stratify_ongroup}, client)
     print(f"Split verified against all {len(sorted_latdims)} AE runs ✓")
 
     # ── Load tensor datasets (same split as AE training) ─────────────────────
@@ -1932,6 +1952,7 @@ def _run_ae_source(cfg, Y_full, client):
         cache_folder="X_vectors",
         n_train=n_train, n_val=0, n_test=n_test,
         special_split=special_split,
+        stratify_ongroup=stratify_ongroup,
         use_both_frames=use_both,
         frame_type=frame_type,
         image_roi_only=image_roi_only,
@@ -1940,7 +1961,7 @@ def _run_ae_source(cfg, Y_full, client):
     print(f"Split: {split_name} | train={len(train_ds)} | test={len(test_ds)}")
 
     # ── Y (duplicate if both frames) ─────────────────────────────────────────
-    Y_train_base, Y_test_base = _apply_split_to_Y(Y_full, n_train, n_test, special_split)
+    Y_train_base, Y_test_base = _apply_split_to_Y(Y_full, n_train, n_test, special_split, stratify_ongroup)
     if use_both:
         Y_train_base = np.concatenate([Y_train_base, Y_train_base])
         Y_test_base  = np.concatenate([Y_test_base,  Y_test_base])
@@ -1977,7 +1998,7 @@ def _run_ae_source(cfg, Y_full, client):
 
             _, _, r_train, r_test = _run_one_step(
                 Z_train, Z_test, Y_train_base, Y_test_base,
-                latdim, 1.0, is_logistic, binary, logistic_C,
+                latdim, None, is_logistic, binary, logistic_C,
             )
             _log_step_metrics(r_train, r_test, step=latdim, is_logistic=is_logistic, binary=binary)
             _save_result_json(r_train, r_test, latdim, label="latdim")
@@ -2008,13 +2029,13 @@ def _result_to_serializable(r: dict) -> dict:
 
 def _save_result_json(r_train: dict, r_test: dict, n_dims: int, label: str):
     """Save train+test result dicts as a JSON artifact in the active MLflow run."""
-    stage = RESULTS_FOLDER / "tmp_artifacts"
-    stage.mkdir(parents=True, exist_ok=True)
-    path = stage / f"results_{n_dims}{label}.json"
-    with open(path, "w") as f:
-        json.dump({"train": _result_to_serializable(r_train),
-                   "test":  _result_to_serializable(r_test)}, f)
-    tracking.log_artifact(path)
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / f"results_{n_dims}{label}.json"
+        with open(path, "w") as f:
+            json.dump({"train": _result_to_serializable(r_train),
+                       "test":  _result_to_serializable(r_test)}, f)
+        tracking.log_artifact(path)
 
 
 def _load_result_json(run_id: str, n_dims: int, label: str, client) -> tuple[dict, dict]:
@@ -2120,8 +2141,8 @@ def _plot_only(cfg, client):
     binary       = run_params["group_binary"] == "True"
     is_logistic  = y_name == "group"
     run_label    = run_params.get("experiment_tag", "baseline")
-    n_pc_confusion = int(run_params.get("n_pc_confusion", 12))
-
+    n_pc_confusion = cfg.get("n_pc_confusion") or int(run_params.get("n_pc_confusion", 12))
+    
     label = "pc" if source_type == "pca" else "latdim"
     dims  = _list_result_dims(load_run_id, label, client)
     if not dims:
@@ -2143,6 +2164,82 @@ def _plot_only(cfg, client):
         _save_plots(results_train_all, results_test_all,
                     n_pc_confusion, y_name, run_label, is_logistic, binary)
 
+def _nearest_n_pc(available: list[int], target: int) -> int:
+    """Return the value in `available` closest to `target` on a log scale."""
+    return min(available, key=lambda n: abs(np.log(n) - np.log(target)))
+
+
+def _check_consistent_runs(runs_params: list[dict]):
+    """Warn (non-blocking) if loaded regression runs differ on params other than split."""
+    keys = ["n_train", "source_type"]
+    if runs_params[0].get("source_type") == "ae":
+        keys += ["ae_model_name", "ae_experiment_tag"]
+
+    for k in keys:
+        values = {p.get(k) for p in runs_params}
+        if len(values) > 1:
+            print(f"WARNING: param '{k}' differs across selected runs: {values}")
+
+def _plot_compare(cfg, client):
+    """Average confusion matrices from several regression runs (different splits)."""
+    run_ids     = cfg["load_run_ids"]
+    n_pc_target = cfg["n_pc_confusion"]
+
+    runs_params  = []
+    cms          = []
+    classes      = None
+    used_run_ids = []
+    label        = None
+
+    for run_id in run_ids:
+        run_params  = client.get_run(run_id).data.params
+        source_type = run_params.get("source_type")
+        run_label   = "pc" if source_type == "pca" else "latdim"
+
+        available = _list_result_dims(run_id, run_label, client)
+        if not available:
+            print(f"WARNING: run {run_id} has no saved results — skipped")
+            continue
+
+        chosen = n_pc_target if n_pc_target in available else _nearest_n_pc(available, n_pc_target)
+        if chosen != n_pc_target:
+            print(f"WARNING: run {run_id} has no n_pc={n_pc_target}, "
+                  f"using closest available: n_pc={chosen}")
+
+        _, r_test = _load_result_json(run_id, chosen, run_label, client)
+        if "confusion_matrix" not in r_test:
+            print(f"WARNING: run {run_id} (n_pc={chosen}) has no confusion matrix — skipped "
+                  f"(y_name must be 'group', non-binary)")
+            continue
+
+        if classes is None:
+            classes = r_test["classes"]
+            label   = run_label
+        elif classes != r_test["classes"]:
+            raise ValueError(f"Run {run_id} has classes {r_test['classes']} != {classes}")
+
+        cms.append(r_test["confusion_matrix"])
+        runs_params.append(run_params)
+        used_run_ids.append(run_id)
+
+    if not cms:
+        raise ValueError(f"No usable confusion matrices found for n_pc≈{n_pc_target} among {run_ids}")
+
+    _check_consistent_runs(runs_params)
+
+    y_name      = runs_params[0]["y_name"]
+    source_type = runs_params[0]["source_type"]
+    n_splits    = len(cms)
+    run_label_tag = cfg.get("experiment_tag", "compare")
+
+    print(f"compare_mode | {n_splits}/{len(run_ids)} runs used | "
+          f"source={source_type} | n_pc≈{n_pc_target} | y={y_name} | runs={used_run_ids}")
+
+    title   = f"Averaged confusion matrix — {y_name} — {source_type} — n_pc≈{n_pc_target} — {n_splits} splits"
+    outpath = RESULTS_FOLDER / f"confusionmatrix_average_{source_type}_{n_splits}splits_{n_pc_target}{label}_{run_label_tag}.png"
+
+    rgp.plot_average_confusion_matrix(cms, classes, title, outpath)
+    print(f"Saved: {outpath}")
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -2158,6 +2255,12 @@ def main():
     n_test  = N_PATIENTS - n_train
     special_split = cfg.get("special_split")
     split_name = _derive_split_name(special_split)
+
+    if cfg.get("compare_mode"):
+        if not cfg.get("load_run_ids"):
+            raise ValueError("compare_mode requires load_run_ids in regression.yaml")
+        _plot_compare(cfg, client)
+        return
 
     if cfg.get("plot_only"):
         if not cfg.get("load_run_id"):
@@ -3302,7 +3405,7 @@ from torch.utils.data import TensorDataset
 
 from src.data import splits as splt
 from src.models import pca_spatial as pcs
-
+from src.data.importdata import load_patient_metadata
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -3366,6 +3469,7 @@ def load_numpy_splits(
     n_val: int,
     n_test: int,
     special_split: str | None = None,
+    stratify_ongroup: bool = False,
     use_both_frames: bool = True,
     frame_type: str = "ED",
     image_roi_only: bool = True,
@@ -3393,6 +3497,9 @@ def load_numpy_splits(
     special_split : str or None
         None       → sequential split, logged as "splitdefault".
         "split42"  → seeded random split, logged under that name.
+    stratify_ongroup : bool
+        If True (and special_split is not None), stratify the split on the
+        ACDC group of each patient. Ignored for the sequential split.
     use_both_frames : bool
         True  → load ED and ES, concatenate within each split.
         False → load only frame_type.
@@ -3432,9 +3539,14 @@ def load_numpy_splits(
     elif frame_type != "ED":
         X_ED = _load_frame(frame_type=frame_type, **kwargs)
 
+    strat_array = (
+        load_patient_metadata("group", len(X_ED)) if stratify_ongroup else None
+    )
+
     train_idx, val_idx, test_idx, split_name = splt.get_split_indices(
         n_train=n_train, n_val=n_val, n_test=n_test,
         special_split=special_split,
+        stratify=strat_array,
         n_patients=len(X_ED),
     )
     X_train, X_val, X_test = _split_frames(X_ED, X_ES, train_idx, val_idx, test_idx)
@@ -3448,6 +3560,7 @@ def load_tensor_datasets(
     n_val: int,
     n_test: int,
     special_split: str | None = None,
+    stratify_ongroup: bool = False,
     use_both_frames: bool = True,
     frame_type: str = "ED",
     image_roi_only: bool = True,
@@ -3477,6 +3590,9 @@ def load_tensor_datasets(
     special_split : str or None
         None       → sequential split, logged as "splitdefault".
         "split42"  → seeded random split, logged under that name.
+    stratify_ongroup : bool
+        If True (and special_split is not None), stratify the split on the
+        ACDC group of each patient. Ignored for the sequential split.
     use_both_frames : bool
     frame_type : str
         "ED" or "ES" — used only if use_both_frames=False.
@@ -3513,9 +3629,14 @@ def load_tensor_datasets(
     elif frame_type != "ED":
         X_ED = _load_frame(frame_type=frame_type, **kwargs)
 
+    strat_array = (
+        load_patient_metadata("group", len(X_ED)) if stratify_ongroup else None
+    )
+
     train_idx, val_idx, test_idx, split_name = splt.get_split_indices(
         n_train=n_train, n_val=n_val, n_test=n_test,
         special_split=special_split,
+        stratify=strat_array,
         n_patients=len(X_ED),
     )
 
@@ -4896,6 +5017,7 @@ import nibabel as nib
 import joblib
 from joblib import Parallel, delayed
 from sklearn.decomposition import PCA
+from pathlib import Path
 
 from src.config import PROCESSED_IMAGES_FOLDER
 from src.visualization import mri_plots as mrp
@@ -5105,20 +5227,26 @@ def patient_metalists(all_files, returnonlyone=False, whichtoreturn="group"):
         return group_list, height_list, weight_list
 
 
-def plot_pca_patientmeta(X_pca, pc_n1, pc_n2):
+def plot_pca_patientmeta(X_pca, pc_n1, pc_n2, n_patients: int) -> list[Path]:
     all_files = ipd.import_patientmetapaths(printinfos=False)
     group_list, height_list, weight_list = patient_metalists(all_files)
-    
-    # Truncate metadata to match X_pca size
-    n = X_pca.shape[0]
-    group_list  = group_list[:n]
-    height_list = height_list[:n]
-    weight_list = weight_list[:n]
-    
-    pcp.plot_pcvalues_2d_meta(X_pca, pc_n1, pc_n2, "Height", height_list)
-    pcp.plot_pcvalues_2d_meta(X_pca, pc_n1, pc_n2, "Weight", weight_list)
-    pcp.plot_pcvalues_2d_metacat(X_pca, pc_n1, pc_n2, "Group", group_list)
 
+    # Keep only the patients in the split
+    group_list  = group_list[:n_patients]
+    height_list = height_list[:n_patients]
+    weight_list = weight_list[:n_patients]
+
+    # Duplicate if ED+ES (each patient appears twice)
+    if X_pca.shape[0] == 2 * n_patients:
+        group_list  = group_list  + group_list
+        height_list = height_list + height_list
+        weight_list = weight_list + weight_list
+
+    paths = []
+    paths.append(pcp.plot_pcvalues_2d_meta(X_pca, pc_n1, pc_n2, "Height", height_list))
+    paths.append(pcp.plot_pcvalues_2d_meta(X_pca, pc_n1, pc_n2, "Weight", weight_list))
+    paths.append(pcp.plot_pcvalues_2d_metacat(X_pca, pc_n1, pc_n2, "Group", group_list))
+    return paths
 
 
 def pca_compute_metrics(
@@ -5130,7 +5258,6 @@ def pca_compute_metrics(
     pca_name,
     metrics_dataset,
     original_shape,
-    savemetrics=False,
 ):
     """
     Compute reconstruction metrics for a list of latent dimensions.
@@ -5149,14 +5276,10 @@ def pca_compute_metrics(
         Patient number offset for this split (0 for train, n_train_images for val, etc.)
     pca_name : str
         e.g. "PCA_200patients_split0_ED+ES"
-    metrics_dataset : str
-        "train", "validation", or "test"
     original_shape : tuple
         3D shape of images, e.g. (128, 128, 32).
     pca_folder : str
         Subfolder in PROCESSED_IMAGES_FOLDER for saving results.
-    savemetrics : bool
-        If True, save individual patient metrics to disk.
     """
  
     all_metrics = []
@@ -5170,22 +5293,10 @@ def pca_compute_metrics(
             x_true=x_patient_3d,
             x_pred=x_recon_3d,
             patient_number=offset + 1 + i,
-            simulation_name=pca_name,
-            n_epochs=None,
-            metrics_dataset=metrics_dataset,
-            savemetrics=savemetrics,
         )
         all_metrics.append(metrics)
 
-    summary = aet.ae_aggregate_metrics(
-        all_metrics,
-        simulation_name=pca_name,
-        experiment_name=f"{latent_dimensions}dims",
-        n_epochs=None,
-        metrics_dataset=metrics_dataset,
-        ae=False,
-        save_summary=False,
-    )
+        summary = aet.ae_aggregate_metrics(all_metrics)
 
     print(
         f"[PCA {latent_dimensions}dims | {metrics_dataset}] "
@@ -5220,14 +5331,14 @@ from sklearn.metrics import (
 )
 
 
-def n_pc_for_variance(pca, threshold: float) -> int:
-    """
-    Return the number of PCs needed to reach a given cumulative explained
-    variance threshold.  threshold >= 1.0 (e.g. 2.0) returns all components.
-    """
-    cumulative = np.cumsum(pca.explained_variance_ratio_)
-    idx = np.where(cumulative >= threshold)[0]
-    return int(len(cumulative)) if len(idx) == 0 else int(idx[0] + 1)
+# def n_pc_for_variance(pca, threshold: float) -> int:
+#     """
+#     Return the number of PCs needed to reach a given cumulative explained
+#     variance threshold.  threshold >= 1.0 (e.g. 2.0) returns all components.
+#     """
+#     cumulative = np.cumsum(pca.explained_variance_ratio_)
+#     idx = np.where(cumulative >= threshold)[0]
+#     return int(len(cumulative)) if len(idx) == 0 else int(idx[0] + 1)
 
 
 def fit_scaler(X_train: np.ndarray) -> StandardScaler:
@@ -5267,7 +5378,7 @@ def fit_linear(X_train: np.ndarray, Y_train: np.ndarray) -> LinearRegression:
 
 
 def eval_logistic_binary(clf, X_test: np.ndarray, Y_test: np.ndarray,
-                         n_dims: int, explained_variance: float) -> dict:
+                         n_dims: int, explained_variance: float | None) -> dict:
     """
     Evaluate a binary logistic classifier and return metrics as a dict.
 
@@ -5278,8 +5389,8 @@ def eval_logistic_binary(clf, X_test: np.ndarray, Y_test: np.ndarray,
     Y_test : np.ndarray
     n_dims : int
         Number of latent dimensions used (for logging).
-    explained_variance : float
-        Cumulative explained variance kept (PCA); 1.0 for AE.
+    explained_variance : float | None
+        Cumulative explained variance kept (PCA); None for AE.
     """
     Y_pred = clf.predict(X_test)
     Y_prob = clf.predict_proba(X_test)[:, 1]
@@ -5297,7 +5408,7 @@ def eval_logistic_binary(clf, X_test: np.ndarray, Y_test: np.ndarray,
 
 
 def eval_logistic_multiclass(clf, X_test: np.ndarray, Y_test: np.ndarray,
-                              n_dims: int, explained_variance: float) -> dict:
+                              n_dims: int, explained_variance: float | None) -> dict:
     """
     Evaluate a multiclass logistic classifier and return metrics as a dict.
     """
@@ -5324,7 +5435,7 @@ def eval_logistic_multiclass(clf, X_test: np.ndarray, Y_test: np.ndarray,
 
 
 def eval_linear(reg, X_test: np.ndarray, Y_test: np.ndarray,
-                n_dims: int, explained_variance: float) -> dict:
+                n_dims: int, explained_variance: float | None) -> dict:
     """
     Evaluate a linear regression model and return metrics as a dict.
     """
@@ -5430,7 +5541,6 @@ def log_metrics(metrics: dict, step: int = None):
 
 def log_model_state_dict(model, filename: str = "model.pth"):
     """Save a PyTorch state dict as an MLflow artifact."""
-    _setup() 
     import torch
     import tempfile
     from pathlib import Path
@@ -5443,7 +5553,6 @@ def log_model_state_dict(model, filename: str = "model.pth"):
 
 def log_artifact(path):
     """Log a file (plot, summary, etc.) as an MLflow artifact."""
-    _setup() 
     mlflow.log_artifact(str(path))
 
 def log_sklearn_model(model, filename: str = "pca.joblib"):
@@ -8516,7 +8625,7 @@ def plot_pcvalues_2d(X_reduced, pc_n1, pc_n2, patient_str, details_str,
 # ── PC values colored by patient metadata ─────────────────────────────────────
 
 def plot_pcvalues_2d_meta(X_reduced, pc_n1, pc_n2, metainfo_str, metainfo_list,
-                          axisscale_fixed=True, extremes_toremove=15):
+                          axisscale_fixed=True, extremes_toremove=15) -> Path:
     fig, ax1 = plt.subplots(1, 1)
     botlimit = sorted(metainfo_list)[extremes_toremove]
     toplimit = sorted(metainfo_list)[-extremes_toremove]
@@ -8537,12 +8646,14 @@ def plot_pcvalues_2d_meta(X_reduced, pc_n1, pc_n2, metainfo_str, metainfo_list,
     max_y = max(abs(X_reduced[:, axis2].min()), abs(X_reduced[:, axis2].max()))
     ax1.set_xticks(np.linspace(-max_x, max_x, 7))
     ax1.set_yticks(np.linspace(-max_y, max_y, 7))
-    plt.savefig(RESULTS_FOLDER / f"pc_allpatientsepoch0_{metainfo_str}_{pc_n1+1}and{pc_n2+1}.png")
+    outpath = RESULTS_FOLDER / f"pc_allpatientsepoch0_{metainfo_str}_{pc_n1+1}and{pc_n2+1}.png"
+    plt.savefig(outpath)
     plt.close()
+    return outpath
 
 
 def plot_pcvalues_2d_metacat(X_reduced, pc_n1, pc_n2, metainfo_str, metainfo_list,
-                             axisscale_fixed=True):
+                             axisscale_fixed=True) -> Path:
     fig, ax1 = plt.subplots(1, 1)
     groups_unique = sorted(set(metainfo_list))
     cmap = plt.get_cmap("tab10")
@@ -8562,8 +8673,10 @@ def plot_pcvalues_2d_metacat(X_reduced, pc_n1, pc_n2, metainfo_str, metainfo_lis
     max_y = max(abs(X_reduced[:, axis2].min()), abs(X_reduced[:, axis2].max()))
     ax1.set_xticks(np.linspace(-max_x, max_x, 7))
     ax1.set_yticks(np.linspace(-max_y, max_y, 7))
-    plt.savefig(RESULTS_FOLDER / f"pc_allpatientsepoch0_{metainfo_str}_{pc_n1+1}and{pc_n2+1}.png")
+    outpath = RESULTS_FOLDER / f"pc_allpatientsepoch0_{metainfo_str}_{pc_n1+1}and{pc_n2+1}.png"
+    plt.savefig(outpath)
     plt.close()
+    return outpath
 
 
 # ── Reconstruction comparison (selected patients) ─────────────────────────────
@@ -8839,15 +8952,17 @@ def plot_logistic_metrics(results: list[dict], y_name: str, run_label: str,
     """
     n_dims = [r["n_dims"] for r in results]
     accuracy = [r["accuracy"] for r in results]
-    ev = [r["explained_variance"] for r in results]
+    show_ev = results[0]["explained_variance"] is not None
+    ev = [r["explained_variance"] for r in results] if show_ev else None
 
     if binary:
         fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(8, 10), sharex=True)
 
         ax1.plot(n_dims, [r["roc_auc"] for r in results], marker="o", label="ROC AUC")
         ax1.plot(n_dims, accuracy, marker="o", label="Accuracy")
-        ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-                 label="Cum. explained variance")
+        if show_ev:
+            ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                    label="Cum. explained variance")
         ax1.set_ylabel("Score")
         ax1.set_title(f"{run_label} — {y_name} (binary) — Overall")
         ax1.set_ylim(0, 1.05)
@@ -8856,8 +8971,9 @@ def plot_logistic_metrics(results: list[dict], y_name: str, run_label: str,
 
         ax2.plot(n_dims, [r["recall"] for r in results], marker="o", label="Recall")
         ax2.plot(n_dims, [r["precision"] for r in results], marker="o", label="Precision")
-        ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-                 label="Cum. explained variance")
+        if show_ev:
+            ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                    label="Cum. explained variance")
         ax2.set_xlabel("Latent dimensions")
         ax2.set_ylabel("Score")
         ax2.set_title(f"{run_label} — {y_name} (binary) — Positive class")
@@ -8870,8 +8986,9 @@ def plot_logistic_metrics(results: list[dict], y_name: str, run_label: str,
         fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, figsize=(9, 14), sharex=True)
 
         ax1.plot(n_dims, accuracy, marker="o", label="Accuracy")
-        ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-                 label="Cum. explained variance")
+        if show_ev:
+            ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                    label="Cum. explained variance")
         ax1.set_ylabel("Score")
         ax1.set_title(f"{run_label} — {y_name} — Accuracy")
         ax1.set_ylim(0, 1.05)
@@ -8881,8 +8998,9 @@ def plot_logistic_metrics(results: list[dict], y_name: str, run_label: str,
         for cls in classes:
             vals = [r["recall_per_class"].get(cls, 0.0) for r in results]
             ax2.plot(n_dims, vals, marker="o", label=f"Recall {cls}")
-        ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-                 label="Cum. explained variance")
+        if show_ev:
+            ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                    label="Cum. explained variance")
         ax2.set_ylabel("Score")
         ax2.set_title(f"{run_label} — {y_name} — Recall per class")
         ax2.set_ylim(0, 1.05)
@@ -8892,8 +9010,9 @@ def plot_logistic_metrics(results: list[dict], y_name: str, run_label: str,
         for cls in classes:
             vals = [r["precision_per_class"].get(cls, 0.0) for r in results]
             ax3.plot(n_dims, vals, marker="o", label=f"Precision {cls}")
-        ax3.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-                 label="Cum. explained variance")
+        if show_ev:
+            ax3.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                    label="Cum. explained variance")
         ax3.set_xlabel("Latent dimensions")
         ax3.set_ylabel("Score")
         ax3.set_title(f"{run_label} — {y_name} — Precision per class")
@@ -8925,13 +9044,15 @@ def plot_linear_metrics(results: list[dict], y_name: str, run_label: str) -> Pat
     Path to saved figure.
     """
     n_dims = [r["n_dims"] for r in results]
-    ev = [r["explained_variance"] for r in results]
+    show_ev = results[0]["explained_variance"] is not None
+    ev = [r["explained_variance"] for r in results] if show_ev else None
 
     fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(8, 10), sharex=True)
 
     ax1.plot(n_dims, [r["r2"] for r in results], marker="o", label="R²")
-    ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-             label="Cum. explained variance")
+    if show_ev:
+        ax1.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                label="Cum. explained variance")
     ax1.set_ylabel("Score")
     ax1.set_title(f"{run_label} — {y_name} — R²")
     ax1.grid(True, alpha=0.3)
@@ -8939,8 +9060,9 @@ def plot_linear_metrics(results: list[dict], y_name: str, run_label: str) -> Pat
 
     ax2.plot(n_dims, [r["rmse"] for r in results], marker="o", label="RMSE")
     ax2.plot(n_dims, [r["mae"] for r in results], marker="o", label="MAE")
-    ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
-             label="Cum. explained variance")
+    if show_ev:
+        ax2.plot(n_dims, ev, linestyle="--", color="gray", alpha=0.35,
+                label="Cum. explained variance")
     ax2.set_xlabel("Latent dimensions")
     ax2.set_ylabel(y_name)
     ax2.set_title(f"{run_label} — {y_name} — Prediction errors")
@@ -8955,29 +9077,28 @@ def plot_linear_metrics(results: list[dict], y_name: str, run_label: str) -> Pat
     return outpath
 
 
-def plot_confusion_matrix(result: dict, y_name: str, run_label: str) -> Path:
+def plot_confusion_matrix(result: dict, y_name: str, run_label: str, z: float = 1.96) -> Path:
     """
-    Plot a normalized confusion matrix from one result dict.
-
-    Parameters
-    ----------
-    result : dict
-        One dict from eval_logistic_binary or eval_logistic_multiclass.
-    y_name : str
-    run_label : str
-
-    Returns
-    -------
-    Path to saved figure.
+    Plot a normalized confusion matrix from one result dict, with per-cell
+    Wilson confidence intervals.
     """
     cm = result["confusion_matrix"].astype(float)
-    cm_norm = cm / cm.sum(axis=1, keepdims=True)
+    row_totals = cm.sum(axis=1, keepdims=True)
+    cm_norm = cm / row_totals
     classes = result["classes"]
     n_dims = result["n_dims"]
 
-    plt.figure(figsize=(6, 5))
-    sns.heatmap(cm_norm, annot=True, fmt=".2f", cmap="Blues",
-                xticklabels=classes, yticklabels=classes, vmin=0, vmax=1)
+    lo, hi = _wilson_interval(cm_norm, row_totals, z)
+
+    annot = np.empty(cm_norm.shape, dtype=object)
+    for i in range(cm_norm.shape[0]):
+        for j in range(cm_norm.shape[1]):
+            annot[i, j] = f"{cm_norm[i, j]:.2f}\n[{lo[i, j]:.2f},{hi[i, j]:.2f}]"
+
+    plt.figure(figsize=(6.5, 5.5))
+    sns.heatmap(cm_norm, annot=annot, fmt="", cmap="Blues",
+                xticklabels=classes, yticklabels=classes, vmin=0, vmax=1,
+                annot_kws={"fontsize": 9})
     plt.xlabel("Predicted class")
     plt.ylabel("True class")
     plt.title(f"{run_label} — {y_name} — Confusion matrix ({n_dims} dims)")
@@ -9025,30 +9146,32 @@ def plot_predicted_vs_true(result: dict, y_name: str, run_label: str) -> Path:
     plt.close()
     return outpath
 
-
 def plot_average_confusion_matrix(cms: list[np.ndarray], classes: list[str],
-                                  title: str, outpath: Path) -> Path:
+                                  title: str, outpath: Path, z: float = 1.96) -> Path:
     """
-    Average several row-normalized confusion matrices and plot the result.
-
-    Parameters
-    ----------
-    cms : list of np.ndarray
-        Raw (unnormalized) confusion matrices, all with same shape.
-    classes : list of str
-    title : str
-    outpath : Path
-
-    Returns
-    -------
-    outpath
+    Average several row-normalized confusion matrices and plot the result,
+    with per-cell Wilson confidence intervals computed on pooled counts.
     """
-    cms_norm = [cm.astype(float) / cm.sum(axis=1, keepdims=True) for cm in cms]
+    cms = [cm.astype(float) for cm in cms]
+    row_totals_list = [cm.sum(axis=1, keepdims=True) for cm in cms]
+    cms_norm = [cm / rt for cm, rt in zip(cms, row_totals_list)]
     cm_avg = np.mean(cms_norm, axis=0)
 
-    plt.figure(figsize=(6, 5))
-    sns.heatmap(cm_avg, annot=True, fmt=".2f", cmap="Blues",
-                xticklabels=classes, yticklabels=classes, vmin=0, vmax=1)
+    pooled_counts     = np.sum(cms, axis=0)
+    pooled_row_totals = np.sum(row_totals_list, axis=0)
+    p = pooled_counts / pooled_row_totals
+
+    lo, hi = _wilson_interval(p, pooled_row_totals, z)
+
+    annot = np.empty(cm_avg.shape, dtype=object)
+    for i in range(cm_avg.shape[0]):
+        for j in range(cm_avg.shape[1]):
+            annot[i, j] = f"{cm_avg[i, j]:.2f}\n[{lo[i, j]:.2f},{hi[i, j]:.2f}]"
+
+    plt.figure(figsize=(7, 6))
+    sns.heatmap(cm_avg, annot=annot, fmt="", cmap="Blues",
+                xticklabels=classes, yticklabels=classes, vmin=0, vmax=1,
+                annot_kws={"fontsize": 9})
     plt.xlabel("Predicted class")
     plt.ylabel("True class")
     plt.title(title)
@@ -9066,3 +9189,12 @@ def _set_xscale_log(ax, n_dims: list) -> None:
         ax.set_xscale("log")
         ax.set_xticks(n_dims)
         ax.set_xticklabels([str(x) for x in n_dims])
+
+def _wilson_interval(p: np.ndarray, n: np.ndarray, z: float = 1.96) -> tuple[np.ndarray, np.ndarray]:
+    """Wilson score interval bounds (lo, hi) for proportions p with sample sizes n."""
+    denom  = 1 + z**2 / n
+    center = (p + z**2 / (2 * n)) / denom
+    halfwidth = (z / denom) * np.sqrt(p * (1 - p) / n + z**2 / (4 * n**2))
+    lo = np.clip(center - halfwidth, 0, 1)
+    hi = np.clip(center + halfwidth, 0, 1)
+    return lo, hi

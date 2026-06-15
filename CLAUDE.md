@@ -67,7 +67,7 @@ SDSC-arthur-project-1/
 
 ## Conventions scientifiques importantes
 - **Split régression** : n_train=100, n_val=0, n_test=50. Les AE entraînés avec n_val=20 sont compatibles (mêmes 100 premiers patients). Les PCA entraînées avec n_train=120 ne le sont pas — réentraîner en 100/50.
-- **Stratification** : pour que les modèles PCA/AE soient utilisables en régression sur les groupes ACDC, les entraîner sur un split stratifié (5 groupes équilibrés). Le splitdefault est par chance stratifié ; pour les splits seedés, utiliser `stratify=True`.
+**Stratification** : pour que les modèles PCA/AE soient utilisables en régression sur les groupes ACDC, les entraîner sur un split stratifié (5 groupes équilibrés). Le splitdefault est par chance stratifié (ignoré de toute façon par `get_split_indices` quand `special_split=null`) ; pour les splits seedés, mettre `stratify_ongroup: true` dans le YAML (PCA et AE).
 - **AE sans val set** : n_val=0 est désormais la norme. `run_regression.py` gère le fallback `best_epoch → n_epochs` si le param n'est pas logué.
 - **PCA artifact** : sauvegardé comme `pca_{frame_tag}.joblib` (ex: `pca_ED.joblib`, `pca_ED+ES.joblib`) dans les artifacts MLflow du run `pca_spatial`.
 
@@ -208,13 +208,13 @@ SDSC-arthur-project-1/
 - `plot_comparison_curves()` ajoutée dans `ae_plots.py` ; anciennes fonctions txt-based conservées (dead code, nettoyage Pan 4)
 - Validé en local sur runs MLflow existants
 
-**Étape 11 : Régression** ⚠ écrit, à tester sur Renku — `run_regression.py`
+**Étape 11 : Régression** ✅ — `run_regression.py`
 - `scripts/run_regression.py` réécrit : YAML, MLflow `start_run`, métriques à `step=n_dims`
 - `src/models/regression.py` : fonctions pures (fit_scaler, fit_logistic, fit_linear, eval_*)
 - `src/visualization/regression_plots.py` : plots in-memory (logistic metrics, linear metrics, confusion matrix, predicted vs true)
 - `src/data/importdata.py` : `load_patient_metadata(y_name)` + `load_acdc_groups` comme wrapper
 - `configs/regression.yaml` : source_type (pca/ae), y_name, n_train=100, cumvar_threshold_list, ae_source, plot_only/load_run_id, logistic_C, n_pc_confusion
-- **Source PCA** : charge la PCA depuis MLflow (`pca_{frame_tag}.joblib`), sweep sur `cumvar_threshold_list` avec déduplication des n_pc identiques, row-centering identique à `run_pca_spatial.py`
+**Source PCA** : charge la PCA depuis MLflow (`pca_{frame_tag}.joblib`), sweep sur `latent_dims_list` (liste fixe de n_pc, partagée avec les AE pour comparabilité), row-centering identique à `run_pca_spatial.py`
 - **Source AE** : `search_runs()` par model_name/experiment_tag/split_name/params_filter, groupés par latent_dim, vérification split sur tous les runs, encoding via `collect_latent_vectors`
 - **Vérification split** : `split_name + n_train` comparés entre le run PCA/AE source et la config régression — ValueError si incohérence
 - **Split régression** : n_train=100, n_test=50, pas de val set. Compatible avec AE entraînés en 100/20/30 (mêmes 100 premiers patients). **Incompatible avec PCA entraînées en 120/30** → réentraîner la PCA spatiale en 100/50 avant de lancer la régression PCA
@@ -222,7 +222,21 @@ SDSC-arthur-project-1/
 - `logistic_C` : null = auto (0.5 si ED+ES pour corriger les paires corrélées, 1.0 sinon)
 - Y dupliqué si `use_both_frames` (dérivé de `frame_tag == "ED+ES"` depuis les params MLflow du run source)
 
+**Stratification (`stratify_ongroup`)** ✅
+- `configs/pca_spatial.yaml` et `configs/autoencoder.yaml` : nouveau param `stratify_ongroup` (true = stratifie le split sur le groupe ACDC, ignoré si `special_split: null`)
+- `src/data/loader.py` : `load_numpy_splits`/`load_tensor_datasets` prennent `stratify_ongroup`, construisent le tableau de groupes via `load_patient_metadata("group", n_patients)` et le passent à `get_split_indices(stratify=...)`
+- Loggé comme param MLflow par `run_pca_spatial.py`, `run_autoencoder.py`, `run_ae_optuna.py`
+- `run_regression.py` : lit `stratify_ongroup` depuis les params du run PCA/AE source et le repropage à `loader`/`_apply_split_to_Y` pour reproduire exactement les mêmes indices (split nommé + stratify_ongroup déterminent ensemble les indices, pas le nom seul)
+- Testé et validé sur Renku (split "split2" stratifié → 10 patients/groupe en test, soit 20 frames/groupe en ED+ES)
 ---
+
+**Comparaison multi-splits (`compare_mode`)** ✅ — `run_regression.py`
+- `configs/regression.yaml` : `compare_mode: true` + `load_run_ids: [...]`
+- Charge les JSON `results_{n}pc/latdim.json` de plusieurs runs de régression (splits différents), sélectionne `n_pc_confusion` ou la dimension la plus proche (échelle log, WARNING si différent)
+- `_check_consistent_runs` : WARNING (non bloquant) si `n_train`/`source_type`/`ae_model_name`/`ae_experiment_tag` diffèrent entre les runs sélectionnés
+- `plot_average_confusion_matrix` (nouveau, `regression_plots.py`) : moyenne des matrices normalisées par ligne + intervalle de confiance de Wilson par cellule (bornes `[lo,hi]`, comptes poolés sur tous les splits)
+- `plot_confusion_matrix` (single-split) : même format d'IC de Wilson, sur les comptes du split unique
+- Sauvegardé directement dans `RESULTS_FOLDER` (pas de tracking MLflow) : `confusionmatrix_average_{source_type}_{n_splits}splits_{n}{pc|latdim}_{experiment_tag}.png`
 
 ### Pan 3 — Finalisation pour GitHub (après refactoring)
 

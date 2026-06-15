@@ -34,6 +34,7 @@ n_train: 100
 n_val: 20                        # must be > 0 (Optuna requires a validation set)
 n_test: 30
 special_split: null              # null = sequential "splitdefault"; e.g. "split42" for seeded
+stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
 
 # ── Fixed hyperparameters ─────────────────────────────────────────────────────
 model_name: "AE3dFCDeep_VAE"
@@ -122,7 +123,7 @@ n_train: 100
 n_val: 20
 n_test: 30
 special_split: null              # null = sequential "splitdefault"; e.g. "split42" for seeded
-
+stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
 
 # ── Model ─────────────────────────────────────────────────────────────────────
 model_name: "AE3dFCDeep_VAE"         # "AE3dFCDeep", "AE3dCurrent", "AE3dConv", "AE3dLinear", "AE3dFCDeep_VAE"
@@ -276,17 +277,18 @@ experiment_tag: "baseline"       # PCA has no hyperparameter regime — kept for
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
 cache_folder: "X_vectors"        # subfolder in processed_images/ for cached .npy arrays
-n_train: 120
+n_train: 100
 n_val: 0
-n_test: 30
-special_split: "split1"             # null = sequential "splitdefault" ; ex: "split42" for seeded random split
+n_test: 50
+special_split: "split2"          # null = sequential "splitdefault" ; ex: "split42" for seeded random split
+stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
 recalculate_x: false
 use_both_frames: true            # true = ED+ES, false = use frame_type below
 frame_type: "ED"                 # "ED" or "ES" — used only if use_both_frames = false
 
 # ── PCA ───────────────────────────────────────────────────────────────────────
-recalculate_pca: false
-load_run_id: "eae670bec1ed4ea0b05700776bacb9dc"                # MLflow run ID — required when recalculate_pca: false
+recalculate_pca: true
+load_run_id: None # MLflow run ID "" — required when recalculate_pca: false
 image_roi_only: true
 mask_ys: false                   # apply ground-truth mask
 mask_bin: false                  # use binary mask
@@ -299,19 +301,19 @@ plot_metrics: true               # save R²/MSE vs n_PCs as PDF in results/
 latdim_list_pca: null            # null = range(1, n_development); or explicit list e.g. [10, 20, 50]
 
 # ── Plots : explained variance ────────────────────────────────────────────────
-plot_explained_variance: false
+plot_explained_variance: true
 
 # ── Plots : PC values in eigenbase ────────────────────────────────────────────
 plot_pc_values: true
-pc_max: 10                       # plots pairs (1,2), (3,4), ... up to pc_max — must be even
+pc_max: 6                       # plots pairs (1,2), (3,4), ... up to pc_max — must be even
 plot_metadata: false
 
 # ── Plots : eigenvectors ──────────────────────────────────────────────────────
-plot_eigenvectors: true         # slow — set true only when needed
+plot_eigenvectors: false         # slow — set true only when needed
 eigenvectors_to_plot: [1, 2, 3]
 
 # ── Plots : reconstruction ────────────────────────────────────────────────────
-plot_reconstruction: true
+plot_reconstruction: false
 n_pc_to_reconstruct: 10
 recons_auto: false
 patients_torecons_manual:
@@ -427,7 +429,7 @@ patients_ES:
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "baseline"
+experiment_tag: "pca_split2_strat"
 
 # ── Target variable ───────────────────────────────────────────────────────────
 y_name: "group"                  # "group", "height", "weight"
@@ -436,50 +438,52 @@ group_bin_value: "NOR"           # used only if group_binary = true; "DCM", "HCM
 
 # ── Data split ────────────────────────────────────────────────────────────────
 n_train: 100                     # number of training patients (n_test = 150 - n_train)
-special_split: null              # null = sequential "splitdefault"; "split42" = seeded random
+special_split: "split2"              # null = sequential "splitdefault"; "split42" = seeded random
 
 # ── Source (pca or ae) ────────────────────────────────────────────────────────
 source_type: "pca"               # "pca" or "ae"
 
 # ── PCA source (used only if source_type = "pca") ─────────────────────────────
-pca_run_id: null                 # MLflow run_id of the pca_spatial run to load
-cumvar_threshold_list:           # sweep: one regression per threshold → n_pc determined at runtime
-  - 2.0                          # 2.0 = all components
-  - 0.99
-  - 0.98
-  - 0.965
-  - 0.95
-  - 0.92
-  - 0.9
-  - 0.87
-  - 0.85
-  - 0.82
-  - 0.78
-  - 0.74
-  - 0.7
-  - 0.68
-  - 0.65
-  - 0.5
-  - 0.4
+pca_run_id: "c2d0133a17824f61ad2d688f88b24885" # MLflow run_id "" of the pca_spatial run to load
+latent_dims_list:                # one regression per n_pc
+  - 1
+  - 2
+  - 4
+  - 6
+  - 8
+  - 12
+  - 16
+  - 20
+  - 28
+  - 40
+  - 60 
+  - 80
+  - 100
+  - 120
+  - 160
+  - 200
 
 # ── AE source (used only if source_type = "ae") ───────────────────────────────
 # search_runs() selects all AE runs matching these criteria, grouped by latent_dimensions
 ae_source:
   model_name: "AE3dFCDeep"       # model architecture name logged in MLflow
-  experiment_tag: "baseline"     # experiment_tag param logged in MLflow
+  experiment_tag: "optuna"     # experiment_tag param logged in MLflow
   split_name: "splitdefault"     # split_name param logged in MLflow
   params_filter: {}              # optional extra MLflow param filters (e.g. frame_tag: "ED")
 
 # ── LOAD / plot-only mode ──────────────────────────────────────────────────────
-plot_only: false                 # true = skip regression, reload metrics from load_run_id and replot
-load_run_id: null                # MLflow run_id of a previous regression run (used if plot_only = true)
+plot_only: true                 # true = skip regression, reload metrics from load_run_id and replot
+load_run_id: "65c6312b3ff14a9f87952109452fd7d0" # MLflow run_id of a previous regression run (used if plot_only = true)
 
 # ── Regression hyperparameters ────────────────────────────────────────────────
 logistic_C: null                 # null = auto: 1.0 if ED only, 0.5 if ED+ES (corrects for correlated pairs)
 
 # ── Plots ──────────────────────────────────────────────────────────────────────
-n_pc_confusion: 12               # n_pc (or latent_dim) for which to plot the confusion matrix
+n_pc_confusion: 16               # n_pc (or latent_dim) for which to plot the confusion matrix
 
+# ── Compare mode (averaged confusion matrix across splits) ────────────────────
+compare_mode: false
+load_run_ids: ["a727f062adc149e4a65f7299db8528dd","f6673a190ff44f37b0e240ef93f1b38d","65c6312b3ff14a9f87952109452fd7d0"]                 # list of regression run_ids to average (must have y_name="group", non-binary)
 
 
 ######################################################################
