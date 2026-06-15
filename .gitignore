@@ -28,6 +28,7 @@
 tempodata/
 processed_images/
 results/
+archive_todelete/ 
 
 # =============================================================================
 # PYTHON - Auto-generated temporary files
