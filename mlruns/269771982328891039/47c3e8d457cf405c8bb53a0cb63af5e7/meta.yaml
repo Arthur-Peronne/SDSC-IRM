@@ -1,11 +1,10 @@
 artifact_uri: mlruns/269771982328891039/47c3e8d457cf405c8bb53a0cb63af5e7/artifacts
-end_time: 1780739525918
+end_time: 1781522685556
 entry_point_name: ''
 experiment_id: '269771982328891039'
 lifecycle_stage: active
 run_id: 47c3e8d457cf405c8bb53a0cb63af5e7
 run_name: AE_AE3dFCDeep_200patients_splitdefault_240dims_optuna
-run_uuid: 47c3e8d457cf405c8bb53a0cb63af5e7
 source_name: ''
 source_type: 4
 source_version: ''

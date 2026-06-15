@@ -3,7 +3,7 @@
 # Modify this file, then run: python scripts/run_visualize_latent.py
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-load_run_id: ff88455bd0a645ed8b1491b1d4bd39af  # MLflow run ID of the trained AE/VAE model
+load_run_id: "aa2255ab99d14775af3a666c4269e0dc"  # MLflow run ID of the trained AE/VAE model
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 use_both_frames: true            # true = ED+ES (300 points), false = ED only
@@ -13,6 +13,6 @@ n_patients: 150                  # total patients to visualize (all 150 by defau
 # model_name and latent_dimensions are read automatically from the MLflow run params
 
 # ── Visualization ─────────────────────────────────────────────────────────────
-projection: "pca"                # "pca" only for now
-use_tsne: false                  # true = also compute t-SNE (slow) — not yet implemented
+projection: "pca"                # "pca" or "tsne"
+perplexity: 5                   # t-SNE only — typical range 5-50
 color_by: "group"                # "group" (ACDC classes) — extensible later

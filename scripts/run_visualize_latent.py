@@ -78,13 +78,23 @@ def main():
     groups = load_acdc_groups(n_patients)
     labels = groups + groups if use_both_frames else groups
 
-    # ── Encode + Plot ─────────────────────────────────────────────────────────
+    # ── Encode ────────────────────────────────────────────────────────────────
     print("Encoding all patients...")
     mus = aep.collect_latent_vectors(model, all_dataset, device)
     print(f"Latent vectors: {mus.shape}")
 
-    save_path = RESULTS_FOLDER / f"{run_name}_latent_pca.png"
-    aep.plot_latent_pca(mus, labels, run_name, use_both_frames, save_path)
+    # ── Plot ──────────────────────────────────────────────────────────────────
+    projection = cfg["projection"]
+
+    if projection == "pca":
+        save_path = RESULTS_FOLDER / f"{run_name}_latent_pca.png"
+        aep.plot_latent_pca(mus, labels, run_name, use_both_frames, save_path)
+    elif projection == "tsne":
+        perplexity = cfg["perplexity"]
+        save_path = RESULTS_FOLDER / f"{run_name}_latent_tsne_p{perplexity}.png"
+        aep.plot_latent_tsne(mus, labels, run_name, use_both_frames, perplexity, save_path)
+    else:
+        raise ValueError(f"Unknown projection: {projection!r} (expected 'pca' or 'tsne')")
 
     # ── Log dans MLflow ───────────────────────────────────────────────────────
     with tracking.resume_run(load_run_id):

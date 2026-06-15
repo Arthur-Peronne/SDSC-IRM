@@ -1785,7 +1785,7 @@ def collect_latent_vectors(model, dataset, device) -> np.ndarray:
             x = x.to(device)
             output = model.encode(x)
             z = output[0] if isinstance(output, tuple) else output
-            vectors.append(z.cpu().numpy().squeeze())
+            vectors.append(z.cpu().numpy().squeeze(0))
     return np.array(vectors)
 
 
@@ -1849,6 +1849,65 @@ def plot_latent_pca(
     print(f"Plot saved: {save_path}")
     return save_path
 
+def plot_latent_tsne(
+    mus: np.ndarray,
+    labels: list[str],
+    run_name: str,
+    use_both_frames: bool,
+    perplexity: int,
+    save_path: Path,
+) -> Path:
+    """
+    Project latent vectors to 2D via t-SNE and plot colored by ACDC group.
+    """
+    from sklearn.manifold import TSNE
+    import matplotlib.patches as mpatches
+
+    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42, init="pca")
+    mus_2d = tsne.fit_transform(mus)
+
+    group_colors = {
+        "NOR":  "#1D9E75",
+        "DCM":  "#534AB7",
+        "HCM":  "#D85A30",
+        "RV":   "#378ADD",
+        "MINF": "#E24B4A",
+    }
+    markers = {"ED": "o", "ES": "s"}
+    n_patients = len(labels) // 2 if use_both_frames else len(labels)
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+
+    for i, (group, (x, y)) in enumerate(zip(labels, mus_2d)):
+        color = group_colors.get(group, "gray")
+        marker = markers["ED" if i < n_patients else "ES"] if use_both_frames else "o"
+        ax.scatter(x, y, color=color, marker=marker,
+                   s=30, alpha=0.75, linewidths=0)
+
+    group_patches = [
+        mpatches.Patch(color=c, label=g)
+        for g, c in group_colors.items()
+    ]
+    frame_handles = []
+    if use_both_frames:
+        frame_handles = [
+            plt.Line2D([0], [0], marker="o", color="gray",
+                       linestyle="", markersize=7, label="ED"),
+            plt.Line2D([0], [0], marker="s", color="gray",
+                       linestyle="", markersize=7, label="ES"),
+        ]
+
+    ax.legend(handles=group_patches + frame_handles,
+              loc="best", fontsize=9, framealpha=0.8)
+    ax.set_xlabel("t-SNE 1", fontsize=10)
+    ax.set_ylabel("t-SNE 2", fontsize=10)
+    ax.set_title(f"Latent space — t-SNE (perplexity={perplexity})\n{run_name}", fontsize=11)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Plot saved: {save_path}")
+    return save_path
 
 # ── New MLflow-based comparison plot ──────────────────────────────────────────
 
