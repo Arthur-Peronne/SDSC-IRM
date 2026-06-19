@@ -22,5 +22,7 @@ NB: no hyperparamter change, only AE architecture. No skip connections.
 ### Phase 3: Comparison and selection
 1. **Log results:** Log model performances in trial_log.csv
 2. **Metric comparison and decision** Compare `val_mse` and $\Delta \text{MSE} against the **best model to date** (not just the original baseline), and ensure predictive power is stable.
-- **Success:** $\Delta \text{MSE} < 0$ AND stable loss curve $\rightarrow$ **COMMIT** and update best model.
-- **Failure:** $\Delta \text{MSE} \geq 0$, unstable loss, or regression collapse $\rightarrow$ **REVERT** and analyze.
+- **Success:** $\Delta \text{MSE} < 0$ AND stable loss curve 
+- **Failure:** $\Delta \text{MSE} \geq 0$, unstable loss, or regression collapse
+3. **Analysis** Analyse reasons of success or failure of this architecture, and save in notes in trial_log.csv
+4. **Commit** Always add ai_agent/trial_log.csv and revert cOKonfigs/autoencoder.yaml. If Success, add src/models/ae_models.py and mlruns/. If Failure, revert src/models/ae_models.py and mlruns/. Then commit -m "AIagent automatic MODEL_NAME".
