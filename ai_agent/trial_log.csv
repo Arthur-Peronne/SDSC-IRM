@@ -1,3 +1,4 @@
 timestamp,trial_id,model_name,latent_dim,modification_description,metric_name,metric_value,metric_delta,status,mlflow_run_id,notes
 2026-06-19,0,AE3dFCDeep,120,Baseline (no changes),val_mse,0.0008935671168728732,0.000000,COMPLETED,4a0b3dd5cdae4727b1a966ce9e425268,
 2026-06-19,1,AE3dAttention,120,Attention-guided AE (SE blocks),val_mse,0.0007721571491856594,-0.0001214100,COMPLETED,dccb003a0a5c4b779a19f17067c319a6,Success. SE blocks enabled channel-wise feature recalibration, prioritizing cardiac structures over background noise. Stable loss curve, faster convergence (best epoch 63 vs 76 baseline), earlier stopping (93 vs 106). Predictive power improved (test_R2: 0.750→0.774).
+2026-06-19,2,AE3dCurrent,120,Baseline test,val_mse,0.000627,-0.000145,COMPLETED,,Improved over baseline.
