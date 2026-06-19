@@ -1,0 +1,15 @@
+artifact_uri: mlruns/269771982328891039/dccb003a0a5c4b779a19f17067c319a6/artifacts
+end_time: 1781884655561
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: dccb003a0a5c4b779a19f17067c319a6
+run_name: AE_AE3dAttention_200patients_splitdefault_120dims_aiagent_attention_1
+run_uuid: dccb003a0a5c4b779a19f17067c319a6
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1781883618834
+status: 3
+tags: []
+user_id: renku
