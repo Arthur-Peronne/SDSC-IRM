@@ -8,11 +8,15 @@
 
 ## 🔬 EXPERIMENTAL PHASES
 
-### Phase 1: New AE architecture hypothesis
-NB: no hyperparamter change, only AE architecture. No skip connections.
-1. **Check:** Read previous trial results in trial_log.csv 
-2. **Idea:** Based on these results, the problem context and your imagination, find a new AE architecture idea
-3. **Refining:** Refine your idea into a fully applicable AE architecture
+### Phase 1: Hypothesis Generation
+NB: no hyperparameter change, only AE architecture. No skip connections.
+1. **Analyze:** Read previous trial results in `trial_log.csv`. Identify the "Current Champion" (best `val_mse`) and patterns in success/failure.
+2. **Select a Strategy:**
+    - **Exploration (New Architectures):** Propose a model from a new architectural family (e.g., Dilated, Multi-scale, Separable, or Topology changes).
+    - **Exploitation (Refinement):** Propose an improvement to the Current Champion or a highly promising previous model (e.g., "Add Residual blocks to `AE3dAttention`").
+3. **Formulate a Hypothesis:** State the *what*, *why*, and *how*: *"I will [Modify X] in [Model Y] because it will [Address Problem Z] via [Mechanism W], which I predict will decrease `val_mse`."*
+4. **Design the Implementation:** Translate the hypothesis into a concrete architecture design, ensuring it respects the **"No Skip Connections"** rule.
+
 
 ### Phase 2: Controlled Implementation & Execution
 1. **Implementation:** Implement the AE architecture in `ae_models.py` (and others if necessary).
@@ -24,5 +28,10 @@ NB: no hyperparamter change, only AE architecture. No skip connections.
 2. **Metric comparison and decision** Compare `val_mse` and $\Delta \text{MSE} against the **best model to date** (not just the original baseline), and ensure predictive power is stable.
 - **Success:** $\Delta \text{MSE} < 0$ AND stable loss curve 
 - **Failure:** $\Delta \text{MSE} \geq 0$, unstable loss, or regression collapse
-3. **Analysis** Analyse reasons of success or failure of this architecture, and save in notes in trial_log.csv
-4. **Commit** Always add ai_agent/trial_log.csv and revert cOKonfigs/autoencoder.yaml. If Success, add src/models/ae_models.py and mlruns/. If Failure, revert src/models/ae_models.py and mlruns/. Then commit -m "AIagent automatic MODEL_NAME".
+3. **Analysis** Document a scientific analysis in the `notes` column of `trial_log.csv`. 
+
+**Note Quality Standard (CRITICAL):** Avoid tautologies (e.g., "Improved over baseline"). Every note MUST include:
+1. **Mechanistic Reasoning:** The theoretical "Why" (e.g., "Spatial context preserved by avoiding flattening").
+2. **Training Dynamics:** Observations on stability and convergence (e.g., "Stable loss curve," "Rapid convergence").
+3. **Hypothesis Validation:** Whether the results align with or refute the initial hypothesis.
+4. **Commit** Always add ai_agent/trial_log.csv and revert `configs/autoencoder.yaml` using `git checkout HEAD -- configs/autoencoder.yaml`. If Success, add src/models/ae_models.py and mlruns/. If Failure, revert src/models/ae_models.py and mlruns/ using `git checkout HEAD --`. Then commit -m "AIagent automatic MODEL_NAME".

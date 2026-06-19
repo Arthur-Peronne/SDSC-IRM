@@ -15,6 +15,8 @@ The SDSC-IRM code has been cloned from a Github repo, and is branched (branch na
 The user will then give you directions on the levers you will be allowed to use to optimize the performances of the autoencoders. Examples: 
 architecture, some parameters (dropout rate, patience, learning rate, etc.), etc. (see Rules and goals for AE optimization)
 
+**NOTE ON HYPERPARAMETERS:** For the current 20-trial architecture optimization loop, hyperparameters are FROZEN. Do not change them. Hyperparameter optimization will be a separate, subsequent experiment.
+
 Then the AI Agent (you) will modify the code in SDSC-IRM (just the yaml file for parameters, or actual .py files for deeper changes like architectures).
 And then effectively train the model. 
 **When running training, always use unbuffered output and tee to allow real-time monitoring:**

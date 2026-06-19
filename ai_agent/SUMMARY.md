@@ -3,8 +3,6 @@
 > **This file is structured chronologically.** It documents the decisions, reasoning, and outcomes of each conversation session. Read from top to bottom to understand the project's evolution. For the current state of rules and constraints, see `AGENT.md`.
 
 ## 🎯 1. MISSION OVERVIEW
-
-## 🎯 1. MISSION OVERVIEW
 The objective is to develop a 3D Autoencoder (AE) architecture for dimensionality reduction of IRM cardiac MRI images $(1, 32, 128, 128)$ that outperforms PCA in reconstruction fidelity ($R^2$) while maintaining high predictive power for downstream regression tasks.
 
 ### ⚖️ The Fundamental Trade-off
@@ -134,5 +132,13 @@ The agent encountered a loop during the previous session and was restarted. The 
 ### 6. Critical lesson from this session
 - **Never assume uncommitted changes are committed.** When reverting, always check `git diff --stat` and `git show HEAD` to understand what's actually in the repo vs what's in the working directory. The previous session had uncommitted changes that were lost when `git checkout HEAD` was used.
 
-### 7. Next step
-- Launch 20-trial architecture optimization loop. The agent should improvise — no pre-defined architectural directions.
+
+---
+
+## 📅 SESSION LOG — 2026-06-19 (Continued)
+
+### 8. Protocol Refinement & Optimization Strategy
+- **Hyperparameter Policy:** Decided that for the upcoming 20-trial architecture optimization loop, all hyperparameters (learning rate, weight decay, etc.) will be **FROZEN**. This ensures that improvements in `val_mse` are directly attributable to architectural changes, maintaining scientific rigor and maximizing iteration speed.
+- **Hypothesis-Driven Experimentation:** Refined `EXPERIMENT.md` to transition from "idea-based" to "hypothesis-driven" research. The agent will now explicitly formulate a hypothesis (What, Why, How) and design the implementation based on whether it is performing **Exploration** (new families) or **Exploitation** (refining the current champion).
+- **Simulated Success for Validation:** Established a preliminary test protocol (`EXPERIMENT_existingarchitectures.md`) to validate the agent's ability to iterate through all existing models in `ae_models.py` using a "simulated success" commit strategy to preserve all results.
+- **Workflow Improvements:** Updated the commit/revert protocol to use `git checkout HEAD -- <file>` for more robust configuration management.
