@@ -16,6 +16,8 @@ Located in `src/models/ae_models.py`, the following models can be instantiated v
 | `AE3dLinear` | Linear | Purely linear (no activations/convolutions); theoretically equivalent to PCA. |
 | `AE3dFCDeep_VAE` | Variational | VAE version of `AE3dFCDeep` using the reparameterization trick. |
 
+> Other architectures have been created by AI Agents during optimization trials. They are not listed here to avoid constant updates.
+
 ## 3. Optimization Levers
 Parameters are managed via YAML configuration files (e.g., `configs/autoencoder.yaml`).
 

@@ -57,8 +57,8 @@ GENERAL
 - Train an AE and test commit on branch : DONE
 AUTOENCODERS ARCHITECTURE
 - Choose evaluation metric (DONE: val_mse)
-- Test change of AE architecture 
-- Test training with architecture changed, and evaluation (+ commit or not, depending on the result)
+- Test change of AE architecture (DONE: AE3dAttention)
+- Test training with architecture changed, and evaluation (+ commit or not, depending on the result) (DONE: Trial 1 committed)
 - Launch AE architecture optimization on 20 trials
 KARPATHY AUTORESEARCH
 - Branch Karpathy Autoresearch as a 3rd code repo 

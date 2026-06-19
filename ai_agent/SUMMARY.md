@@ -1,5 +1,9 @@
 # 📜 PROJECT OPERATIONAL SUMMARY: SDSC-IRM AE OPTIMIZATION
 
+> **This file is structured chronologically.** It documents the decisions, reasoning, and outcomes of each conversation session. Read from top to bottom to understand the project's evolution. For the current state of rules and constraints, see `AGENT.md`.
+
+## 🎯 1. MISSION OVERVIEW
+
 ## 🎯 1. MISSION OVERVIEW
 The objective is to develop a 3D Autoencoder (AE) architecture for dimensionality reduction of IRM cardiac MRI images $(1, 32, 128, 128)$ that outperforms PCA in reconstruction fidelity ($R^2$) while maintaining high predictive power for downstream regression tasks.
 
@@ -88,3 +92,47 @@ The agent encountered a loop during the previous session and was restarted. The 
 - **Architectural Constraints:** Re-confirmed the "No Skip Connections" rule to maintain the independence of the latent space.
 - **Current Implementation Status:** The `AE3dAttention` architecture is implemented in `src/models/ae_models.py` and integrated into the `build_autoencoder` factory function.
 - **Immediate Objective:** Verify the implementation via baseline testing and begin the optimization loop for the attention-guided architecture using `val_mse` as the primary metric.
+
+---
+
+## 📅 SESSION LOG — 2026-06-19
+
+### 1. trial_log.csv metric correction
+- **Problem:** The CSV was logging `validation_R2_mean` as the primary metric, but the protocol specifies `val_mse`.
+- **Action:** Restructured `trial_log.csv` with correct columns: `model_name`, `latent_dim`, `metric_name` (val_mse), `metric_value`, `metric_delta`, `mlflow_run_id`, `notes`.
+- **Baseline value:** Pulled directly from MLflow (`4a0b3dd5cdae4727b1a966ce9e425268`): `val_mse = 0.0008935671168728732`.
+- **EXPERIMENT.md updated** to match the full-precision baseline value.
+
+### 2. Trial 1 result: AE3dAttention
+- **Last model trained before crash:** AE3dAttention (2-epoch dryrun, catastrophic failure — R² = -36).
+- **Full training result:** AE3dAttention with tag `aiagent_attention_1` (300 epochs, MLflow run `dccb003a0a5c4b779a19f17067c319a6`).
+- **val_mse:** `0.0007721571491856594` (Δ = **-0.000121** vs baseline).
+- **test_R2:** 0.750 → 0.774. **validation_R2:** 0.688 → 0.742.
+- **Loss curve:** Stable, no spikes, no regression collapse. Best epoch 63 (vs 76 baseline). Early stopping at 93 (vs 106).
+- **Analysis (logged in trial_log.csv):** SE blocks enabled channel-wise feature recalibration, prioritizing cardiac structures over background noise.
+
+### 3. Phase 3 protocol refinement
+- **Key decision:** ΔMSE is calculated against the **best model to date**, not the original baseline. A trial only commits if it beats the current best.
+- **Phase 3 finalized as 4 steps:**
+  1. Log results → trial_log.csv
+  2. Compare ΔMSE vs best model to date (stable loss curve required)
+  3. Analysis → document reasons in trial_log.csv notes
+  4. Commit → always add trial_log.csv + revert configs/autoencoder.yaml. Success: add ae_models.py + mlruns/. Failure: revert ae_models.py + mlruns/. Then commit.
+- **EXPERIMENT.md updated** with this refined protocol.
+
+### 4. Commit
+- **Commit `5e181a77`:** "AIagent automatic AE3dAttention"
+- **Included:** `src/models/ae_models.py` (AE3dAttention code), `ai_agent/trial_log.csv`, `mlruns/` (already tracked)
+- **Reverted:** `configs/autoencoder.yaml` back to `vae_optuna2` / `AE3dFCDeep_VAE`
+- **Working tree:** clean, ready for next trial.
+
+### 5. Documentation updates
+- **CODEBASE.md:** Added note that other AI-Agent-created architectures exist but are not listed to avoid constant updates. Only the original 5 models are in the table.
+- **AGENT.md:** Marked architecture test items as DONE in the to-do list.
+- **SUMMARY.md:** This file — structured chronologically to document session decisions and their reasoning.
+
+### 6. Critical lesson from this session
+- **Never assume uncommitted changes are committed.** When reverting, always check `git diff --stat` and `git show HEAD` to understand what's actually in the repo vs what's in the working directory. The previous session had uncommitted changes that were lost when `git checkout HEAD` was used.
+
+### 7. Next step
+- Launch 20-trial architecture optimization loop. The agent should improvise — no pre-defined architectural directions.
