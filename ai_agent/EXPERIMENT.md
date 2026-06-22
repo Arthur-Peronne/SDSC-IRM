@@ -35,3 +35,6 @@ NB: no hyperparameter change, only AE architecture. No skip connections.
 2. **Training Dynamics:** Observations on stability and convergence (e.g., "Stable loss curve," "Rapid convergence").
 3. **Hypothesis Validation:** Whether the results align with or refute the initial hypothesis.
 4. **Commit** Always add ai_agent/trial_log.csv and revert `configs/autoencoder.yaml` using `git checkout HEAD -- configs/autoencoder.yaml`. If Success, add src/models/ae_models.py and mlruns/. If Failure, revert src/models/ae_models.py and mlruns/ using `git checkout HEAD --`. Then commit -m "AIagent automatic MODEL_NAME".
+
+## 📂 LOGGING CONVENTION
+All training logs generated via the `tee` command **MUST** be directed into the `SDSC-IRM/` directory (e.g., `tee SDSC-IRM/training_<experiment_tag>.log`). This prevents logs from being scattered in the working directory and ensures all experimental artifacts are centralized within the project folder for easier tracking and version control.
