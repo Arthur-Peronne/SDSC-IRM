@@ -17,6 +17,17 @@ mlflow ui --host 0.0.0.0 --port 5000
 # puis cliquer sur le lien...
 ```
 
+```bash
+# Lancer jobs
+nohup python -u scripts/run_autoencoder.py > vae_alldims_opt2.txt 2>&1 &
+```
+
+```bash
+# Créer des archives pour passer entre sessions Renku
+tar -czf tempdata_autoencoder.tar.gz tempodata/autoencoder/
+tar -czf ACDC.tar.gz /home/renku/work/s3-bucket/ACDC
+```
+
 ## Règles de travail
 - **Langue** : discussions en français, code en anglais
 - **Priorité absolue** : reproductibilité des résultats passés — ne jamais casser ce qui fonctionne
