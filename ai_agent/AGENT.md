@@ -1,49 +1,37 @@
 # AGENT.md
 
 ## Project Vision
-History: the user has developped models (PCA, autoencoders, etc.) for dimensionality reduction on IRM heart images for 150 patients. 
-The autoencoders have various architectures and hyperparameters, but despite the user's effort to optimize them (through Optuna 
-for hyperparameters for example), the autoencoders still perform poorly compared to simpler models like PCA.
+The goal is to optimize 3D autoencoders for dimensionality reduction of cardiac MRI images (150 patients, shape 1×32×128×128), aiming to outperform PCA in reconstruction fidelity (`val_mse`). Despite hyperparameter optimization via Optuna, autoencoders currently underperform PCA — this agent loop explores architectural improvements.
 
-We are working on a Renku session, where a AI Agent pi (you) is built from the race-sdsc-llm-poc folder. 
-The goal is to use this Agent to optimize models (autoencoders whose architecture and hyperparameters could be improved) in the SDSC-IRM folder 
-through iterations.
+The agent iterates through trials: propose an architecture → implement → train → evaluate → commit (SUCCESS) or revert (FAILURE). The full trial protocol is in `EXPERIMENT.md`.
 
-## Operational Procedures
-The SDSC-IRM code has been cloned from a Github repo, and is branched (branch name: ae-agent-opti)
+## Optimization Goals
+- **Primary Metric:** `val_mse` (Reconstruction Loss on the validation set). Minimize it.
+- **Hyperparameters:** Currently FROZEN — architecture search only. Hyperparameter optimization (via Optuna or agent) is a separate subsequent phase.
 
-The user will then give you directions on the levers you will be allowed to use to optimize the performances of the autoencoders. Examples: 
-architecture, some parameters (dropout rate, patience, learning rate, etc.), etc. (see Rules and goals for AE optimization)
-
-**NOTE ON HYPERPARAMETERS:** For the current 20-trial architecture optimization loop, hyperparameters are FROZEN. Do not change them. Hyperparameter optimization will be a separate, subsequent experiment.
-
-Then the AI Agent (you) will modify the code in SDSC-IRM (just the yaml file for parameters, or actual .py files for deeper changes like architectures).
-And then effectively train the model. 
-**When running training, always use unbuffered output and tee to allow real-time monitoring:**
-`python -u scripts/run_autoencoder.py | tee training_<experiment_tag>.log`
-
-Save your trial results in trial_log.csv.
-If the performance has improved, commit the change in the Git branch. If not, revert the change, and try something ELSE (trial_log.csv helps you to 
-keep in mind what you tried not to try the same modification over and over)
-
-## Rules and goals for AE optimization
-
-### Optimization Goals
-- **Primary Metric:** Use the **Reconstruction Loss (MSE) on the validation set (`val_mse`)** to decide if a change is successful. 
-- **Objective:** Minimize `val_mse` to improve image reconstruction quality (reducing blurriness) and to avoid instabilities in VAEs (like beta collapsing to zero).
-
-### Core Architectural Rules
-- **No U-Net (No skip connections):** The architecture must maintain an independent latent space. Information must pass through the bottleneck alone. This is crucial to allow future constraints to be applied directly to the latent space to study heart tissue deformations.
+## Core Architectural Rule
+- **No skip connections (no U-Net):** Information must pass through the bottleneck alone. This preserves an independent latent space for future constraints (VAE regularization, disentanglement, heart tissue deformation studies).
 
 ## Technical Environment
-[Insert paths, environment activation commands, and dependency information here]
+- **Working directory:** `/home/renku/work/SDSC-IRM/` — all commands must be run from here.
+- **Python:** `python3` (venv at `/home/renku/work/.venv/` is pre-activated by the Renku shell; no activation step needed).
+- **Git branch:** `agent-ae-opti`
+- **Key files:**
+  - `EXPERIMENT.md` — full trial protocol (read this to run a trial)
+  - `src/models/ae_models.py` — architecture definitions + `build_autoencoder` factory (line ~1077)
+  - `configs/autoencoder.yaml` — training configuration (modify before each trial, revert after)
+  - `ai_agent/trials_conclusions/trial_log.csv` — trial history (one row per trial)
+  - `ai_agent/trials_conclusions/` — per-trial markdown reports
+  - `mlruns/` — MLflow experiment data
+  - `SUMMARY.md` — read only if you need historical context on past sessions
+- **Verify environment:** `python3 -c "import torch, mlflow; print('ok')"` — must print `ok` before any training run.
 
 ## Rules
-- MOST IMPORTANT RULE: do not modify files unless explicitly asked to!!!
-- Do not commit unless part of a specified trial/evaluation/commit procedure to improve AE models.
-- Always verify changes with tests
+- **File modification:** Only modify files explicitly authorized by `EXPERIMENT.md` (`src/models/ae_models.py`, `configs/autoencoder.yaml`, `ai_agent/trials_conclusions/trial_log.csv`, `ai_agent/EXPERIMENT.md`, and the per-trial report). Do not touch any other files.
+- **Commits:** Only as part of the Phase 3 commit procedure defined in `EXPERIMENT.md`.
 
-### Loop-Breaking Protocol (To avoid infinite retry loops)
+### Loop-Breaking Protocol
+- **General Rule:** If you attempt the same action twice with the same outcome, stop and ask the user rather than trying a third time.
 - **Two-Strike Rule:** If an `edit` fails twice, do not attempt a third time using the same logic.
 - **Mandatory Re-Read:** If an `edit` fails, immediately `read` the file again to ensure current state is captured.
 - **Granularity Shift:** If large edits fail, switch to "Micro-Edits" (replacing 1–3 lines instead of large blocks).
@@ -51,19 +39,7 @@ keep in mind what you tried not to try the same modification over and over)
 
 ## Communication Style
 - Be concise and direct.
-- Please don't have a validation bias, you can challenge the user's idea if you think they are suboptimal.
+- Do not have a validation bias — challenge the user's ideas if you think they are suboptimal.
 
-## To-do list 
-GENERAL
-- Implement Git branching : DONE
-- Train an AE and test commit on branch : DONE
-AUTOENCODERS ARCHITECTURE
-- Choose evaluation metric (DONE: val_mse)
-- Test change of AE architecture (DONE: AE3dAttention)
-- Test training with architecture changed, and evaluation (+ commit or not, depending on the result) (DONE: Trial 1 committed)
-- Launch AE architecture optimization on 20 trials
-KARPATHY AUTORESEARCH
-- Branch Karpathy Autoresearch as a 3rd code repo 
-- Code "model independent": refactoring to use kwargs instead of hard coded parameters.
-- Automatize trial/evaluation/commit loop 
-- Make the process "independent" from code to optimize (SDSC-IRM here)
+## To-do
+- Launch AE architecture optimization on several trials

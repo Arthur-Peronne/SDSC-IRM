@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "baseline_aiarchi"
+experiment_tag: "aiagent_blablabla"
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
@@ -24,9 +24,9 @@ special_split: null              # null = sequential "splitdefault"; e.g. "split
 stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
 
 # ── Model ─────────────────────────────────────────────────────────────────────
-model_name: ""
+model_name: "blablabla"
 latent_dimensions: 120
-multiple_models_and_dims: true  # true = loop over models_list × latdim_list
+multiple_models_and_dims: false  # true = loop over models_list × latdim_list
 models_list: ["AE3dAttention","AE3dDilated", "AE3dDilatedAttention", "AE3dSeparableDilated"]
 latdim_list: [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
 

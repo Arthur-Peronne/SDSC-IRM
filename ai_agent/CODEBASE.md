@@ -2,10 +2,7 @@
 
 This document provides a technical overview of the `SDSC-IRM` codebase to assist in the iterative optimization of autoencoder (AE) models.
 
-## 1. Project Overview
-The goal is to optimize 3D autoencoders for dimensionality reduction of cardiac MRI images, aiming to outperform PCA. The workflow involves modifying architectures or hyperparameters, training, and evaluating against a defined metric.
-
-## 2. Available Architectures
+## 1. Available Architectures
 Located in `src/models/ae_models.py`, the following models can be instantiated via `build_autoencoder`:
 
 | Model Name | Type | Description |
@@ -18,7 +15,7 @@ Located in `src/models/ae_models.py`, the following models can be instantiated v
 
 > Other architectures have been created by AI Agents during optimization trials. They are not listed here to avoid constant updates.
 
-## 3. Optimization Levers
+## 2. Optimization Levers
 Parameters are managed via YAML configuration files (e.g., `configs/autoencoder.yaml`).
 
 ### Structural Levers
@@ -36,7 +33,7 @@ Parameters are managed via YAML configuration files (e.g., `configs/autoencoder.
 *   `beta`: Weight of the KL-divergence term.
 *   `beta_warmup_epochs`: Linear ramp-up period for $\beta$.
 
-## 4. Operational Workflows
+## 3. Operational Workflows
 
 ### Single Training & Evaluation
 **Command:** `python scripts/run_autoencoder.py`
@@ -50,7 +47,7 @@ Parameters are managed via YAML configuration files (e.g., `configs/autoencoder.
 *   Results are stored in a SQLite database and logged to MLflow.
 *   **Goal:** Find the best combination of hyperparameters for a specific architecture.
 
-## 5. Key File Structure
+## 4. Key File Structure
 *   `configs/`: YAML configuration files.
 *   `scripts/`: Entry point scripts for training and optimization.
 *   `src/`: Core logic (data loading, model definitions, training loops, tracking).

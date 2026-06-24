@@ -1,6 +1,6 @@
 # 📜 PROJECT OPERATIONAL SUMMARY: SDSC-IRM AE OPTIMIZATION
 
-> **This file is structured chronologically.** It documents the decisions, reasoning, and outcomes of each conversation session. Read from top to bottom to understand the project's evolution. For the current state of rules and constraints, see `AGENT.md`.
+> **Read this file only if you need more historical context on the project.** For current rules, constraints, and workflow, use `AGENT.md` and `EXPERIMENT.md` instead. This file is structured chronologically and documents decisions, reasoning, and outcomes of past sessions.
 
 ## 🎯 1. MISSION OVERVIEW
 The objective is to develop a 3D Autoencoder (AE) architecture for dimensionality reduction of IRM cardiac MRI images $(1, 32, 128, 128)$ that outperforms PCA in reconstruction fidelity ($R^2$) while maintaining high predictive power for downstream regression tasks.
@@ -147,3 +147,51 @@ The agent encountered a loop during the previous session and was restarted. The 
 - **Analysis (logged in trial_log.csv):** Dilated convolutions successfully increased the receptive field of the encoder layers, allowing the model to capture larger-scale cardiac structures without the need for pooling-induced resolution loss or skip connections. This directly addresses the "MSE-induced blurriness" by providing better global context to the bottleneck.
 - **Status:** **SUCCESS**. New architecture champion.
 - **Action:** Commit `ae_models.py` and `trial_log.csv`. Revert `autoencoder.yaml`.
+
+---
+
+## 📅 SESSION LOG — 2026-06-24: Documentation overhaul
+
+This session focused entirely on improving the `ai_agent/` documentation to increase agent stability, based on failure patterns observed with previous models (Qwen, Gemma): inability to write results, falling into retry loops, and code duplication in `ae_models.py`.
+
+### 1. Root causes identified
+- **Technical Environment section was empty** (`AGENT.md`) — agents didn't know the working directory, Python executable, or key file paths.
+- **No safe-edit protocol for `ae_models.py`** — no instruction to read before editing, no explicit insertion point, no warning against reproducing existing classes. Led to duplicate class definitions.
+- **No explicit CSV append instruction** — agents inferred how to write results and sometimes overwrote the file or failed silently.
+- **Inconsistent log file paths** across `AGENT.md` and `EXPERIMENT.md`.
+- **Context overflow at Phase 3** — 300-epoch training output fills the agent's context, causing it to forget Phase 3 instructions read earlier in the session.
+- **Baseline value mismatch** between `EXPERIMENT.md` (0.000893567) and `trial_log.csv` (0.000835246).
+
+### 2. Key fixes applied
+
+**AGENT.md:**
+- Filled in Technical Environment: working directory, Python executable, git branch, key file paths, env verification command.
+- Rephrased "MOST IMPORTANT RULE" to clearly scope file modification to files authorized by `EXPERIMENT.md`.
+- Added a General Rule to the Loop-Breaking Protocol: stop and ask the user after two identical failures, not just on edit failures.
+- Removed redundant operational details (already in `EXPERIMENT.md`), vague rules, done to-do items, and KARPATHY future work.
+
+**EXPERIMENT.md:**
+- Added safe-edit protocol to Phase 2: read before editing, insertion point above `build_autoencoder`, one `elif` only, no duplication.
+- Added explicit CSV append command with column order and `tail -1` verification to Phase 3.
+- Added re-read instruction at the start of Phase 3 to counter context overflow.
+- Added `🏆 CURRENT CHAMPION` block at the top — updated on every SUCCESS, so the agent never needs to parse the CSV to find the reference value.
+- Fixed baseline value and unified log file path to `SDSC-IRM/training_<tag>.log`.
+- Removed redundant LOGGING CONVENTION block.
+
+**trial_log.csv:**
+- Removed `notes` column — qualitative analysis now goes in per-trial markdown reports.
+
+**New: `ai_agent/trials_conclusions/`:**
+- Contains `trial_log.csv` (quantitative results) and one `trial_<ID>_<ModelName>.md` per trial (qualitative report).
+- `TEMPLATE.md` provides a fixed structure the agent fills in — prevents open-ended generation at the most context-heavy moment.
+
+**CODEBASE.md:** Removed redundant project overview (covered by `AGENT.md`), renumbered sections.
+
+**SUMMARY.md:** Added note directing agents to read this file only for historical context, not as part of the standard workflow.
+
+### 3. Design decisions and rationale
+- **Reassurance language rejected:** Phrases like "you're doing well, keep going" don't fix weak model failures; clearer step-by-step instructions do.
+- **Skills (`/ae-phase3`) rejected:** A re-read instruction in the doc achieves the same context refresh without adding moving parts.
+- **One report per trial, not cumulative:** Appending to a growing file risks overwriting previous entries; creating a new file per trial is a simpler, isolated write operation.
+- **`notes` column removed from CSV:** Redundant with the markdown report; keeping both creates inconsistency risk.
+- **`SUMMARY.md` kept (not archived):** Added a conditional-read note instead — useful for deep context, not needed for routine trials.

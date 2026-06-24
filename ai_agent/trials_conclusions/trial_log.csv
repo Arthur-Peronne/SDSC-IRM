@@ -1,0 +1,8 @@
+timestamp,trial_id,model_name,latent_dim,modification_description,metric_name,metric_value,metric_delta,status,mlflow_run_id
+2026-06-19,1,AE3dFCDeep,120,Baseline test,val_mse,0.000835246,0.000,BASELINE,4a0b3dd5cdae4727b1a966ce9e425268
+2026-06-19,2,AE3dCurrent,120,Baseline test,val_mse,0.000626880,-0.000208366,SUCCESS,bd1386ca293244219d93989cc3a3b5da
+2026-06-22,3,AE3dConv,120,Baseline test,val_mse,0.000673388,0.000046508,FAILURE,08976d1ebc6a4e15bbb65b2db7c25958
+2026-06-19,4,AE3dAttention,120,Attention-guided AE (SE blocks),val_mse,0.000726869,0.000099989,FAILURE,dccb003a0a5c4b779a19f17067c319a6
+2026-06-20,5,AE3dDilated,120,Dilated Conv Blocks,val_mse,0.000641876,-0.000084993,FAILURE,3b99305a537f471e930edccf35437cc1
+2026-06-20,6,AE3dDilatedAttention,120,Dilated + SE blocks,val_mse,0.000573453,-0.000068423,SUCCESS,1f8c81907c5d4fa8859606c0265b0a7c
+2026-06-20,7,AE3dSeparableDilated,120,Separable Dilated Conv Blocks,val_mse,0.000590949,0.000017496,FAILURE,91954b1be812454a86c31b748b734967
