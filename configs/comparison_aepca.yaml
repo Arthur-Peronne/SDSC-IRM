@@ -4,9 +4,9 @@
 
 # ── Plot options ──────────────────────────────────────────────────────────────
 plotname: null           # null = auto-generated from series labels; set a string to override
-metrics: ["test_R2_mean","train_R2_mean"]
+metrics: ["train_R2_mean", "validation_R2_mean", "test_R2_mean", "validation_MSE_mean"]
 xscale: "log"
-superpose_metrics: true     # false = one subplot per metric; true = all on one axes (linestyle encodes metric)
+superpose_metrics: false     # false = one subplot per metric; true = all on one axes (linestyle encodes metric)
 
 # ── Series ────────────────────────────────────────────────────────────────────
 # Required per series: model_name + experiment_tag
@@ -27,14 +27,20 @@ superpose_metrics: true     # false = one subplot per metric; true = all on one 
 #   - key params differ between series (potential apples-to-oranges comparison)
 
 series:
-  - model_name: AE3dFCDeep_VAE
-    experiment_tag: vae_optuna2
-
   - model_name: AE3dFCDeep
     experiment_tag: optuna
+
+  - model_name: AE3dAttention
+    experiment_tag: baseline_aiarchi
   
-  - model_name: PCA
-    experiment_tag: baseline
+  - model_name: AE3dDilated
+    experiment_tag: baseline_aiarchi
+
+  - model_name: AE3dDilatedAttention
+    experiment_tag: baseline_aiarchi
+  
+  - model_name: AE3dSeparableDilated
+    experiment_tag: baseline_aiarchi
 
   # Example with params_filter override:
   # - model_name: AE3dFCDeep

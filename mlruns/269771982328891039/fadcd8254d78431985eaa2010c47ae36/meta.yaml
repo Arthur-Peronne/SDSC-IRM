@@ -1,0 +1,14 @@
+artifact_uri: mlruns/269771982328891039/fadcd8254d78431985eaa2010c47ae36/artifacts
+end_time: 1782242021858
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: fadcd8254d78431985eaa2010c47ae36
+run_name: AE_AE3dSeparableDilated_200patients_splitdefault_28dims_baseline_aiarchi
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1782241028778
+status: 3
+tags: []
+user_id: renku

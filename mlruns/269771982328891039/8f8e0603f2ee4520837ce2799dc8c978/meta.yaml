@@ -1,0 +1,14 @@
+artifact_uri: mlruns/269771982328891039/8f8e0603f2ee4520837ce2799dc8c978/artifacts
+end_time: 1782222374847
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: 8f8e0603f2ee4520837ce2799dc8c978
+run_name: AE_AE3dDilatedAttention_200patients_splitdefault_2dims_baseline_aiarchi
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1782221588249
+status: 3
+tags: []
+user_id: renku
