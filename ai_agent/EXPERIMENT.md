@@ -15,11 +15,13 @@
 ## 🔬 EXPERIMENTAL PHASES
 
 ### Phase 1: Hypothesis Generation
+**Before anything else, re-read this file (`ai_agent/EXPERIMENT.md`) and `ai_agent/trials_conclusions/trial_log.csv` to ensure the current champion and trial history are fresh in context.**
+
 NB: no hyperparameter change, only AE architecture. No skip connections.
 1. **Analyze:** Read previous trial results in `ai_agent/trials_conclusions/trial_log.csv`. Identify the "Current Champion" (best `val_mse`) and patterns in success/failure.
 2. **Select a Strategy:**
     - **Exploration (New Architectures):** Propose a model from a new architectural family (e.g., Dilated, Multi-scale, Separable, or Topology changes).
-    - **Exploitation (Refinement):** Propose an improvement to the Current Champion or a highly promising previous model (e.g., "Add Residual blocks to `AE3dAttention`").
+    - **Exploitation (Refinement):** Tune the structure of the Current Champion or a highly promising previous model (e.g., change the number of layers, adjust channel widths, or modify kernel sizes).
 3. **Formulate a Hypothesis:** State the *what*, *why*, and *how*: *"I will [Modify X] in [Model Y] because it will [Address Problem Z] via [Mechanism W], which I predict will decrease `val_mse`."*
 4. **Design the Implementation:** Translate the hypothesis into a concrete architecture design, ensuring it respects the **"No Skip Connections"** rule.
 
