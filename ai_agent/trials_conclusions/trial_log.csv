@@ -6,3 +6,4 @@ timestamp,trial_id,model_name,latent_dim,modification_description,metric_name,me
 2026-06-20,5,AE3dDilated,120,Dilated Conv Blocks,val_mse,0.000641876,-0.000084993,FAILURE,3b99305a537f471e930edccf35437cc1
 2026-06-20,6,AE3dDilatedAttention,120,Dilated + SE blocks,val_mse,0.000573453,-0.000068423,SUCCESS,1f8c81907c5d4fa8859606c0265b0a7c
 2026-06-20,7,AE3dSeparableDilated,120,Separable Dilated Conv Blocks,val_mse,0.000590949,0.000017496,FAILURE,91954b1be812454a86c31b748b734967
+2026-06-24,8,AE3dDilatedAttentionDeep,120,Deeper champion: 5th non-downsampling DilatedAttention encoder block (64->64 dilation=2) before bottleneck,val_mse,0.000676755,+0.000103302,FAILURE,7c5c45e204ef4bea9c0eddded525fc9a
