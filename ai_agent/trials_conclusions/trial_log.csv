@@ -9,3 +9,4 @@ timestamp,trial_id,model_name,latent_dim,modification_description,metric_name,me
 2026-06-24,8,AE3dDilatedAttentionDeep,120,Deeper champion: 5th non-downsampling DilatedAttention encoder block (64->64 dilation=2) before bottleneck,val_mse,0.000676755,+0.000103302,FAILURE,7c5c45e204ef4bea9c0eddded525fc9a
 2026-06-24,9,AE3dDilatedAttentionWide,120,Wider champion: doubled encoder channels (1->16->32->64->128 vs 1->8->16->32->64),val_mse,0.000848473,+0.000275020,FAILURE,7a41525da9e8444cbaf3ae2c45ae808a
 2026-06-24,10,AE3dDilatedAttentionResidual,120,Intra-block residual shortcuts in all 4 encoder stages (same channels+dilations as champion),val_mse,0.000643113,+0.000069660,FAILURE,c7fb0c44e9ff454580442634bff8da98
+2026-06-24,11,AE3dDilatedAttentionBottleneckSE,120,SE channel attention after each bottleneck conv layer (2×SEBlock3D at 128ch) — same as champion otherwise,val_mse,0.000660893,+0.000087440,FAILURE,a395c3ef1038475eb067625a324e6e08
