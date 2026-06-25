@@ -1,12 +1,12 @@
-timestamp,trial_id,model_name,latent_dim,modification_description,metric_name,metric_value,metric_delta,status,mlflow_run_id
-2026-06-19,1,AE3dFCDeep,120,Baseline test,val_mse,0.000835246,0.000,BASELINE,4a0b3dd5cdae4727b1a966ce9e425268
-2026-06-19,2,AE3dCurrent,120,Baseline test,val_mse,0.000626880,-0.000208366,SUCCESS,bd1386ca293244219d93989cc3a3b5da
-2026-06-22,3,AE3dConv,120,Baseline test,val_mse,0.000673388,0.000046508,FAILURE,08976d1ebc6a4e15bbb65b2db7c25958
-2026-06-19,4,AE3dAttention,120,Attention-guided AE (SE blocks),val_mse,0.000726869,0.000099989,FAILURE,dccb003a0a5c4b779a19f17067c319a6
-2026-06-20,5,AE3dDilated,120,Dilated Conv Blocks,val_mse,0.000641876,-0.000084993,FAILURE,3b99305a537f471e930edccf35437cc1
-2026-06-20,6,AE3dDilatedAttention,120,Dilated + SE blocks,val_mse,0.000573453,-0.000068423,SUCCESS,1f8c81907c5d4fa8859606c0265b0a7c
-2026-06-20,7,AE3dSeparableDilated,120,Separable Dilated Conv Blocks,val_mse,0.000590949,0.000017496,FAILURE,91954b1be812454a86c31b748b734967
-2026-06-24,8,AE3dDilatedAttentionDeep,120,Deeper champion: 5th non-downsampling DilatedAttention encoder block (64->64 dilation=2) before bottleneck,val_mse,0.000676755,+0.000103302,FAILURE,7c5c45e204ef4bea9c0eddded525fc9a
-2026-06-24,9,AE3dDilatedAttentionWide,120,Wider champion: doubled encoder channels (1->16->32->64->128 vs 1->8->16->32->64),val_mse,0.000848473,+0.000275020,FAILURE,7a41525da9e8444cbaf3ae2c45ae808a
-2026-06-24,10,AE3dDilatedAttentionResidual,120,Intra-block residual shortcuts in all 4 encoder stages (same channels+dilations as champion),val_mse,0.000643113,+0.000069660,FAILURE,c7fb0c44e9ff454580442634bff8da98
-2026-06-24,11,AE3dDilatedAttentionBottleneckSE,120,SE channel attention after each bottleneck conv layer (2×SEBlock3D at 128ch) — same as champion otherwise,val_mse,0.000660893,+0.000087440,FAILURE,a395c3ef1038475eb067625a324e6e08
+timestamp,trial_id,model_name,latent_dim,modification_description,validation_R2_mean,validation_R2_std,val_R2_lower_bound,lower_bound_compared_to_champion,mean_compared_to_champion,status,mlflow_run_id
+2026-06-19,1,AE3dFCDeep,120,Baseline test,0.688289,0.205251,0.483038,N/A,N/A,BASELINE,4a0b3dd5cdae4727b1a966ce9e425268
+2026-06-19,2,AE3dCurrent,120,Baseline test,0.773734,0.117938,0.655796,+0.1728,+0.0855,CHAMPION,bd1386ca293244219d93989cc3a3b5da
+2026-06-22,3,AE3dConv,120,Baseline test,0.743346,0.168412,0.574934,-0.0809,-0.0304,FAILURE,08976d1ebc6a4e15bbb65b2db7c25958
+2026-06-19,4,AE3dAttention,120,Attention-guided AE (SE blocks),0.741908,0.119188,0.622720,-0.0331,-0.0318,FAILURE,dccb003a0a5c4b779a19f17067c319a6
+2026-06-20,5,AE3dDilated,120,Dilated Conv Blocks,0.762370,0.143079,0.619291,-0.0365,-0.0114,FAILURE,3b99305a537f471e930edccf35437cc1
+2026-06-20,6,AE3dDilatedAttention,120,Dilated + SE blocks,0.803638,0.072903,0.730735,+0.0749,+0.0299,CHAMPION,1f8c81907c5d4fa8859606c0265b0a7c
+2026-06-20,7,AE3dSeparableDilated,120,Separable Dilated Conv Blocks,0.785982,0.092678,0.693304,-0.0374,-0.0177,FAILURE,91954b1be812454a86c31b748b734967
+2026-06-24,8,AE3dDilatedAttentionDeep,120,Deeper champion: 5th non-downsampling DilatedAttention encoder block (64->64 dilation=2) before bottleneck,0.791,N/A,N/A,N/A,-0.0126,FAILURE,7c5c45e204ef4bea9c0eddded525fc9a
+2026-06-24,9,AE3dDilatedAttentionWide,120,Wider champion: doubled encoder channels (1->16->32->64->128 vs 1->8->16->32->64),0.704,N/A,N/A,N/A,-0.0996,FAILURE,7a41525da9e8444cbaf3ae2c45ae808a
+2026-06-24,10,AE3dDilatedAttentionResidual,120,Intra-block residual shortcuts in all 4 encoder stages (same channels+dilations as champion),0.778,N/A,N/A,N/A,-0.0256,FAILURE,c7fb0c44e9ff454580442634bff8da98
+2026-06-24,11,AE3dDilatedAttentionBottleneckSE,120,SE channel attention after each bottleneck conv layer (2×SEBlock3D at 128ch) — same as champion otherwise,0.790,N/A,N/A,N/A,-0.0136,FAILURE,a395c3ef1038475eb067625a324e6e08

@@ -195,3 +195,68 @@ This session focused entirely on improving the `ai_agent/` documentation to incr
 - **One report per trial, not cumulative:** Appending to a growing file risks overwriting previous entries; creating a new file per trial is a simpler, isolated write operation.
 - **`notes` column removed from CSV:** Redundant with the markdown report; keeping both creates inconsistency risk.
 - **`SUMMARY.md` kept (not archived):** Added a conditional-read note instead — useful for deep context, not needed for routine trials.
+
+---
+
+## 📅 SESSION LOG — 2026-06-25: Metric overhaul and protocol refinements
+
+This session overhauled the decision metric and tightened the protocol. No new training was run.
+
+### 1. Primary metric changed: val_mse → validation_R2 lower bound
+
+`val_mse` was an online training metric (noisy, per-epoch). It has been replaced with post-training metrics computed on the restored best model:
+
+- **`validation_R2_mean`** and **`validation_R2_std`** (across the 20 validation patients, logged by MLflow)
+- **`val_R2_lower_bound`** = `mean − std` — the ranking metric
+
+**Decision logic (replaces old Δval_mse < 0):**
+- **CHAMPION:** `trial_lb > champion_lb`
+- **CANDIDATE:** `trial_lb ≤ champion_lb` AND `trial_mean > champion_mean` — higher average but more variable; kept for future analysis
+- **FAILURE:** `trial_lb ≤ champion_lb` AND `trial_mean ≤ champion_mean` — revert as before
+
+The champion's `validation_R2_mean` and `val_R2_lower_bound` are pre-computed in the **🏆 CURRENT CHAMPION** block — the agent must read them from there, not re-derive from the CSV.
+
+### 2. trial_log.csv columns updated
+
+Old columns `metric_name`, `metric_value`, `metric_delta` replaced with:
+`validation_R2_mean, validation_R2_std, val_R2_lower_bound, lower_bound_compared_to_champion, mean_compared_to_champion`
+
+All 11 past trials backfilled with R2 data from MLflow (trials 1–7 full, trials 8–11 R2_mean only — std lost when mlruns were purged on failure). Statuses retroactively updated: trials 3–5, 7–8, 10–11 reclassified (were FAILURE under val_mse, now correctly classified under R2).
+
+### 3. Phase 3 MLflow extraction command added
+
+Agents now extract R2 metrics directly from MLflow at the start of Phase 3:
+```bash
+python3 -c "
+import mlflow; mlflow.set_tracking_uri('mlruns')
+run = mlflow.get_run('RUN_ID')
+m = run.data.metrics
+mean = m['validation_R2_mean']; std = m['validation_R2_std']; lb = mean - std
+print(f'R2_mean={mean:.6f}  R2_std={std:.6f}  lb={lb:.6f}')
+"
+```
+
+### 4. Exploration cooldown rule added (EXPERIMENT.md Phase 1)
+
+**Rule:** If the last 2+ consecutive FAILURE trials are all variants of the Current Champion (model name starts with champion's name), the next trial **must** be Exploration. Exploitation is blocked until a new champion is established.
+
+**Current state:** Trials 8–11 are 4 consecutive FAILUREs on AE3dDilatedAttention variants → **cooldown is already triggered. Trial 12 must be Exploration.**
+
+### 5. Unexplored Directions section added (EXPERIMENT.md)
+
+A curated list of architectural families never tried, placed between Phase 1 and Phase 2 for agent reference during mandatory exploration:
+- Strided conv downsampling (instead of MaxPool)
+- CBAM-style spatial attention (channel SE already tried)
+- Multi-scale parallel encoder paths
+- Asymmetric encoder-decoder depth
+- GroupNorm or no normalization
+- 1×1×1 bottleneck compression before FC
+
+The list is explicitly non-exhaustive — agents may propose anything architecturally sound.
+
+### 6. Minor protocol fixes
+
+- **Log file path fixed:** `results/0_tempo/training_<tag>.log` (was `SDSC-IRM/training_<tag>.log`, wrong relative path)
+- **MLflow artifact:** `scripts/run_autoencoder.py` now uploads the training log as an MLflow artifact at end of run (guarded by `if log_path.exists()`)
+- **Champion block is authoritative:** Phase 1 step 1 no longer asks the agent to re-derive the champion from the CSV
+- **Cooldown rule wording:** "model name starts with the champion's name" — unambiguous for string matching

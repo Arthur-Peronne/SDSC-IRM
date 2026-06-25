@@ -142,6 +142,10 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
             )
             tracking.log_artifact(loss_plot_path)
 
+            log_path = RESULTS_FOLDER / f"training_{experiment_tag}.log"
+            if log_path.exists():
+                tracking.log_artifact(log_path)
+
         # ── LOAD mode ─────────────────────────────────────────────────────────
         else:
             client = mlflow.MlflowClient()
