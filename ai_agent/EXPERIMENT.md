@@ -43,7 +43,9 @@ The following architectural ideas have **never been tried** in this project. Thi
    - **Factory registration:** Add exactly **one new `elif` branch** to `build_autoencoder` for the new model. Do not rewrite or reproduce any existing branch.
    - **No duplication:** Never reproduce existing class definitions. If an edit fails, re-read the file before retrying — do not re-apply the same edit blindly.
 2. **Preparation:** In `configs/autoencoder.yaml`, set `model_name` to the new model's name and `experiment_tag: "aiagent_<NAME>"`. These are the only two fields to change.
-3. **Execution:** `python -u scripts/run_autoencoder.py | tee results/0_tempo/training_<experiment_tag>.log`.
+3. **Execution:** Run training in the background (Bash tool `run_in_background=true`) with the command:
+   `python -u scripts/run_autoencoder.py > results/0_tempo/training_<experiment_tag>.log 2>&1`
+   After the background process completes, read the log file to verify training finished without errors.
 
 ### Phase 3: Comparison and selection
 **Before anything else, re-read this file (`ai_agent/EXPERIMENT.md`) to ensure Phase 3 instructions are current in context.**

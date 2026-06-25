@@ -37,6 +37,10 @@ The agent iterates through trials: propose an architecture → implement → tra
 - **Granularity Shift:** If large edits fail, switch to "Micro-Edits" (replacing 1–3 lines instead of large blocks).
 - **Strategy Pivot:** If micro-edits fail, use `bash` (e.g., `cat -A`) to inspect whitespace/hidden characters, or suggest a full `write`. If still stuck, stop and ask the user for guidance.
 
+## Multi-Trial Autonomous Run
+- **User:** invoke `/loop` (no interval) to run trials autonomously. Each iteration = one trial.
+- **Agent:** run training with `run_in_background=true` (Bash tool parameter), not piped to stdout. Read the log file for results after the background process completes. Re-reading `EXPERIMENT.md` and `trial_log.csv` at the start of each iteration (Phase 1) is already sufficient for state recovery.
+
 ## Communication Style
 - Be concise and direct.
 - Do not have a validation bias — challenge the user's ideas if you think they are suboptimal.
