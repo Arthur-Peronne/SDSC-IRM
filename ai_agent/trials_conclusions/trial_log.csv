@@ -11,3 +11,4 @@ timestamp,trial_id,model_name,latent_dim,modification_description,validation_R2_
 2026-06-24,10,AE3dDilatedAttentionResidual,120,Intra-block residual shortcuts in all 4 encoder stages (same channels+dilations as champion),0.778,N/A,N/A,N/A,-0.0256,FAILURE,c7fb0c44e9ff454580442634bff8da98
 2026-06-24,11,AE3dDilatedAttentionBottleneckSE,120,SE channel attention after each bottleneck conv layer (2×SEBlock3D at 128ch) — same as champion otherwise,0.790,N/A,N/A,N/A,-0.0136,FAILURE,a395c3ef1038475eb067625a324e6e08
 2026-06-25,12,AE3dStrided,120,Exploration: replace MaxPool3d with learned stride-2 Conv3d+IN+ReLU downsampling (dilated+SE attention otherwise identical to champion),0.675142,0.167746,0.507395,-0.223340,-0.128496,FAILURE,1d85705532664fba893f72588a9ea0aa
+2026-06-26,13,AE3dDilatedCBAM,120,CBAM spatial attention (channel SE + spatial attention map) on champion encoder blocks,0.771310,0.126245,0.645066,-0.085669,-0.032328,FAILURE,7cfefa33e5234c32895e2804b4eef5e8
