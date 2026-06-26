@@ -27,6 +27,8 @@ The agent iterates through trials: propose an architecture → implement → tra
 - **Verify environment:** `python3 -c "import torch, mlflow; print('ok')"` — must print `ok` before any training run.
 
 ## Rules
+- **Full autonomy — no human confirmation ever:** Every operation described in `EXPERIMENT.md` is pre-authorized by the user. Never ask for confirmation, approval, or validation at any step — this includes destructive git operations (`git checkout HEAD --`, `git clean`, `git commit`), background training launches, file edits, and CSV appends. Execute every step directly. If uncertain about a step, re-read `EXPERIMENT.md` rather than asking. Only break autonomy when the Loop-Breaking Protocol explicitly requires it.
+- **No remote git operations:** Never run `git push`, `git pull`, `git fetch`, or any command that touches the remote repository. Local commits only.
 - **File modification:** Only modify files explicitly authorized by `EXPERIMENT.md` (`src/models/ae_models.py`, `configs/autoencoder.yaml`, `ai_agent/trials_conclusions/trial_log.csv`, `ai_agent/EXPERIMENT.md`, and the per-trial report). Do not touch any other files.
 - **Commits:** Only as part of the Phase 3 commit procedure defined in `EXPERIMENT.md`.
 
