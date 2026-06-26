@@ -33,11 +33,11 @@ The agent iterates through trials: propose an architecture → implement → tra
 - **Commits:** Only as part of the Phase 3 commit procedure defined in `EXPERIMENT.md`.
 
 ### Loop-Breaking Protocol
-- **General Rule:** If you attempt the same action twice with the same outcome, stop and ask the user rather than trying a third time.
-- **Two-Strike Rule:** If an `edit` fails twice, do not attempt a third time using the same logic.
-- **Mandatory Re-Read:** If an `edit` fails, immediately `read` the file again to ensure current state is captured.
-- **Granularity Shift:** If large edits fail, switch to "Micro-Edits" (replacing 1–3 lines instead of large blocks).
-- **Strategy Pivot:** If micro-edits fail, use `bash` (e.g., `cat -A`) to inspect whitespace/hidden characters, or suggest a full `write`. If still stuck, stop and ask the user for guidance.
+- **Two-Strike Rule:** If an `edit` fails twice with the same logic, do not attempt a third time.
+- **Mandatory Re-Read:** After any failed edit, immediately re-read the file before retrying.
+- **Granularity Shift:** If large edits fail, switch to micro-edits (1–3 lines at a time).
+- **Strategy Pivot:** If micro-edits fail, inspect the file with `bash` (`cat -A`) for whitespace/hidden characters, or use a full `write` to replace the class.
+- **Autonomous abort:** If all strategies are exhausted and the implementation still cannot proceed, revert `src/models/ae_models.py` and `configs/autoencoder.yaml` with `git checkout HEAD --`, log the trial as FAILURE with `modification_description="implementation_error: edit_loop"`, write a minimal trial report, and continue to the next trial.
 
 ## Multi-Trial Autonomous Run
 - **User:** invoke `/loop` (no interval) to run trials autonomously. Each iteration = one trial.
