@@ -1,9 +1,42 @@
 ======================================================================
 PROJECT ARBORESCENCE WITH MODULE DESCRIPTIONS
-Root : /home/renku/work/SDSC-arthur-project-1
+Root : /home/renku/work/SDSC-IRM
 ======================================================================
 
-SDSC-arthur-project-1/
+SDSC-IRM/
+├── ai_agent/
+│   ├── archive/
+│   │   └── experiment_architecture_1/
+│   │       ├── trial_10_AE3dDilatedAttentionResidual.md
+│   │       ├── trial_11_AE3dDilatedAttentionBottleneckSE.md
+│   │       ├── trial_12_AE3dStrided.md
+│   │       ├── trial_13_AE3dDilatedCBAM.md
+│   │       ├── trial_14_AE3dDilatedGroupNorm.md
+│   │       ├── trial_15_AE3dDilatedAttentionSEDecoder.md
+│   │       ├── trial_16_AE3dDilatedBottleneckCompress.md
+│   │       ├── trial_17_AE3dDilated1242.md
+│   │       ├── trial_18_AE3dDilatedMSBottleneck.md
+│   │       ├── trial_19_AE3dDilatedAttentionSEDecoder2.md
+│   │       ├── trial_20_AE3dDilatedAttentionReduction4.md
+│   │       ├── trial_21_AE3dMBConv.md
+│   │       ├── trial_22_AE3dCompact.md
+│   │       ├── trial_23_AE3dDilatedDecoder.md
+│   │       ├── trial_24_AE3dDilatedDecRefinement.md
+│   │       ├── trial_25_AE3dDilatedAttentionLatentNorm.md
+│   │       ├── trial_26_AE3dDilatedAttentionSEDecoderR2.md
+│   │       ├── trial_27_AE3dDilatedAttentionSpatialDecoder.md
+│   │       ├── trial_28_AE3dTrilinDecoder.md
+│   │       ├── trial_8_AE3dDilatedAttentionDeep.md
+│   │       ├── trial_9_AE3dDilatedAttentionWide.md
+│   │       └── trial_log_EXP1.csv
+│   ├── trials_conclusions/
+│   │   ├── TEMPLATE.md
+│   │   └── trial_log.csv
+│   ├── AGENT.md
+│   ├── CODEBASE.md
+│   ├── EXPERIMENT.md
+│   ├── EXPERIMENT_EXISTING.md
+│   └── SUMMARY.md
 ├── ai_assistance/
 │   ├── What the code must perform.txt
 │   ├── context_arborescence.txt
@@ -25,7 +58,16 @@ SDSC-arthur-project-1/
 │   ├── pca_testiris.py  # Script to perform a simple PCA on the IRIS dataset
 │   └── regression_testscikit.py
 ├── reports/
-│   └── test.txt
+│   ├── 0_MRI_visualization/
+│   ├── 1_pca_temporal/
+│   ├── 2_registration/
+│   ├── 3_pca_spatial/
+│   ├── 4_autoencoders_architectures/
+│   ├── 5_autoencoders_training/
+│   │   └── report_autoencoders_training_DUMMY.md
+│   ├── 6_variational_autoencoders/
+│   ├── 7_agentic_ai_training/
+│   └── 8_regression/
 ├── scripts/
 │   ├── run_ae_optuna.py  # Optuna hyperparameter optimisation for 3D autoencoders.
 │   ├── run_autoencoder.py  # 3D autoencoder training and evaluation on cardiac MRI data.
@@ -36,6 +78,11 @@ SDSC-arthur-project-1/
 │   ├── run_regression.py  # Regression pipeline on PCA or AE latent representations.
 │   ├── run_visualize.py  # Visualize MRI NIfTI images (raw ACDC or processed).
 │   └── run_visualize_latent.py  # Visualize the latent space of a trained AE or VAE model.
+├── sdsc_arthur_project.egg-info/
+│   ├── PKG-INFO
+│   ├── SOURCES.txt
+│   ├── dependency_links.txt
+│   └── top_level.txt
 ├── src/
 │   ├── data/
 │   │   ├── __init__.py
@@ -73,12 +120,8 @@ SDSC-arthur-project-1/
 │   └── tracking.py  # MLflow utilities. All tracking interactions must go through this module.
 ├── CLAUDE.md
 ├── README.md
-├── backup_results.tar.gz
-├── optuna_fcdeepnew_MLflow_log.txt
 ├── pyproject.toml
-├── requirements_locked.txt
-├── setup_env.sh
-└── shortcut_AP.txt
+└── requirements_locked.txt
 
 ======================================================================
 DETAILED DOCSTRINGS PER FILE

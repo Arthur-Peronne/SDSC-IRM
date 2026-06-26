@@ -1,6 +1,6 @@
 ======================================================================
 FULL PROJECT CODE — ALL .py FILES
-Root : /home/renku/work/SDSC-arthur-project-1
+Root : /home/renku/work/SDSC-IRM
 Files: 36
 ======================================================================
 
@@ -528,6 +528,10 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
                 save_path=loss_plot_path,
             )
             tracking.log_artifact(loss_plot_path)
+
+            log_path = RESULTS_FOLDER / f"training_{experiment_tag}.log"
+            if log_path.exists():
+                tracking.log_artifact(log_path)
 
         # ── LOAD mode ─────────────────────────────────────────────────────────
         else:
@@ -2526,13 +2530,23 @@ def main():
     groups = load_acdc_groups(n_patients)
     labels = groups + groups if use_both_frames else groups
 
-    # ── Encode + Plot ─────────────────────────────────────────────────────────
+    # ── Encode ────────────────────────────────────────────────────────────────
     print("Encoding all patients...")
     mus = aep.collect_latent_vectors(model, all_dataset, device)
     print(f"Latent vectors: {mus.shape}")
 
-    save_path = RESULTS_FOLDER / f"{run_name}_latent_pca.png"
-    aep.plot_latent_pca(mus, labels, run_name, use_both_frames, save_path)
+    # ── Plot ──────────────────────────────────────────────────────────────────
+    projection = cfg["projection"]
+
+    if projection == "pca":
+        save_path = RESULTS_FOLDER / f"{run_name}_latent_pca.png"
+        aep.plot_latent_pca(mus, labels, run_name, use_both_frames, save_path)
+    elif projection == "tsne":
+        perplexity = cfg["perplexity"]
+        save_path = RESULTS_FOLDER / f"{run_name}_latent_tsne_p{perplexity}.png"
+        aep.plot_latent_tsne(mus, labels, run_name, use_both_frames, perplexity, save_path)
+    else:
+        raise ValueError(f"Unknown projection: {projection!r} (expected 'pca' or 'tsne')")
 
     # ── Log dans MLflow ───────────────────────────────────────────────────────
     with tracking.resume_run(load_run_id):
@@ -3629,8 +3643,9 @@ def load_tensor_datasets(
     elif frame_type != "ED":
         X_ED = _load_frame(frame_type=frame_type, **kwargs)
 
+    print(special_split)
     strat_array = (
-        load_patient_metadata("group", len(X_ED)) if stratify_ongroup else None
+        load_patient_metadata("group", len(X_ED)) if (stratify_ongroup and special_split is not None) else None
     )
 
     train_idx, val_idx, test_idx, split_name = splt.get_split_indices(
@@ -4334,6 +4349,7 @@ def get_split_indices(
 import torch
 import torch.nn as nn
 
+# Blocks original 
 
 class Conv3DBlock(nn.Module):
     """
@@ -4434,6 +4450,230 @@ class UpConv3DBlock(nn.Module):
 
         return x
 
+# Blocks AI Agent
+
+class SEBlock3D(nn.Module):
+    """
+    Squeeze-and-Excitation block for 3D convolutions.
+    """
+    def __init__(self, channels, reduction=16):
+        super().__init__()
+        self.avg_pool = nn.AdaptiveAvgPool3d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(channels, channels // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(channels // reduction, channels, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        b, c, _, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1, 1)
+        return x * y.expand_as(x)
+
+
+class AttentionConv3DBlock(nn.Module):
+    """
+    3D convolutional block with Squeeze-and-Excitation attention.
+    """
+    def __init__(self, in_channels, out_channels, downsample=True, reduction=16):
+        super().__init__()
+        self.conv_block = Conv3DBlock(in_channels, out_channels, downsample=downsample)
+        self.se = SEBlock3D(out_channels, reduction)
+
+    def forward(self, x):
+        x = self.conv_block(x)
+        x = self.se(x)
+        return x
+
+class DilatedConv3DBlock(nn.Module):
+
+    def __init__(self, in_channels, out_channels, dilation=1, downsample=True):
+        super().__init__()
+
+        self.conv1 = nn.Conv3d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=3,
+            stride=1,
+            padding=dilation,
+            dilation=dilation
+        )
+        self.norm1 = nn.InstanceNorm3d(out_channels)
+        self.relu1 = nn.ReLU(inplace=True)
+
+        self.conv2 = nn.Conv3d(
+            in_channels=out_channels,
+            out_channels=out_channels,
+            kernel_size=3,
+            stride=1,
+            padding=dilation,
+            dilation=dilation
+        )
+        self.norm2 = nn.InstanceNorm3d(out_channels)
+        self.relu2 = nn.ReLU(inplace=True)
+
+        self.downsample = downsample
+        if self.downsample:
+            self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.norm1(x)
+        x = self.relu1(x)
+
+        x = self.conv2(x)
+        x = self.norm2(x)
+        x = self.relu2(x)
+
+        if self.downsample:
+            x = self.pool(x)
+
+        return x
+
+class DilatedAttentionConv3DBlock(nn.Module):
+    """
+    3D dilated convolutional block with Squeeze-and-Excitation attention.
+    """
+    def __init__(self, in_channels, out_channels, dilation=1, downsample=True, reduction=16):
+        super().__init__()
+        self.conv_block = DilatedConv3DBlock(in_channels, out_channels, dilation=dilation, downsample=downsample)
+        self.se = SEBlock3D(out_channels, reduction)
+
+    def forward(self, x):
+        x = self.conv_block(x)
+        x = self.se(x)
+        return x
+
+
+class SeparableConv3DBlock(nn.Module):
+    """
+    3D Depthwise Separable Convolutional block:
+    (Depthwise -> Pointwise) -> Norm -> ReLU -> (Depthwise -> Pointwise) -> Norm -> ReLU
+    Optionally followed by MaxPool3D for downsampling.
+    """
+    def __init__(self, in_channels, out_channels, dilation=1, downsample=True):
+        super().__init__()
+
+        # Layer 1
+        self.depthwise1 = nn.Conv3d(
+            in_channels=in_channels,
+            out_channels=in_channels,
+            kernel_size=3,
+            stride=1,
+            padding=dilation,
+            dilation=dilation,
+            groups=in_channels
+        )
+        self.pointwise1 = nn.Conv3d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=1,
+            stride=1,
+            padding=0
+        )
+        self.norm1 = nn.InstanceNorm3d(out_channels)
+        self.relu1 = nn.ReLU(inplace=True)
+
+        # Layer 2
+        self.depthwise2 = nn.Conv3d(
+            in_channels=out_channels,
+            out_channels=out_channels,
+            kernel_size=3,
+            stride=1,
+            padding=dilation,
+            dilation=dilation,
+            groups=out_channels
+        )
+        self.pointwise2 = nn.Conv3d(
+            in_channels=out_channels,
+            out_channels=out_channels,
+            kernel_size=1,
+            stride=1,
+            padding=0
+        )
+        self.norm2 = nn.InstanceNorm3d(out_channels)
+        self.relu2 = nn.ReLU(inplace=True)
+
+        self.downsample = downsample
+        if self.downsample:
+            self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
+
+    def forward(self, x):
+        x = self.depthwise1(x)
+        x = self.pointwise1(x)
+        x = self.norm1(x)
+        x = self.relu1(x)
+
+        x = self.depthwise2(x)
+        x = self.pointwise2(x)
+        x = self.norm2(x)
+        x = self.relu2(x)
+
+        if self.downsample:
+            x = self.pool(x)
+
+        return x
+
+# class ResidualSeparableConv3DBlock(nn.Module):
+#     """
+#     3D Residual Depthwise Separable Convolutional block:
+#     Residual connection: x = x + Conv(x)
+#     """
+#     def __init__(self, in_channels, out_channels, dilation=1, downsample=True):
+#         super().__init__()
+#         self.downsample = downsample
+#         self.conv = SeparableConv3DBlock(in_channels, out_channels, dilation=dilation, downsample=downsample)
+        
+#         # Projection for residual to match dimensions
+#         if in_channels != out_channels or downsample:
+#             stride = 2 if downsample else 1
+#             self.residual = nn.Sequential(
+#                 nn.Conv3d(in_channels, out_channels, kernel_size=1, stride=stride),
+#                 nn.InstanceNorm3d(out_channels)
+#             )
+#         else:
+#             self.residual = nn.Identity()
+
+#     def forward(self, x):
+#         return self.conv(x) + self.residual(x)
+
+# class MultiScaleDilatedConv3DBlock(nn.Module):
+#     """
+#     Multi-scale Depthwise Separable Convolutional block:
+#     Parallel paths with different dilations fused together.
+#     """
+#     def __init__(self, in_channels, out_channels, downsample=True):
+#         super().__init__()
+#         mid_channels = out_channels // 3
+#         self.path1 = SeparableConv3DBlock(in_channels, mid_channels, dilation=1, downsample=False)
+#         self.path2 = SeparableConv3DBlock(in_channels, mid_channels, dilation=2, downsample=False)
+#         self.path3 = SeparableConv3DBlock(in_channels, out_channels - 2*mid_channels, dilation=4, downsample=False)
+        
+#         self.fusion = nn.Conv3d(out_channels, out_channels, kernel_size=1)
+#         self.norm = nn.InstanceNorm3d(out_channels)
+#         self.relu = nn.ReLU(inplace=True)
+
+#         self.downsample = downsample
+#         if self.downsample:
+#             self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
+
+#     def forward(self, x):
+#         p1 = self.path1(x)
+#         p2 = self.path2(x)
+#         p3 = self.path3(x)
+        
+#         x = torch.cat([p1, p2, p3], dim=1)
+#         x = self.fusion(x)
+#         x = self.norm(x)
+#         x = self.relu(x)
+
+#         if self.downsample:
+#             x = self.pool(x)
+#         return x
+
+# Classes original
 
 class AutoEncoder3D_Current(nn.Module):
     """
@@ -4604,7 +4844,6 @@ class AutoEncoder3D_FCDeep(nn.Module):
         x_recon = self.decode(z)
         return x_recon, z
 
-        
 class AutoEncoder3D_Conv(nn.Module):
     """
     Model B:
@@ -4767,28 +5006,6 @@ class AutoEncoder3D_Linear(nn.Module):
         x_recon = self.decode(z)
         return x_recon, z
 
-def build_autoencoder(model_name, latent_dimensions, dropout_rate=0.0):
-    """
-    Build one of the available AE models.
-    """
-    if model_name == "AE3dCurrent":
-        return AutoEncoder3D_Current(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
-
-    elif model_name == "AE3dFCDeep":
-        return AutoEncoder3D_FCDeep(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
-
-    elif model_name == "AE3dConv":
-        return AutoEncoder3D_Conv(latent_dim=latent_dimensions)
-
-    elif model_name == "AE3dLinear":
-        return AutoEncoder3D_Linear(latent_dim=latent_dimensions)
-    
-    elif model_name == "AE3dFCDeep_VAE":
-        return AutoEncoder3D_FCDeep_VAE(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
-
-    else:
-        raise ValueError(f"Unknown model_name: {model_name}")
-
 class AutoEncoder3D_FCDeep_VAE(nn.Module):
     """
     Variational Autoencoder based on AE3dFCDeep architecture.
@@ -4888,6 +5105,353 @@ class AutoEncoder3D_FCDeep_VAE(nn.Module):
         z = self.reparameterize(mu, logvar)
         x_recon = self.decode(z)
         return x_recon, z, mu, logvar
+
+# Classes AI Agent
+
+class AutoEncoder3D_Attention(nn.Module):
+    """
+    Attention-guided 3D AE (sibling of AE3dFCDeep with SE blocks).
+    Same progressive compression, same depth, same channels.
+    All Conv3DBlocks replaced by AttentionConv3DBlocks.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0, reduction=16):
+        super().__init__()
+
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        # Encoder (Attention blocks)
+        self.enc1 = AttentionConv3DBlock(1, 8, downsample=True, reduction=reduction)
+        self.enc2 = AttentionConv3DBlock(8, 16, downsample=True, reduction=reduction)
+        self.enc3 = AttentionConv3DBlock(16, 32, downsample=True, reduction=reduction)
+        self.enc4 = AttentionConv3DBlock(32, 64, downsample=True, reduction=reduction)
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128),
+            nn.ReLU(inplace=True),
+        )
+
+        self.final_down = nn.Conv3d(128, 128, kernel_size=2, stride=2)
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        # Decoder
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+
+        self.initial_up = nn.ConvTranspose3d(128, 128, kernel_size=2, stride=2)
+
+        self.dec1 = UpConv3DBlock(128, 64)
+        self.dec2 = UpConv3DBlock(64, 32)
+        self.dec3 = UpConv3DBlock(32, 16)
+        self.dec4 = UpConv3DBlock(16, 8)
+
+        self.final_conv = nn.Conv3d(8, 1, kernel_size=3, stride=1, padding=1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+class AutoEncoder3D_Dilated(nn.Module):
+    """
+    Dilated Convolutional Autoencoder.
+    Uses dilated convolutions in the encoder to increase receptive field.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        # Encoder (Dilated)
+        # Layer 1: dilation=1
+        self.enc1 = DilatedConv3DBlock(1, 8, dilation=1, downsample=True)
+        # Layer 2: dilation=2
+        self.enc2 = DilatedConv3DBlock(8, 16, dilation=2, downsample=True)
+        # Layer 3: dilation=4
+        self.enc3 = DilatedConv3DBlock(16, 32, dilation=4, downsample=True)
+        # Layer 4: dilation=1 (to stabilize)
+        self.enc4 = DilatedConv3DBlock(32, 64, dilation=1, downsample=True)
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128),
+            nn.ReLU(inplace=True),
+        )
+
+        self.final_down = nn.Conv3d(128, 128, kernel_size=2, stride=2)
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        # Decoder
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, kernel_size=2, stride=2)
+
+        self.dec1 = UpConv3DBlock(128, 64)
+        self.dec2 = UpConv3DBlock(64, 32)
+        self.dec3 = UpConv3DBlock(32, 16)
+        self.dec4 = UpConv3DBlock(16, 8)
+
+        self.final_conv = nn.Conv3d(8, 1, kernel_size=3, stride=1, padding=1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+class AutoEncoder3D_DilatedAttention(nn.Module):
+    """
+    Dilated Convolutional Autoencoder with Squeeze-and-Excitation attention.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0, reduction=16):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        # Encoder (Dilated + Attention)
+        self.enc1 = DilatedAttentionConv3DBlock(1, 8, dilation=1, downsample=True, reduction=reduction)
+        self.enc2 = DilatedAttentionConv3DBlock(8, 16, dilation=2, downsample=True, reduction=reduction)
+        self.enc3 = DilatedAttentionConv3DBlock(16, 32, dilation=4, downsample=True, reduction=reduction)
+        self.enc4 = DilatedAttentionConv3DBlock(32, 64, dilation=1, downsample=True, reduction=reduction)
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128),
+            nn.ReLU(inplace=True),
+        )
+
+        self.final_down = nn.Conv3d(128, 128, kernel_size=2, stride=2)
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        # Decoder
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, kernel_size=2, stride=2)
+
+        self.dec1 = UpConv3DBlock(128, 64)
+        self.dec2 = UpConv3DBlock(64, 32)
+        self.dec3 = UpConv3DBlock(32, 16)
+        self.dec4 = UpConv3DBlock(16, 8)
+
+        self.final_conv = nn.Conv3d(8, 1, kernel_size=3, stride=1, padding=1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+class AutoEncoder3D_SeparableDilated(nn.Module):
+    """
+    Separable Dilated Convolutional Autoencoder.
+    Uses Depthwise Separable Dilated convolutions in the encoder to reduce
+    parameter count while maintaining large receptive fields.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        # Encoder (Separable Dilated)
+        self.enc1 = SeparableConv3DBlock(1, 8, dilation=1, downsample=True)
+        self.enc2 = SeparableConv3DBlock(8, 16, dilation=2, downsample=True)
+        self.enc3 = SeparableConv3DBlock(16, 32, dilation=4, downsample=True)
+        self.enc4 = SeparableConv3DBlock(32, 64, dilation=1, downsample=True)
+
+        self.bottleneck_conv = nn.Sequential(
+            SeparableConv3DBlock(64, 128, dilation=1, downsample=False),
+            SeparableConv3DBlock(128, 128, dilation=1, downsample=False),
+        )
+
+        self.final_down = nn.Conv3d(128, 128, kernel_size=2, stride=2)
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        # Decoder
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, kernel_size=2, stride=2)
+
+        self.dec1 = UpConv3DBlock(128, 64)
+        self.dec2 = UpConv3DBlock(64, 32)
+        self.dec3 = UpConv3DBlock(32, 16)
+        self.dec4 = UpConv3DBlock(16, 8)
+
+        self.final_conv = nn.Conv3d(8, 1, kernel_size=3, stride=1, padding=1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+# Building
+
+def build_autoencoder(model_name, latent_dimensions, dropout_rate=0.0):
+    """
+    Build one of the available AE models.
+    """
+    if model_name == "AE3dCurrent":
+        return AutoEncoder3D_Current(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dFCDeep":
+        return AutoEncoder3D_FCDeep(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dConv":
+        return AutoEncoder3D_Conv(latent_dim=latent_dimensions)
+
+    elif model_name == "AE3dLinear":
+        return AutoEncoder3D_Linear(latent_dim=latent_dimensions)
+    
+    elif model_name == "AE3dFCDeep_VAE":
+        return AutoEncoder3D_FCDeep_VAE(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    # AI Agent
+
+    elif model_name == "AE3dAttention":
+        return AutoEncoder3D_Attention(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dDilated":
+        return AutoEncoder3D_Dilated(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dDilatedAttention":
+        return AutoEncoder3D_DilatedAttention(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dSeparableDilated":
+        return AutoEncoder3D_SeparableDilated(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    else:
+        raise ValueError(f"Unknown model_name: {model_name}")
 
 
 ######################################################################
@@ -8166,7 +8730,7 @@ def collect_latent_vectors(model, dataset, device) -> np.ndarray:
             x = x.to(device)
             output = model.encode(x)
             z = output[0] if isinstance(output, tuple) else output
-            vectors.append(z.cpu().numpy().squeeze())
+            vectors.append(z.cpu().numpy().squeeze(0))
     return np.array(vectors)
 
 
@@ -8230,6 +8794,65 @@ def plot_latent_pca(
     print(f"Plot saved: {save_path}")
     return save_path
 
+def plot_latent_tsne(
+    mus: np.ndarray,
+    labels: list[str],
+    run_name: str,
+    use_both_frames: bool,
+    perplexity: int,
+    save_path: Path,
+) -> Path:
+    """
+    Project latent vectors to 2D via t-SNE and plot colored by ACDC group.
+    """
+    from sklearn.manifold import TSNE
+    import matplotlib.patches as mpatches
+
+    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42, init="pca")
+    mus_2d = tsne.fit_transform(mus)
+
+    group_colors = {
+        "NOR":  "#1D9E75",
+        "DCM":  "#534AB7",
+        "HCM":  "#D85A30",
+        "RV":   "#378ADD",
+        "MINF": "#E24B4A",
+    }
+    markers = {"ED": "o", "ES": "s"}
+    n_patients = len(labels) // 2 if use_both_frames else len(labels)
+
+    fig, ax = plt.subplots(figsize=(9, 7))
+
+    for i, (group, (x, y)) in enumerate(zip(labels, mus_2d)):
+        color = group_colors.get(group, "gray")
+        marker = markers["ED" if i < n_patients else "ES"] if use_both_frames else "o"
+        ax.scatter(x, y, color=color, marker=marker,
+                   s=30, alpha=0.75, linewidths=0)
+
+    group_patches = [
+        mpatches.Patch(color=c, label=g)
+        for g, c in group_colors.items()
+    ]
+    frame_handles = []
+    if use_both_frames:
+        frame_handles = [
+            plt.Line2D([0], [0], marker="o", color="gray",
+                       linestyle="", markersize=7, label="ED"),
+            plt.Line2D([0], [0], marker="s", color="gray",
+                       linestyle="", markersize=7, label="ES"),
+        ]
+
+    ax.legend(handles=group_patches + frame_handles,
+              loc="best", fontsize=9, framealpha=0.8)
+    ax.set_xlabel("t-SNE 1", fontsize=10)
+    ax.set_ylabel("t-SNE 2", fontsize=10)
+    ax.set_title(f"Latent space — t-SNE (perplexity={perplexity})\n{run_name}", fontsize=11)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Plot saved: {save_path}")
+    return save_path
 
 # ── New MLflow-based comparison plot ──────────────────────────────────────────
 
