@@ -17,7 +17,8 @@ The agent iterates through trials: propose an architecture → implement → tra
 - **Python:** `python3` (venv at `/home/renku/work/.venv/` is pre-activated by the Renku shell; no activation step needed).
 - **Git branch:** `agent-ae-opti`
 - **Key files:**
-  - `EXPERIMENT.md` — full trial protocol (read this to run a trial)
+  - `EXPERIMENT.md` — full trial protocol (read this to run a new architecture trial)
+  - `EXPERIMENT_EXISTING.md` — protocol for the reference sweep of all 9 existing architectures (run this first)
   - `src/models/ae_models.py` — architecture definitions + `build_autoencoder` factory (line ~1077)
   - `configs/autoencoder.yaml` — training configuration (modify before each trial, revert after)
   - `ai_agent/trials_conclusions/trial_log.csv` — trial history (one row per trial)
@@ -48,4 +49,5 @@ The agent iterates through trials: propose an architecture → implement → tra
 - Do not have a validation bias — challenge the user's ideas if you think they are suboptimal.
 
 ## To-do
-- Launch AE architecture optimization on several trials
+1. Run `EXPERIMENT_EXISTING.md` sweep — establish reference baselines for all 9 existing architectures and set the starting champion.
+2. Run `EXPERIMENT.md` optimization loop — propose and test new architectures.

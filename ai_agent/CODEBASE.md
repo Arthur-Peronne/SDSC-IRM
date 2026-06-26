@@ -19,8 +19,9 @@ Located in `src/models/ae_models.py`, the following models can be instantiated v
 Parameters are managed via YAML configuration files (e.g., `configs/autoencoder.yaml`).
 
 ### Structural Levers
-*   `model_name`: Selection of the architecture.
-*   `latent_dimensions`: The size of the bottleneck/latent vector.
+*   `model_name`: Selection of the architecture (single-run mode).
+*   `latent_dimensions`: The size of the bottleneck/latent vector (single-run mode).
+*   `multiple_models_and_dims` / `models_list` / `latdim_list`: If `multiple_models_and_dims: true`, the script loops over `models_list × latdim_list` and creates one independent MLflow run per combination (each with its own `run_id` in the `autoencoder` experiment). Used by the agent loop.
 
 ### Hyperparameter Levers
 *   `lr`: Learning rate.

@@ -1,0 +1,1 @@
+timestamp,trial_id,model_name,latent_dims,modification_description,R2_dim8,R2_dim60,R2_dim240,avg_validation_R2_mean,delta_vs_champion,status,mlflow_run_ids

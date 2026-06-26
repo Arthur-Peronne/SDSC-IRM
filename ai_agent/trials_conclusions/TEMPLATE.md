@@ -7,13 +7,11 @@
 <!-- Key architectural changes: what was added, where, and how it differs from the current champion. -->
 
 ## Results
-- **validation_R2_mean:** VALUE
-- **validation_R2_std:** VALUE
-- **val_R2_lower_bound** (mean − std): VALUE
-- **lower_bound_compared_to_champion** (trial lb − champion lb): VALUE
-- **mean_compared_to_champion** (trial mean − champion mean): VALUE
-- **MLflow Run ID:** RUN_ID
-- **Best epoch:** EPOCH / N_EPOCHS
+- **R2_dim8:** VALUE | **R2_dim60:** VALUE | **R2_dim240:** VALUE
+- **avg_validation_R2_mean:** VALUE
+- **delta_vs_champion** (trial avg − champion avg): VALUE
+- **MLflow Run IDs:** RUNID_8 RUNID_60 RUNID_240
+- **Best epochs:** EPOCH_8/N_EPOCHS | EPOCH_60/N_EPOCHS | EPOCH_240/N_EPOCHS
 
 ## Training Dynamics
 <!-- Stability, convergence speed, notable observations (spikes, plateau, early stopping behaviour). -->
