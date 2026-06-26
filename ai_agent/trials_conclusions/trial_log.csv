@@ -14,3 +14,4 @@ timestamp,trial_id,model_name,latent_dim,modification_description,validation_R2_
 2026-06-26,13,AE3dDilatedCBAM,120,CBAM spatial attention (channel SE + spatial attention map) on champion encoder blocks,0.771310,0.126245,0.645066,-0.085669,-0.032328,FAILURE,7cfefa33e5234c32895e2804b4eef5e8
 2026-06-26,14,AE3dDilatedGroupNorm,120,GroupNorm (8 groups) replacing InstanceNorm3d in all encoder and bottleneck layers of champion,0.732918,0.184706,0.548212,-0.182523,-0.070720,FAILURE,ddd1462699c346bf8195c8338835040b
 2026-06-26,15,AE3dDilatedAttentionSEDecoder,120,SE channel attention added to all 4 decoder blocks (champion encoder+bottleneck unchanged),0.802384,0.076517,0.725868,-0.004867,-0.001254,FAILURE,7df080ba97ec4b839aacc72f2c46b48d
+2026-06-26,16,AE3dDilatedBottleneckCompress,120,1x1x1 conv (128->64) after final_down before flattening; FC(1024->120) instead of FC(2048->120),0.769919,0.108136,0.661783,-0.068952,-0.033719,FAILURE,9764a649c62f40e8afcff830705ec28f
