@@ -260,3 +260,76 @@ The list is explicitly non-exhaustive — agents may propose anything architectu
 - **MLflow artifact:** `scripts/run_autoencoder.py` now uploads the training log as an MLflow artifact at end of run (guarded by `if log_path.exists()`)
 - **Champion block is authoritative:** Phase 1 step 1 no longer asks the agent to re-derive the champion from the CSV
 - **Cooldown rule wording:** "model name starts with the champion's name" — unambiguous for string matching
+
+---
+
+## 📅 SESSION LOG — 2026-06-26: Multi-dim protocol overhaul + reference sweep setup
+
+No new training was run. Full protocol redesign motivated by the observation that 28 trials in experiment_architecture_1 all failed to beat `AE3dDilatedAttention` — suspected cause: the champion's unusually low std=0.073 at latdim=120 may have been a lucky single run rather than a genuine architectural advantage.
+
+### 1. Root causes identified
+
+- **Single latent dim (120) per trial:** one training run at one dimension is highly noisy. A lucky convergence can produce an artificially strong champion that blocks all subsequent trials.
+- **val_R2_lower_bound as metric:** `mean − std` amplifies variance — both terms fluctuate across runs, making the lb doubly noisy.
+- **Champion benchmark invalid under new protocol:** `AE3dDilatedAttention`'s metrics were measured only at latdim=120; no comparable multi-dim baseline existed.
+
+### 2. Multi-dim training adopted
+
+Each trial now trains at **three latent dimensions: [8, 60, 240]**, producing 3 independent MLflow runs per trial. The `autoencoder.yaml` was updated: `multiple_models_and_dims: true`, `models_list: ["<ModelName>"]`, `latdim_list: [8, 60, 240]`.
+
+**This yaml change must be committed before the loop starts** — each trial ends with `git checkout HEAD -- configs/autoencoder.yaml`, so the committed state is the revert target.
+
+### 3. Decision metric changed: val_R2_lower_bound → avg_validation_R2_mean
+
+The new ranking metric is the **average `validation_R2_mean` across the 3 latent dims**. Lower bound is dropped entirely.
+
+New decision logic:
+- **CHAMPION:** `trial_avg > champion_avg`
+- **CANDIDATE:** `trial_avg > champion_avg − 0.03`
+- **FAILURE:** `trial_avg ≤ champion_avg − 0.03`
+- **No champion yet (—):** first trial automatically becomes CHAMPION
+
+### 4. trial_log.csv columns updated
+
+Old: `validation_R2_mean, validation_R2_std, val_R2_lower_bound, lower_bound_compared_to_champion, mean_compared_to_champion`
+
+New: `latent_dims, R2_dim8, R2_dim60, R2_dim240, avg_validation_R2_mean, delta_vs_champion`
+
+A fresh `trial_log.csv` was created with the new header. All 28 past trials are archived in `archive/experiment_architecture_1/`.
+
+### 5. MLflow extraction updated
+
+Phase 3 now searches by `experiment_tag + model_name` to retrieve all 3 runs, then computes the average:
+```bash
+python3 -c "
+import mlflow; mlflow.set_tracking_uri('mlruns')
+df = mlflow.search_runs(
+    experiment_names=['autoencoder'],
+    filter_string=\"params.experiment_tag = 'EXPERIMENT_TAG' and params.model_name = 'MODELNAME'\",
+    order_by=['start_time DESC']
+)[['run_id', 'params.latent_dimensions', 'metrics.validation_R2_mean']].head(3)
+print(df.to_string(index=False)); print(f'avg={df[\"metrics.validation_R2_mean\"].mean():.6f}')
+"
+```
+
+### 6. EXPERIMENT_EXISTING.md created — reference sweep of 9 architectures
+
+Before running new architecture trials, all 9 registered architectures must be evaluated under the new multi-dim protocol to establish valid baselines and set the starting champion. The 9 models: `AE3dCurrent`, `AE3dFCDeep`, `AE3dConv`, `AE3dLinear`, `AE3dFCDeep_VAE`, `AE3dAttention`, `AE3dDilated`, `AE3dDilatedAttention`, `AE3dSeparableDilated`.
+
+Protocol specifics:
+- No new architecture implementation — just configure and run
+- All trials commit (status = `REFERENCE`) — no FAILURE/revert
+- Results go into the shared `trial_log.csv` with `trial_id`, `modification_description`, `delta_vs_champion` left blank
+- Post-sweep: best avg_R2_mean model becomes the new champion in `EXPERIMENT.md`
+
+### 7. Unexplored Directions list removed
+
+Most directions from the list (strided conv, CBAM, GroupNorm, 1×1×1 compression, multi-scale) were already tried in experiment_architecture_1. Replaced with a **Strategy Reference** section pointing agents to either propose genuinely new ideas or revisit promising archive candidates (`archive/experiment_architecture_1/trial_log.csv`) under the new protocol.
+
+### 8. Claude Code permissions configured
+
+`/home/renku/work/.claude/settings.json` updated to pre-authorize all tool calls (fixing loop interruptions) while blocking dangerous operations:
+- **Allow:** `Bash(*)`, `Edit(*)`, `Read(*)`, `Write(*)`
+- **Deny:** `git push/pull/fetch/remote/reset`, `rm `, `rm -r*`
+
+**Why this was needed:** the session settings file is at `/home/renku/work/.claude/settings.json` (session root), not at `SDSC-IRM/.claude/settings.json`. The SDSC-IRM settings were never loaded, causing every Edit/Bash call to prompt for authorization and break autonomous loop operation.
