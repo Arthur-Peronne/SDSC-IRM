@@ -14,7 +14,7 @@
 | 6 | `AE3dAttention` | DONE | 0.745631 | 65a449973c9b4819ae7c788328f7c7b8 b7d2a9522a6547cc9ef65cd9a252359c 40e9f1ef9f864a0b8a6696dbf3d57ad0 |
 | 7 | `AE3dDilated` | DONE | 0.748160 | 0e338713893f49f09e6e9efbd595512f 72d1c817ae5d4cd8937f080828956f8e d5350a5061ed4c948f9ede2ff70c1c7c |
 | 8 | `AE3dDilatedAttention` | DONE | 0.733706 | 2492702da6254a649b1c597ee382daf8 e6e3180bc5024dc2abcf8613db928641 3e03d6da5bc74c3bbac2c28a51a3d9ab |
-| 9 | `AE3dSeparableDilated` | TODO | — | — |
+| 9 | `AE3dSeparableDilated` | DONE | 0.737950 | d1e732e69dfd4d558c4a1f01aaed9d72 b31031c8e124440dbaf49d1ab961b042 f908acc9a5734addb7bac4b88a7be137 |
 
 ## 🔬 EXPERIMENTAL PHASES
 

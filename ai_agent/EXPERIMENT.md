@@ -6,11 +6,11 @@
 - **validation_R2_mean:** `0.688289`
 
 ## 🏆 CURRENT CHAMPION — update this block on every CHAMPION
-- **Trial:** — (none yet under multi-dim protocol)
-- **Model:** —
-- **avg_validation_R2_mean (latent_dims: 8, 60, 240):** —
-- **MLflow Run IDs:** —
-- **Note:** If champion_avg is —, the first trial automatically becomes CHAMPION.
+- **Trial:** REFERENCE sweep winner
+- **Model:** `AE3dFCDeep`
+- **avg_validation_R2_mean (latent_dims: 8, 60, 240):** 0.751709
+- **R2_dim8:** 0.771515 | **R2_dim60:** 0.725822 | **R2_dim240:** 0.757791
+- **MLflow Run IDs:** 0dee39dc65294cb69d33f1c99ea60ce0 9d1b0b8b751a4208911bc5ac714702a2 5140426136f643b499b089003010c28a
 
 ## 🔬 EXPERIMENTAL PHASES
 
