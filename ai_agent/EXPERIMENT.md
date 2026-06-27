@@ -62,8 +62,8 @@ Two valid sources for the next trial:
    Verify that exactly 3 rows are returned (one per latent dim). If fewer, check the training log for errors.
 2. **Decision** — read `avg_validation_R2_mean` (= `champion_avg`) from the **🏆 CURRENT CHAMPION** block above, then:
    - **CHAMPION:** `trial_avg > champion_avg` → new champion, update the block
-   - **CANDIDATE:** `trial_avg > champion_avg − 0.03` AND `trial_avg ≤ champion_avg` → save, do not update champion block
-   - **FAILURE:** `trial_avg ≤ champion_avg − 0.03` → revert
+   - **CANDIDATE:** `trial_avg ≤ champion_avg` AND `max(R2_dim8, R2_dim60, R2_dim240) > champion_avg + 0.03` → save, do not update champion block
+   - **FAILURE:** neither CHAMPION nor CANDIDATE → revert
    - **No champion yet (champion_avg = —):** trial automatically becomes CHAMPION.
 3. **Log results:** Append one row to `ai_agent/trials_conclusions/trial_log.csv` using the exact column order below:
    ```
