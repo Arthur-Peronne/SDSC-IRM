@@ -1,0 +1,15 @@
+artifact_uri: mlruns/269771982328891039/0dee39dc65294cb69d33f1c99ea60ce0/artifacts
+end_time: 1782550457563
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: 0dee39dc65294cb69d33f1c99ea60ce0
+run_name: AE_AE3dFCDeep_200patients_splitdefault_8dims_aiagent_existing_AE3dFCDeep
+run_uuid: 0dee39dc65294cb69d33f1c99ea60ce0
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1782548949746
+status: 3
+tags: []
+user_id: renku
