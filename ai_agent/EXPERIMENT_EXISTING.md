@@ -10,7 +10,7 @@
 | 2 | `AE3dFCDeep` | DONE | 0.751709 | 0dee39dc65294cb69d33f1c99ea60ce0 9d1b0b8b751a4208911bc5ac714702a2 5140426136f643b499b089003010c28a |
 | 3 | `AE3dConv` | DONE | 0.744460 | b2733e91203f45558850e66a7f89bab3 2db3eddbff364a348dbee128173bd591 17b3168b5bb3439f80bf976234d9bc33 |
 | 4 | `AE3dLinear` | DONE | 0.590524 | d3cd4b195aee4d78943cd8eb4a897b38 fb34b6cd9d064492adafa7455e85c82e de3854f2406f485b9b32a4730bd4ba8f |
-| 5 | `AE3dFCDeep_VAE` | TODO | — | — |
+| 5 | `AE3dFCDeep_VAE` | DONE | 0.741339 | ab5b8c351c8c4fb5a8c554fafb284ab2 8449767e1e684d51a1e8e63967a6cf8a 3f1d8794d0994438a9b38ea6f4281d19 |
 | 6 | `AE3dAttention` | TODO | — | — |
 | 7 | `AE3dDilated` | TODO | — | — |
 | 8 | `AE3dDilatedAttention` | TODO | — | — |
