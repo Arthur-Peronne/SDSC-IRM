@@ -1,1 +1,2 @@
 timestamp,trial_id,model_name,latent_dims,modification_description,R2_dim8,R2_dim60,R2_dim240,avg_validation_R2_mean,delta_vs_champion,status,mlflow_run_ids
+2026-06-27,,AE3dCurrent,"8,60,240",,0.713262,0.732954,0.693351,0.713189,,REFERENCE,"efc10e1740eb4bed8ec77e88d5bb2757 2a409469cc5f4c84861db97f1405eeb6 a4e9410aeeda47f4b66f967fee036d5f"

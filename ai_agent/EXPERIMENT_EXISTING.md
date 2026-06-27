@@ -6,7 +6,7 @@
 
 | # | Model | Status | avg_R2_mean | mlflow_run_ids |
 |---|---|---|---|---|
-| 1 | `AE3dCurrent` | TODO | — | — |
+| 1 | `AE3dCurrent` | DONE | 0.713189 | efc10e1740eb4bed8ec77e88d5bb2757 2a409469cc5f4c84861db97f1405eeb6 a4e9410aeeda47f4b66f967fee036d5f |
 | 2 | `AE3dFCDeep` | TODO | — | — |
 | 3 | `AE3dConv` | TODO | — | — |
 | 4 | `AE3dLinear` | TODO | — | — |
