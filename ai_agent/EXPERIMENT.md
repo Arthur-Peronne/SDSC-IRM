@@ -15,7 +15,7 @@
 NB: no hyperparameter change, only AE architecture. No skip connections.
 1. **Analyze:** The Current Champion's metrics are in the **🏆 CURRENT CHAMPION** block above — no need to re-derive them from the CSV. Read `ai_agent/trials_conclusions/trial_log.csv` only to identify patterns across CHAMPION / CANDIDATE / FAILURE outcomes.
 2. **Select a Strategy:**
-    - **Exploration cooldown rule:** Count the last N consecutive FAILURE trials in `trial_log.csv`. If N ≥ 2 and all those failures are variants of the Current Champion (their model name starts with the champion's name), the next trial **must** be Exploration — proposing a model from a different architectural family. Exploitation is not permitted until a new champion is established.
+    - **Exploration cooldown rule:** Count the last N consecutive FAILURE trials in `trial_log.csv`. If N ≥ 2 and all those failures are exploitation trials (refinements of the current champion or any of its variants, regardless of model name), the next trial **must** be Exploration — proposing a model from a different architectural family. Exploitation is not permitted until a new champion is established. Do not rely on name prefix matching to determine lineage — read the `modification_description` column to judge whether a trial was an exploitation of the champion family.
     - **Exploration (New Architectures):** Propose a model from a new architectural family (e.g., Dilated, Multi-scale, Separable, or Topology changes). See the **Unexplored Directions** list below for concrete starting points — but that list is not exhaustive; propose anything architecturally sound that hasn't been tried.
     - **Exploitation (Refinement):** Tune the structure of the Current Champion or a highly promising previous model (e.g., change the number of layers, adjust channel widths, or modify kernel sizes).
 3. **Formulate a Hypothesis:** State the *what*, *why*, and *how*: *"I will [Modify X] in [Model Y] because it will [Address Problem Z] via [Mechanism W], which I predict will increase `avg_validation_R2_mean`."*
@@ -73,6 +73,18 @@ Two valid sources for the next trial:
 5. **Commit** — always add `ai_agent/trials_conclusions/trial_log.csv`, `ai_agent/trials_conclusions/trial_<ID>_<ModelName>.md`, and revert `configs/autoencoder.yaml` using `git checkout HEAD -- configs/autoencoder.yaml`. Then:
    - **CHAMPION:** update the **🏆 CURRENT CHAMPION** block at the top of this file, then add `src/models/ae_models.py`, `ai_agent/EXPERIMENT.md`, and `mlruns/`.
    - **CANDIDATE:** add `src/models/ae_models.py` and `mlruns/` (model and runs are kept for future analysis — do **not** update the champion block).
-   - **FAILURE:** revert `src/models/ae_models.py` using `git checkout HEAD -- src/models/ae_models.py` and purge the MLflow run using `git checkout HEAD -- mlruns/ && git clean -fd mlruns/`.
+   - **FAILURE:** revert `src/models/ae_models.py` using `git checkout HEAD -- src/models/ae_models.py` and purge the MLflow runs (including gitignored `.pth`/`.log` artifacts) using:
+     ```bash
+     git clean -fdx mlruns/EXPERIMENT_ID/RUNID_8/ mlruns/EXPERIMENT_ID/RUNID_60/ mlruns/EXPERIMENT_ID/RUNID_240/
+     ```
+     Replace `EXPERIMENT_ID` with the MLflow experiment folder ID (e.g. `269771982328891039`) and `RUNID_*` with the actual run IDs. Using `-x` ensures gitignored files are also removed. Do **not** run `git clean -fdx mlruns/` globally — that would wipe CHAMPION artifacts.
    
    Then commit: `git commit -m "AIagent automatic MODEL_NAME"`
+
+---
+
+## 🧹 POST-CAMPAIGN CLEANUP
+
+After the campaign, purge leftover FAILURE artifacts (`.pth`, `.log`) that survive `git clean -fd` because they are gitignored. Run once from the repo root:
+
+> **Note for future campaigns:** use `git clean -fdx mlruns/<run_id>/` (with `-x`) per FAILURE run ID to also remove gitignored files at cleanup time, avoiding this accumulation.
