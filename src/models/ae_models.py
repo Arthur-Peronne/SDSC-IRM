@@ -1072,6 +1072,93 @@ class AutoEncoder3D_SeparableDilated(nn.Module):
         x_recon = self.decode(z)
         return x_recon, z
 
+class AutoEncoder3D_FCDeepAsym(nn.Module):
+    """
+    AE3dFCDeep with anisotropic stage-1 downsampling.
+    Stage 1 uses (1,2,2) pooling to preserve z-depth (32 slices → 32);
+    stages 2–4 use isotropic (2,2,2) pooling. FC bottleneck identical to champion.
+    Rationale: cardiac MRI z-axis (32) is 4x smaller than y/x (128); standard
+    (2,2,2) pooling in stage 1 immediately discards half the z-slices, losing
+    early 3D context. Preserving z through stage 1 gives later blocks richer
+    volumetric features before isotropic compression begins.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        # Encoder: stage 1 uses anisotropic (1,2,2) pool; stages 2-4 isotropic
+        self.enc1 = Conv3DBlock(1, 8, downsample=False)                  # 8×32×128×128
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))  # 8×32×64×64
+        self.enc2 = Conv3DBlock(8, 16, downsample=True)                  # 16×16×32×32
+        self.enc3 = Conv3DBlock(16, 32, downsample=True)                 # 32×8×16×16
+        self.enc4 = Conv3DBlock(32, 64, downsample=True)                 # 64×4×8×8
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+        )                                                                # 128×4×8×8
+
+        # Asymmetric final compression: (4,8,8) → (1,4,4) via kernel/stride (4,2,2)
+        self.final_down = nn.Conv3d(128, 128, kernel_size=(4, 2, 2), stride=(4, 2, 2))
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        # Decoder: symmetric asymmetric upsample
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, kernel_size=(4, 2, 2), stride=(4, 2, 2))
+
+        self.dec1 = UpConv3DBlock(128, 64)   # 64×8×16×16
+        self.dec2 = UpConv3DBlock(64, 32)    # 32×16×32×32
+        self.dec3 = UpConv3DBlock(32, 16)    # 16×32×64×64
+
+        # Anisotropic final decode: (1,2,2) upsample only y/x
+        self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
+        self.dec4_conv = Conv3DBlock(16, 8, downsample=False)            # 8×32×128×128
+
+        self.final_conv = nn.Conv3d(8, 1, kernel_size=3, stride=1, padding=1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.pool1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4_up(x)
+        x = self.dec4_conv(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+
 # Building
 
 def build_autoencoder(model_name, latent_dimensions, dropout_rate=0.0):
@@ -1106,6 +1193,9 @@ def build_autoencoder(model_name, latent_dimensions, dropout_rate=0.0):
 
     elif model_name == "AE3dSeparableDilated":
         return AutoEncoder3D_SeparableDilated(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dFCDeepAsym":
+        return AutoEncoder3D_FCDeepAsym(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
     else:
         raise ValueError(f"Unknown model_name: {model_name}")
