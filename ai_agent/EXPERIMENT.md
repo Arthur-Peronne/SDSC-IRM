@@ -1,11 +1,11 @@
 # 🧪 AE OPTIMIZATION EXPERIMENT PROTOCOL
 
 ## 🏆 CURRENT CHAMPION — update this block on every CHAMPION
-- **Trial:** 4
-- **Model:** `AE3dFCDeepAsymV2`
-- **avg_validation_R2_mean (latent_dims: 8, 60, 240):** 0.766463
-- **R2_dim8:** 0.747656 | **R2_dim60:** 0.760047 | **R2_dim240:** 0.791686
-- **MLflow Run IDs:** 4365d204b8e2456c965e8c9e88c03735 3b3d0085c6b8457392911f8ed4fcdb5c c6ece9ce362548d3916358734c95d0ed
+- **Trial:** 6
+- **Model:** `AE3dFCDeepAsymV4`
+- **avg_validation_R2_mean (latent_dims: 8, 60, 240):** 0.766648
+- **R2_dim8:** 0.747004 | **R2_dim60:** 0.774821 | **R2_dim240:** 0.778119
+- **MLflow Run IDs:** f9a89b6f621748718f1aaf6c1e44b6c3 1ce1d6737eef411fb85ed6ce642c6369 8cedbc464b4a4414b48ecd07025d3521
 
 ## 🔬 EXPERIMENTAL PHASES
 
