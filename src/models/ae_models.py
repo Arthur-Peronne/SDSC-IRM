@@ -1888,58 +1888,65 @@ def build_autoencoder(model_name, latent_dimensions, dropout_rate=0.0):
     """
     Build one of the available AE models.
     """
-    if model_name == "AE3dCurrent":
+
+    # BASE MODELS 
+    
+    if model_name == "AE3dCurrent": # 0.713189
         return AutoEncoder3D_Current(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dFCDeep":
+    elif model_name == "AE3dFCDeep": # 0.751709
         return AutoEncoder3D_FCDeep(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dConv":
+    elif model_name == "AE3dConv": # 0.744460
         return AutoEncoder3D_Conv(latent_dim=latent_dimensions)
 
-    elif model_name == "AE3dLinear":
+    elif model_name == "AE3dLinear": # O.590524
         return AutoEncoder3D_Linear(latent_dim=latent_dimensions)
     
-    elif model_name == "AE3dFCDeep_VAE":
+    elif model_name == "AE3dFCDeep_VAE": # 0.741339
         return AutoEncoder3D_FCDeep_VAE(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    # AI Agent
+    # AI Agent Pi
 
-    elif model_name == "AE3dAttention":
+    elif model_name == "AE3dAttention": # 0.745631
         return AutoEncoder3D_Attention(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dDilated":
+    elif model_name == "AE3dDilated": # 0.748160
         return AutoEncoder3D_Dilated(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dDilatedAttention":
+    elif model_name == "AE3dDilatedAttention": # 0.733706
         return AutoEncoder3D_DilatedAttention(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dSeparableDilated":
+    elif model_name == "AE3dSeparableDilated": # 0.737950
         return AutoEncoder3D_SeparableDilated(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+    
+    # AI Agent Claude
 
-    elif model_name == "AE3dFCDeepAsym":
+    elif model_name == "AE3dFCDeepAsym": # 0.762770
         return AutoEncoder3D_FCDeepAsym(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dFCDeepAsymV2":
+    elif model_name == "AE3dFCDeepAsymV2": # 0.766463
         return AutoEncoder3D_FCDeepAsymV2(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dFCDeepAsymV4":
+    elif model_name == "AE3dFCDeepAsymV4": # 0.766648
         return AutoEncoder3D_FCDeepAsymV4(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dAsymResidual":
+    elif model_name == "AE3dAsymResidual": # 0.762058
         return AutoEncoder3D_AsymResidual(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dAsymResidualV4":
+    elif model_name == "AE3dAsymResidualV4": # 0.773806 -> TO TRAIN ALL DIMS?
         return AutoEncoder3D_AsymResidualV4(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dAsymSeparable":
+    elif model_name == "AE3dAsymSeparable": # 0.755189
         return AutoEncoder3D_AsymSeparable(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dAsymResSeparable":
+    elif model_name == "AE3dAsymResSeparable": # 0.795874 -> TO TRAIN ALL DIMS?
         return AutoEncoder3D_AsymResSeparable(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dAsymResSeparableV2":
+    elif model_name == "AE3dAsymResSeparableV2": # 0.811539 -> TO TRAIN ALL DIMS?
         return AutoEncoder3D_AsymResSeparableV2(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    # ELSE 
 
     else:
         raise ValueError(f"Unknown model_name: {model_name}")

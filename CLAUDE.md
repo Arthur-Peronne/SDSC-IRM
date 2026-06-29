@@ -19,7 +19,7 @@ mlflow ui --host 0.0.0.0 --port 5000
 
 ```bash
 # Lancer jobs
-nohup python -u scripts/run_autoencoder.py > vae_alldims_opt2.txt 2>&1 &
+nohup python -u scripts/run_autoencoder.py > alldims_aiarchi_claudeexp2.txt 2>&1 &
 ```
 
 ```bash

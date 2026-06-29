@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "aiagent_blablabla"
+experiment_tag: "baseline_aiarchi"
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
@@ -24,11 +24,11 @@ special_split: null              # null = sequential "splitdefault"; e.g. "split
 stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
 
 # ── Model ─────────────────────────────────────────────────────────────────────
-model_name: "blablabla"
+model_name: ""
 latent_dimensions: 120
 multiple_models_and_dims: true  # true = loop over models_list × latdim_list
-models_list: ["blablabla"]
-latdim_list: [8, 60, 240] # [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
+models_list: ["AE3dAsymResidualV4", "AE3dAsymResSeparable", "AE3dAsymResSeparableV2"]
+latdim_list: [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
 
 # ── Training ──────────────────────────────────────────────────────────────────
 recalculate_ae: true             # false = load existing model (requires load_run_id)
