@@ -30,16 +30,13 @@ series:
   - model_name: AE3dFCDeep
     experiment_tag: optuna
 
-  - model_name: AE3dAttention
+  - model_name: AE3dAsymResidualV4
     experiment_tag: baseline_aiarchi
   
-  - model_name: AE3dDilated
+  - model_name: AE3dAsymResSeparable
     experiment_tag: baseline_aiarchi
 
-  - model_name: AE3dDilatedAttention
-    experiment_tag: baseline_aiarchi
-  
-  - model_name: AE3dSeparableDilated
+  - model_name: AE3dAsymResSeparableV2
     experiment_tag: baseline_aiarchi
 
   # Example with params_filter override:
