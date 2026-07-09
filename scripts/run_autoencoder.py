@@ -10,6 +10,12 @@ Usage:
 
 LOAD mode: set recalculate_ae: false and load_run_id: <mlflow_run_id> in the YAML.
 CALC mode: set recalculate_ae: true.
+
+Hyperparameter resolution (hyper_automatic_values in autoencoder.yaml):
+  false → values taken directly from autoencoder.yaml
+  true  → values resolved via ae_hparam_loader from configs/ae_HPforarchis.yaml
+          (interpolated, single-point, or default depending on the model)
+  The resolved values are always what is logged to MLflow — never the yaml placeholders.
 """
 
 import yaml
@@ -21,26 +27,46 @@ from src.config import RESULTS_FOLDER
 from src.data import loader
 from src.models.ae_models import build_autoencoder
 from src.training import ae_training as aet
+from src.training.ae_hparam_loader import load_hp_table, resolve_hyperparams
 from src.visualization import ae_plots as aep
 from src import tracking
 
 CONFIG_PATH = Path(__file__).parent.parent / "configs" / "autoencoder.yaml"
+HP_TABLE_PATH = Path(__file__).parent.parent / "configs" / "ae_HPforarchis.yaml"
 
 
 def _run_one(cfg, model_name, latent_dimensions, split_name,
              n_train_images, n_val_images,
-             train_dataset, val_dataset, test_dataset, X_maxnorm):
+             train_dataset, val_dataset, test_dataset, X_maxnorm,
+             hp_table):
     """Train (or load) one AE model and log everything to a single MLflow run."""
 
-    recalculate  = cfg["recalculate_ae"]
-    load_run_id  = cfg.get("load_run_id") if not recalculate else None
-    frame_tag    = "ED+ES" if cfg["use_both_frames"] else cfg["frame_type"]
-    n_train      = cfg["n_train"]
-    n_val        = cfg["n_val"]
+    recalculate    = cfg["recalculate_ae"]
+    load_run_id    = cfg.get("load_run_id") if not recalculate else None
+    frame_tag      = "ED+ES" if cfg["use_both_frames"] else cfg["frame_type"]
+    n_train        = cfg["n_train"]
+    n_val          = cfg["n_val"]
     experiment_tag = cfg["experiment_tag"]
 
     if not recalculate and not load_run_id:
         raise ValueError("recalculate_ae: false requires load_run_id in YAML")
+
+    # ── Resolve hyperparameters ───────────────────────────────────────────────
+    # These are the single source of truth for training and MLflow logging.
+    # cfg values for these keys are ignored when hyper_automatic_values=True.
+    lr, weight_decay, dropout_rate, noise_std, patience, beta, beta_warmup_epochs = \
+        resolve_hyperparams(model_name, latent_dimensions, hp_table, cfg)
+
+    # print(
+    #     f"Hyperparameters resolved:\n"
+    #     f"  lr                 = {lr:.2e}\n"
+    #     f"  weight_decay       = {weight_decay:.2e}\n"
+    #     f"  dropout_rate       = {dropout_rate}\n"
+    #     f"  noise_std          = {noise_std}\n"
+    #     f"  patience           = {patience}\n"
+    #     f"  beta               = {beta:.2e}\n"
+    #     f"  beta_warmup_epochs = {beta_warmup_epochs}"
+    # )    
 
     run_name = (
         f"AE_{model_name}_{n_train_images}patients_{split_name}"
@@ -59,28 +85,35 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
         # ── CALC mode ─────────────────────────────────────────────────────────
         if recalculate:
             tracking.log_artifact(CONFIG_PATH)
+
+            # ── Log fixed parameters ──────────────────────────────────────────
             tracking.log_params({
-                "source_folder":    cfg["source_folder"],
-                "model_name":       model_name,
-                "latent_dimensions": latent_dimensions,
-                "n_train":          n_train,
-                "n_val":            n_val,
-                "n_test":           cfg["n_test"],
-                "split_name":       split_name,
-                "stratify_ongroup": cfg.get("stratify_ongroup", False),
-                "frame_tag":        frame_tag,
-                "image_roi_only":   cfg["image_roi_only"],
-                "mask_ys":          cfg["mask_ys"],
-                "mask_bin":         cfg["mask_bin"],
-                "experiment_tag":   experiment_tag,
-                "n_epochs":         cfg["n_epochs"],
-                "batch_size":       cfg["batch_size"],
-                "lr":               cfg["lr"],
-                "weight_decay":     cfg["weight_decay"],
-                "dropout_rate":     cfg["dropout_rate"],
-                "noise_std":        cfg["noise_std"],
-                "patience":         cfg["patience"],
+                "source_folder":      cfg["source_folder"],
+                "model_name":         model_name,
+                "latent_dimensions":  latent_dimensions,
+                "n_train":            n_train,
+                "n_val":              n_val,
+                "n_test":             cfg["n_test"],
+                "split_name":         split_name,
+                "stratify_ongroup":   cfg.get("stratify_ongroup", False),
+                "frame_tag":          frame_tag,
+                "image_roi_only":     cfg["image_roi_only"],
+                "mask_ys":            cfg["mask_ys"],
+                "mask_bin":           cfg["mask_bin"],
+                "experiment_tag":     experiment_tag,
+                "n_epochs":           cfg["n_epochs"],
+                "batch_size":         cfg["batch_size"],
                 "patience_scheduler": cfg["patience_scheduler"],
+                # Traceability: was this run using automatic HP or manual?
+                "hyper_automatic_values": cfg.get("hyper_automatic_values", False),
+                # Resolved hyperparameters (always the real values used) ────────
+                "lr":                 lr,
+                "weight_decay":       weight_decay,
+                "dropout_rate":       dropout_rate,
+                "noise_std":          noise_std,
+                "patience":           patience,
+                "beta":               beta,
+                "beta_warmup_epochs": beta_warmup_epochs,
             })
 
             if n_val > 0:
@@ -91,14 +124,14 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
                     latent_dimensions=latent_dimensions,
                     n_epochs=cfg["n_epochs"],
                     batch_size=cfg["batch_size"],
-                    lr=cfg["lr"],
-                    patience=cfg["patience"],
+                    lr=lr,
+                    patience=patience,
                     patience_scheduler=cfg["patience_scheduler"],
-                    weight_decay=cfg["weight_decay"],
-                    dropout_rate=cfg["dropout_rate"],
-                    noise_std=cfg["noise_std"],
-                    beta=cfg["beta"],
-                    beta_warmup_epochs=cfg["beta_warmup_epochs"],
+                    weight_decay=weight_decay,
+                    dropout_rate=dropout_rate,
+                    noise_std=noise_std,
+                    beta=beta,
+                    beta_warmup_epochs=beta_warmup_epochs,
                 )
                 tracking.log_params({"best_epoch": best_epoch})
             else:
@@ -108,14 +141,14 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
                     latent_dimensions=latent_dimensions,
                     n_epochs=cfg["n_epochs"],
                     batch_size=cfg["batch_size"],
-                    lr=cfg["lr"],
-                    weight_decay=cfg["weight_decay"],
-                    dropout_rate=cfg["dropout_rate"],
-                    noise_std=cfg["noise_std"],
+                    lr=lr,
+                    weight_decay=weight_decay,
+                    dropout_rate=dropout_rate,
+                    noise_std=noise_std,
                 )
                 best_epoch = cfg["n_epochs"]
 
-            # ── Log loss history in MLflow ────────────────────────────────────────────
+            # ── Log loss history ──────────────────────────────────────────────
             for step, value in enumerate(loss_history.get("train", [])):
                 tracking.log_metric("train_loss", value, step=step + 1)
             for step, value in enumerate(loss_history.get("validation", [])):
@@ -129,10 +162,8 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
             for step, value in enumerate(loss_history.get("val_kl", [])):
                 tracking.log_metric("val_kl", value, step=step + 1)
 
-            # Save model artifact in MLflow
             tracking.log_model_state_dict(model, filename=f"model_{best_epoch}epochs.pth")
 
-            # Loss plot (always produced when training)
             loss_plot_path = RESULTS_FOLDER / f"{run_name}_train_val_loss.png"
             aep.plot_train_val_loss(
                 loss_history=loss_history,
@@ -151,17 +182,17 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
             client = mlflow.MlflowClient()
             saved  = client.get_run(load_run_id).data.params
             expected = {
-                "split_name":       split_name,
-                "n_train":          str(n_train),
-                "n_val":            str(n_val),
-                "n_test":           str(cfg["n_test"]),
-                "frame_tag":        frame_tag,
-                "model_name":       model_name,
+                "split_name":        split_name,
+                "n_train":           str(n_train),
+                "n_val":             str(n_val),
+                "n_test":            str(cfg["n_test"]),
+                "frame_tag":         frame_tag,
+                "model_name":        model_name,
                 "latent_dimensions": str(latent_dimensions),
-                "source_folder":  cfg["source_folder"],
-                "image_roi_only": str(cfg["image_roi_only"]),
-                "mask_ys":        str(cfg["mask_ys"]),
-                "mask_bin":       str(cfg["mask_bin"]),
+                "source_folder":     cfg["source_folder"],
+                "image_roi_only":    str(cfg["image_roi_only"]),
+                "mask_ys":           str(cfg["mask_ys"]),
+                "mask_bin":          str(cfg["mask_bin"]),
             }
             mismatches = [
                 f"  {k}: saved={saved.get(k)!r}, current={v!r}"
@@ -178,7 +209,8 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
             local_path     = client.download_artifacts(load_run_id, model_filename)
             device         = aet.get_device()
             model          = build_autoencoder(
-                model_name, latent_dimensions, dropout_rate=cfg["dropout_rate"]
+                model_name, latent_dimensions,
+                dropout_rate=dropout_rate,
             ).to(device)
             model.load_state_dict(torch.load(local_path, map_location=device))
             model.eval()
@@ -219,11 +251,15 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
             n_development = n_train + n_val
 
             if cfg["recons_auto"]:
-                # Compute metrics on test set at this latent_dim for patient selection
                 test_metrics = []
                 for i, patient_tensor in enumerate(test_dataset):
                     x_true, x_pred = aet.ae_reconstructX(patient_tensor, X_maxnorm, model)
-                    test_metrics.append(aet.reconstruction_metrics(x_true, x_pred, n_train_images + n_val_images + 1 + i))
+                    test_metrics.append(
+                        aet.reconstruction_metrics(
+                            x_true, x_pred,
+                            n_train_images + n_val_images + 1 + i,
+                        )
+                    )
                 selected = aep.ae_select_representative_patients(
                     test_metrics,
                     use_both_frames=cfg["use_both_frames"],
@@ -257,18 +293,26 @@ def main():
     with open(CONFIG_PATH) as f:
         cfg = yaml.safe_load(f)
 
-    # ── Float fix ────────────────────────────────────────────────────
+    # ── Float fix for manual HP values in cfg ─────────────────────────────────
+    # (only needed when hyper_automatic_values=False, but harmless otherwise)
     for key in ("lr", "weight_decay", "dropout_rate", "noise_std", "beta"):
-        cfg[key] = float(cfg[key])
-    
-    # ── Derived parameters ────────────────────────────────────────────────────
+        if key in cfg:
+            cfg[key] = float(cfg[key])
+
+    # ── Load HP table once (used by resolve_hyperparams inside the loop) ──────
+    if cfg.get("hyper_automatic_values", False):
+        hp_table = load_hp_table(HP_TABLE_PATH)
+    else:
+        hp_table = {}  # not used in case 1, but resolve_hyperparams handles it
+
+    # ── Derived parameters ─────────────────────────────────────────────────────
     n_train         = cfg["n_train"]
     n_val           = cfg["n_val"]
     use_both_frames = cfg["use_both_frames"]
     n_train_images  = n_train * 2 if use_both_frames else n_train
     n_val_images    = n_val   * 2 if use_both_frames else n_val
 
-    # ── Load data (before MLflow — split_name needed for run_name) ────────────
+    # ── Load data ──────────────────────────────────────────────────────────────
     train_dataset, val_dataset, test_dataset, X_maxnorm, split_name = loader.load_tensor_datasets(
         source_folder=cfg["source_folder"],
         cache_folder=cfg["cache_folder"],
@@ -280,8 +324,8 @@ def main():
         use_both_frames=use_both_frames,
         frame_type=cfg["frame_type"],
         image_roi_only=cfg["image_roi_only"],
-        mask=cfg["mask_ys"],         
-        binary_mask=cfg["mask_bin"], 
+        mask=cfg["mask_ys"],
+        binary_mask=cfg["mask_bin"],
         recalculate=cfg["recalculate_x"],
     )
     print(
@@ -290,7 +334,7 @@ def main():
         f"test: {len(test_dataset)} | split: {split_name}"
     )
 
-    # ── Run ───────────────────────────────────────────────────────────────────
+    # ── Run ────────────────────────────────────────────────────────────────────
     if cfg["multiple_models_and_dims"]:
         if not cfg["recalculate_ae"]:
             raise ValueError("multiple_models_and_dims: true requires recalculate_ae: true")
@@ -301,13 +345,16 @@ def main():
                     cfg, model_name, latent_dimensions, split_name,
                     n_train_images, n_val_images,
                     train_dataset, val_dataset, test_dataset, X_maxnorm,
+                    hp_table=hp_table,
                 )
     else:
         _run_one(
             cfg, cfg["model_name"], cfg["latent_dimensions"], split_name,
             n_train_images, n_val_images,
             train_dataset, val_dataset, test_dataset, X_maxnorm,
+            hp_table=hp_table,
         )
+
 
 if __name__ == "__main__":
     main()
