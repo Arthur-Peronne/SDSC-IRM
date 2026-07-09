@@ -1,0 +1,67 @@
+# configs/ae_HPforarchis.yaml
+#
+# Optuna-optimised hyperparameters per architecture and latent dim.
+# Used by src/training/ae_hparam_loader.py when hyper_automatic_values: true
+# in configs/autoencoder.yaml.
+#
+# Resolution rules (see ae_hparam_loader.py for full logic):
+#   - Model present, 2+ dim entries  → log-interpolation to the requested dim
+#                                       (no extrapolation: clamped to boundary dims)
+#   - Model present, 1 dim entry     → that entry used for all dims
+#   - Model absent                   → 'default' block used
+#
+# Interpolation scale per hyperparameter:
+#   log-log   (Optuna log=True):  lr, weight_decay, beta
+#   log-linear (Optuna log=False): dropout_rate, noise_std, patience, beta_warmup_epochs
+#
+# Hand-tuned fallback values go in the 'default' block below.
+# ─────────────────────────────────────────────────────────────────────────────
+
+AE3dAsymResSeparableV2:
+  dim_8:
+    lr: 1.0e-5
+    weight_decay: 1.0e-5
+    dropout_rate: 0.0
+    noise_std: 0.02
+    patience: 30
+  dim_60:
+    lr: 1.0e-5
+    weight_decay: 1.0e-6
+    dropout_rate: 0.1
+    noise_std: 0.0
+    patience: 50
+  dim_240:
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    dropout_rate: 0.01
+    noise_std: 0.01
+    patience: 40
+
+AE3dFCDeep:
+  dim_120:
+    lr: 4.23e-5
+    weight_decay: 4.84e-6
+    dropout_rate: 0.221
+    noise_std: 0.002
+    patience: 45
+
+AE3dFCDeep_VAE:
+  dim_120:
+    lr: 4.77e-5
+    weight_decay: 1.09e-7
+    patience: 27
+    beta: 0.00022
+    beta_warmup_epochs: 41
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fallback for any architecture not listed above.
+# These are hand-tuned conservative values, not Optuna results.
+# ─────────────────────────────────────────────────────────────────────────────
+default:
+  lr: 1.0e-5
+  weight_decay: 1.0e-7
+  dropout_rate: 0.1
+  noise_std: 0.002
+  patience: 30
+  beta: 0.00022
+  beta_warmup_epochs: 41

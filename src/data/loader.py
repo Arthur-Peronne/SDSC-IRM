@@ -242,7 +242,7 @@ def load_tensor_datasets(
     elif frame_type != "ED":
         X_ED = _load_frame(frame_type=frame_type, **kwargs)
 
-    print(special_split)
+    print(f"special_split = {special_split}")
     strat_array = (
         load_patient_metadata("group", len(X_ED)) if (stratify_ongroup and special_split is not None) else None
     )
