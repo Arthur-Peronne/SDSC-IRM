@@ -6,29 +6,63 @@ Root : /home/renku/work/SDSC-IRM
 SDSC-IRM/
 ├── ai_agent/
 │   ├── archive/
-│   │   └── experiment_architecture_1/
-│   │       ├── trial_10_AE3dDilatedAttentionResidual.md
-│   │       ├── trial_11_AE3dDilatedAttentionBottleneckSE.md
-│   │       ├── trial_12_AE3dStrided.md
-│   │       ├── trial_13_AE3dDilatedCBAM.md
-│   │       ├── trial_14_AE3dDilatedGroupNorm.md
-│   │       ├── trial_15_AE3dDilatedAttentionSEDecoder.md
-│   │       ├── trial_16_AE3dDilatedBottleneckCompress.md
-│   │       ├── trial_17_AE3dDilated1242.md
-│   │       ├── trial_18_AE3dDilatedMSBottleneck.md
-│   │       ├── trial_19_AE3dDilatedAttentionSEDecoder2.md
-│   │       ├── trial_20_AE3dDilatedAttentionReduction4.md
-│   │       ├── trial_21_AE3dMBConv.md
-│   │       ├── trial_22_AE3dCompact.md
-│   │       ├── trial_23_AE3dDilatedDecoder.md
-│   │       ├── trial_24_AE3dDilatedDecRefinement.md
-│   │       ├── trial_25_AE3dDilatedAttentionLatentNorm.md
-│   │       ├── trial_26_AE3dDilatedAttentionSEDecoderR2.md
-│   │       ├── trial_27_AE3dDilatedAttentionSpatialDecoder.md
-│   │       ├── trial_28_AE3dTrilinDecoder.md
-│   │       ├── trial_8_AE3dDilatedAttentionDeep.md
-│   │       ├── trial_9_AE3dDilatedAttentionWide.md
-│   │       └── trial_log_EXP1.csv
+│   │   ├── experiment_architecture_1/
+│   │   │   ├── trial_10_AE3dDilatedAttentionResidual.md
+│   │   │   ├── trial_11_AE3dDilatedAttentionBottleneckSE.md
+│   │   │   ├── trial_12_AE3dStrided.md
+│   │   │   ├── trial_13_AE3dDilatedCBAM.md
+│   │   │   ├── trial_14_AE3dDilatedGroupNorm.md
+│   │   │   ├── trial_15_AE3dDilatedAttentionSEDecoder.md
+│   │   │   ├── trial_16_AE3dDilatedBottleneckCompress.md
+│   │   │   ├── trial_17_AE3dDilated1242.md
+│   │   │   ├── trial_18_AE3dDilatedMSBottleneck.md
+│   │   │   ├── trial_19_AE3dDilatedAttentionSEDecoder2.md
+│   │   │   ├── trial_20_AE3dDilatedAttentionReduction4.md
+│   │   │   ├── trial_21_AE3dMBConv.md
+│   │   │   ├── trial_22_AE3dCompact.md
+│   │   │   ├── trial_23_AE3dDilatedDecoder.md
+│   │   │   ├── trial_24_AE3dDilatedDecRefinement.md
+│   │   │   ├── trial_25_AE3dDilatedAttentionLatentNorm.md
+│   │   │   ├── trial_26_AE3dDilatedAttentionSEDecoderR2.md
+│   │   │   ├── trial_27_AE3dDilatedAttentionSpatialDecoder.md
+│   │   │   ├── trial_28_AE3dTrilinDecoder.md
+│   │   │   ├── trial_8_AE3dDilatedAttentionDeep.md
+│   │   │   ├── trial_9_AE3dDilatedAttentionWide.md
+│   │   │   └── trial_log_EXP1.csv
+│   │   └── experiment_architecture_2/
+│   │       ├── TEMPLATE.md
+│   │       ├── existing_AE3dAttention.md
+│   │       ├── existing_AE3dConv.md
+│   │       ├── existing_AE3dCurrent.md
+│   │       ├── existing_AE3dDilated.md
+│   │       ├── existing_AE3dDilatedAttention.md
+│   │       ├── existing_AE3dFCDeep.md
+│   │       ├── existing_AE3dFCDeep_VAE.md
+│   │       ├── existing_AE3dLinear.md
+│   │       ├── existing_AE3dSeparableDilated.md
+│   │       ├── trial_10_AE3dFCDeepAsymV8.md
+│   │       ├── trial_11_AE3dResidual.md
+│   │       ├── trial_12_AE3dAsymResidual.md
+│   │       ├── trial_13_AE3dAsymResidualV2.md
+│   │       ├── trial_14_AE3dAsymResidualV3.md
+│   │       ├── trial_15_AE3dAsymGated.md
+│   │       ├── trial_16_AE3dAsymResidualV4.md
+│   │       ├── trial_17_AE3dAsymResidualV5.md
+│   │       ├── trial_18_AE3dAsymV4ResDec.md
+│   │       ├── trial_19_AE3dAsymSeparable.md
+│   │       ├── trial_1_AE3dFCDeepDilated.md
+│   │       ├── trial_20_AE3dAsymResSeparable.md
+│   │       ├── trial_21_AE3dAsymResSeparableV2.md
+│   │       ├── trial_22_AE3dAsymResSeparableV3.md
+│   │       ├── trial_2_AE3dFCDeepSE.md
+│   │       ├── trial_3_AE3dFCDeepAsym.md
+│   │       ├── trial_4_AE3dFCDeepAsymV2.md
+│   │       ├── trial_5_AE3dFCDeepAsymV3.md
+│   │       ├── trial_6_AE3dFCDeepAsymV4.md
+│   │       ├── trial_7_AE3dFCDeepAsymV5.md
+│   │       ├── trial_8_AE3dFCDeepAsymV6.md
+│   │       ├── trial_9_AE3dFCDeepAsymV7.md
+│   │       └── trial_log.csv
 │   ├── trials_conclusions/
 │   │   ├── TEMPLATE.md
 │   │   └── trial_log.csv

@@ -1,0 +1,75 @@
+# =============================================================================
+# experiment.yaml — THE CONTRACT
+# -----------------------------------------------------------------------------
+# The ONLY file to edit to adapt the autonomous workflow to a project.
+# The driver reads it; program.md / AGENT.md never repeat these hard rules.
+#
+# Principles baked in:
+#   - ALLOWLIST, not blocklist: only files under `mutable` may be touched by the
+#     agent. Everything else is frozen by default (deny-by-default).
+#   - ONE judge: a single aggregated metric decides keep/revert. Deterministic.
+#   - The judge is fixed FOR A SESSION. Changing the metric (e.g. archi search ->
+#     hyperparameter tuning) means a NEW session with a champion re-evaluated
+#     under the new metric. Never change the metric mid-session.
+# =============================================================================
+
+experiment_name: "ae_architecture_refinement"
+
+# -- 1. Scope: what the agent may modify (ALLOWLIST) --------------------------
+# Any change to a file NOT listed here => driver rejects the trial before
+# training (status: REJECTED_SCOPE). The eval harness, data loader, and splits
+# are simply absent => frozen by default. That is your immutable judge.
+mutable:
+  - src/models/ae_models.py           # architecture: free
+  - configs/autoencoder.yaml          # hyperparameters: free ("best model" mode)
+
+# -- 2. The judge: metric + eval -----------------------------------------------
+# A trial = N trainings over `repeat_over` -> each yields a per-run metric from
+# MLflow -> the driver aggregates them into ONE decisional scalar. "One training"
+# is just N=1 with aggregation: identity. Same code path for every case.
+# The aggregate lives in <hash>.md (a TRIAL-level value), NEVER in MLflow
+# (it belongs to no single model/run).
+eval:
+  command: "python scripts/run_autoencoder.py"
+  config: "configs/autoencoder.yaml"
+
+  # What to repeat the training over:
+  #   {latent_dim: [8, 60, 240]}  -> archi search (N=3, one run per dim)
+  #   null                         -> single training (N=1), e.g. hp tuning
+  #   {seed: [0, 1, 2]}            -> average over seeds (N=3, same config)
+  repeat_over: {latent_dim: [8, 60, 240]}
+
+  per_run_metric: "validation_R2_mean"          # read from EACH MLflow run
+  aggregation: "mean"                            # "identity" (N=1) | "mean" (N>1)
+  primary_metric_name: "avg_validation_R2_mean"  # label for the aggregate
+  direction: "maximize"
+  source: "mlflow"
+  also_log:                                      # tracked, non-decisional
+    - "val_mse"
+
+# -- 3. Fair-run budget --------------------------------------------------------
+# Only a common EPOCH CEILING. Early stopping decides when to actually stop, and
+# must be configured identically for all trials (in autoencoder.yaml). n_epochs
+# already bounds run duration, so there is no separate wall-clock timeout.
+run_budget:
+  n_epochs: 75                        # same ceiling for every trial
+
+# -- 4. Keep / revert decision -------------------------------------------------
+decision:
+  keep_if: "aggregated metric improves over current champion"
+  auto_commit: true
+  branch: "ai-agent-experiments"      # isolated branch; never main
+  commits_per_trial: 2                # commit 1 = input (identity), commit 2 = result
+  max_trials: 20                      # driver refuses a new trial once the CSV has this many
+  
+# -- 5. Logging / storage ------------------------------------------------------
+logging:
+  experiments_dir: "ai_agent/experiments"   # one <hash>.md per trial
+  template: "ai_agent/experiments/TEMPLATE.md"
+  ledger: "ai_agent/trial_log.csv"          # flat index; header auto-created by driver
+  # All configs (autoencoder.yaml, experiment.yaml) are captured by the input
+  # commit (commit 1) and reachable via identity.commit -> no separate archiving.
+
+# -- Safety rails the driver enforces ------------------------------------------
+safety:
+  nan_abort: true                     # abort + status CRASHED on NaN loss
