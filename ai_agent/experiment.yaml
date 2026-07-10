@@ -35,7 +35,7 @@ mutable:
 #     {seed: [0, 1, 2]}                   -> seed averaging  (N=3, same config)
 training:
   command: "python scripts/run_autoencoder.py"
-  repeat_over: null             #{latent_dimensions: [8, 60, 240]}
+  repeat_over: {latent_dimensions: [8, 60, 240]}
 
 # -- 3. Eval: how the N runs collapse into ONE decisional number --------------
 # At launch the driver tags each run with the trial id, then reads back exactly
