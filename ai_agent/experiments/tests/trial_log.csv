@@ -1,3 +1,0 @@
-timestamp,id,parent,model_name,modification_description,metric_name,metric_value,metric_delta,status,verdict
-2026-07-10T17:52:20+00:00,d0e6940b,,,,avg_validation_R2_mean,-0.087051,+0.000000,completed,BASELINE
-2026-07-10T17:58:11+00:00,c6ee7f3a,,,,avg_validation_R2_mean,-10.061935,-9.974884,completed,FAILURE

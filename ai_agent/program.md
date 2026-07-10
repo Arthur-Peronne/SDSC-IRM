@@ -9,27 +9,11 @@ decides and the driver applies. Rewrite this file at the start of each campaign.
 # program.md — Research Session Intention
 
 ## Objective
-<!-- EDIT PER CAMPAIGN. Example:
-Find the autoencoder ARCHITECTURE that maximizes avg_validation_R2_mean (mean
-validation R² over latent dims 8 / 60 / 240), hyperparameters held fixed. This is
-an optimization goal, not a controlled comparison — we want the best model. -->
-The goal of this campaign is to optimize the primary metric by adjusting the 
-autoencoder models hyperpameters. 
-We repeat the experiment over several latent dims (see repeat_over in experiment.yaml) 
-to find hyperparameters suitable accross latent dims.
+The goal of this campaign is to optimize the hyperparameters of the autoencoder "AE3dAsymResSeparableV2" at latent_dimensions = 240, by running trials in order
+to maximize the primary metric.
 
 ## What to explore this session
-<!-- EDIT PER CAMPAIGN. Examples:
-- Refine the current champion, or explore a new architectural family — see the
-  exploration/exploitation balance you want.
-- Combining ideas is encouraged: if you merge two prior directions (e.g. attention
-  + dilated convs), set `parent` to the trial whose CODE you branched from, and
-  describe the fusion explicitly in ## Hypothesis.
-- Motivate every change: each trial costs real compute, so propose deliberate,
-  mechanistically-justified changes — not random search.
-- Architectural constraint for this project: NO skip connections (no U-Net) — all
-  information must pass through the bottleneck. -->
-- Modify only the hyperparamers autoencoder.yaml, you can't change the model architecture or other parameters
+- Modify only the hyperparamers autoencoder.yaml (you can't change the model architecture or other parameters)
 - Only 5 hyperparameters opened to change, to optimize: lr, weight_decay, dropout_rate, noise_std, patience
 - hyper_automatic_values is already set to false for this campaign (so the YAML values are the ones used). Do NOT change it, and do NOT touch any field of autoencoder.yaml other than the ones opened to change.
 - Propose deliberate, mechanistically-justified changes — not random search.

@@ -1,4 +1,0 @@
-timestamp,id,parent,model_name,modification_description,metric_name,metric_value,metric_delta,status,verdict
-2026-07-10T18:46:27+00:00,21acba9e,,AE3dAsymResSeparableV2,"Baseline HPs as currently configured (lr=5e-5, weight_decay=0.0, dropout_rate=0.0, noise_std=0.0, patience=30); procedural smoke test (n_epochs=5, not scientifically meaningful)",avg_validation_R2_mean,-0.542756,+0.000000,completed,BASELINE
-2026-07-10T18:53:17+00:00,e3b6e5ff,21acba9e,AE3dAsymResSeparableV2,lr 5e-5 -> 5e-4 (10x): faster per-epoch convergence under the fixed 5-epoch budget,avg_validation_R2_mean,0.521200,+1.063956,completed,CHAMPION
-2026-07-10T18:59:55+00:00,acf6f37d,e3b6e5ff,AE3dAsymResSeparableV2,"lr 5e-4 -> 1.5e-3 (3x): test whether pushing lr further still helps, or the epoch4-5 wobble seen at 5e-4 turns into instability",avg_validation_R2_mean,0.441396,-0.079804,completed,FAILURE
