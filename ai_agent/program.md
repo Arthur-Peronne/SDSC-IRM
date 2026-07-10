@@ -31,7 +31,7 @@ to find hyperparameters suitable accross latent dims.
   information must pass through the bottleneck. -->
 - Modify only the hyperparamers autoencoder.yaml, you can't change the model architecture or other parameters
 - Only 5 hyperparameters opened to change, to optimize: lr, weight_decay, dropout_rate, noise_std, patience
-- Verify that hyper_automatic_values is set to false in experiment.yaml. If not, set it to false!
+- hyper_automatic_values is already set to false for this campaign (so the YAML values are the ones used). Do NOT change it, and do NOT touch any field of autoencoder.yaml other than the ones opened to change.
 - Propose deliberate, mechanistically-justified changes — not random search.
 
 ## Hard boundaries (defined in experiment.yaml, enforced by the driver — see SETUP.md)
