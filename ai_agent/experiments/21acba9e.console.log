@@ -1,0 +1,48 @@
+
+=== python scripts/run_autoencoder.py --trial-id 21acba9e --set latent_dimensions=8 ===
+/home/renku/work/SDSC-IRM/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+special_split = None
+Data loaded | train: 200 | val: 40 | test: 60 | split: splitdefault
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=30 | max_epochs=5
+Epoch 1/5 | train: 0.158064 | val: 0.072006 | lr: 5.00e-05 ✓ best
+Epoch 2/5 | train: 0.038492 | val: 0.017052 | lr: 5.00e-05 ✓ best
+Epoch 3/5 | train: 0.012632 | val: 0.006883 | lr: 5.00e-05 ✓ best
+Epoch 4/5 | train: 0.006880 | val: 0.004102 | lr: 5.00e-05 ✓ best
+Epoch 5/5 | train: 0.004764 | val: 0.002901 | lr: 5.00e-05 ✓ best
+Loss plot saved: /home/renku/work/SDSC-IRM/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_splitdefault_8dims_ai_agentnew_test2_train_val_loss.png
+[train] R2 mean=0.0964 std=0.6287 | MSE mean=1128.147217
+[validation] R2 mean=-0.1921 std=0.7701 | MSE mean=764.830261
+[test] R2 mean=0.0495 std=0.5728 | MSE mean=789.626282
+
+=== python scripts/run_autoencoder.py --trial-id 21acba9e --set latent_dimensions=40 ===
+/home/renku/work/SDSC-IRM/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+special_split = None
+Data loaded | train: 200 | val: 40 | test: 60 | split: splitdefault
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=30 | max_epochs=5
+Epoch 1/5 | train: 0.125035 | val: 0.047458 | lr: 5.00e-05 ✓ best
+Epoch 2/5 | train: 0.025075 | val: 0.011726 | lr: 5.00e-05 ✓ best
+Epoch 3/5 | train: 0.009141 | val: 0.004875 | lr: 5.00e-05 ✓ best
+Epoch 4/5 | train: 0.005571 | val: 0.003042 | lr: 5.00e-05 ✓ best
+Epoch 5/5 | train: 0.004158 | val: 0.003600 | lr: 5.00e-05 (no improvement for 1 epochs)
+Loss plot saved: /home/renku/work/SDSC-IRM/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_splitdefault_40dims_ai_agentnew_test2_train_val_loss.png
+[train] R2 mean=-0.0182 std=0.7693 | MSE mean=1180.046265
+[validation] R2 mean=-0.2743 std=0.8716 | MSE mean=802.046509
+[test] R2 mean=-0.0383 std=0.6532 | MSE mean=853.137878
+
+=== python scripts/run_autoencoder.py --trial-id 21acba9e --set latent_dimensions=200 ===
+/home/renku/work/SDSC-IRM/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+special_split = None
+Data loaded | train: 200 | val: 40 | test: 60 | split: splitdefault
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=30 | max_epochs=5
+Epoch 1/5 | train: 0.214516 | val: 0.140500 | lr: 5.00e-05 ✓ best
+Epoch 2/5 | train: 0.078553 | val: 0.036607 | lr: 5.00e-05 ✓ best
+Epoch 3/5 | train: 0.024448 | val: 0.013046 | lr: 5.00e-05 ✓ best
+Epoch 4/5 | train: 0.011481 | val: 0.006626 | lr: 5.00e-05 ✓ best
+Epoch 5/5 | train: 0.007362 | val: 0.004828 | lr: 5.00e-05 ✓ best
+Loss plot saved: /home/renku/work/SDSC-IRM/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_splitdefault_200dims_ai_agentnew_test2_train_val_loss.png
+[train] R2 mean=-0.6835 std=1.5384 | MSE mean=1684.564941
+[validation] R2 mean=-1.1619 std=1.8027 | MSE mean=1272.813110
+[test] R2 mean=-0.6712 std=1.2774 | MSE mean=1274.953003

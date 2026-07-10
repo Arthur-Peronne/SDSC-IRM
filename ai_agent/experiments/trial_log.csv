@@ -1,0 +1,2 @@
+timestamp,id,parent,model_name,modification_description,metric_name,metric_value,metric_delta,status,verdict
+2026-07-10T18:46:27+00:00,21acba9e,,AE3dAsymResSeparableV2,"Baseline HPs as currently configured (lr=5e-5, weight_decay=0.0, dropout_rate=0.0, noise_std=0.0, patience=30); procedural smoke test (n_epochs=5, not scientifically meaningful)",avg_validation_R2_mean,-0.542756,+0.000000,completed,BASELINE
