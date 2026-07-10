@@ -46,8 +46,23 @@ architecture, data, split, `n_epochs` all frozen/untouched).
 - **MLflow Run IDs:** eb9199ed4ea447c4a7b6566e22da7865 1c42791ae5ab4bb48f40c1a4f00b58b4 6d36ef0a3f0c4370b43c9c19e56bd221
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+The wobble seen only mildly at epoch 4-5 in the champion (lr=5e-4) now appears from
+epoch 2 onward at all 3 dims and is larger: e.g. dim=8 best@1 (0.0015) -> worse@2
+(0.0020) -> new best@3 (0.0011) -> worse@4 -> flat@5; dim=40 similarly, but its epoch-5
+val loss (0.0054) is now worse than the champion's already-noisy epoch-5 (0.0046);
+dim=200 tracks the same up-down pattern. No divergence/NaN, but the oscillation is
+clearly earlier and larger than at lr=5e-4, and it scales with latent_dimensions: the
+higher-capacity runs (40, 200) lose more R² relative to the champion than dim=8 does.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Hypothesis's second branch held: pushing lr further (5e-4 -> 1.5e-3) crossed from
+"faster-convergence still dominates" into "step-size noise dominates" — avg R² dropped
+from 0.5212 to 0.4414 (delta -0.0798), below both the CHAMPION bar and the CANDIDATE
+margin (best per-run 0.5334 < champion 0.5212 + 0.03 = 0.5512). This locates the
+sweet-spot boundary for this architecture/epoch-budget between 5e-4 (net positive,
+mild noise) and 1.5e-3 (net negative, noise scaling with latent_dimensions — dim=200
+lost the most). Actionable for a future campaign: search lr in roughly [1e-4, 7e-4]
+rather than pushing toward 1e-3+, and consider that higher latent_dimensions may need
+comparatively smaller lr than lower ones. As FAILURE, `configs/autoencoder.yaml` was
+reverted by the driver to the champion's values (lr=5e-4) — confirmed on disk.
+Campaign budget (`max_trials=3`) is now spent; champion remains e3b6e5ff.
