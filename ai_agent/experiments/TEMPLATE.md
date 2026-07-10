@@ -31,11 +31,11 @@ created_at: null
 <!-- ===== written AFTER the run (commit 2): numbers by the driver, prose by the agent ===== -->
 
 ## Results
-- **R2_dim8:** VALUE | **R2_dim60:** VALUE | **R2_dim240:** VALUE
+- **R2_trial1:** VALUE | **R2_trial2:** VALUE | **R2_trial3:** VALUE etc.
 - **avg_validation_R2_mean:** VALUE
 - **delta_vs_champion** (display only): VALUE
-- **MLflow Run IDs:** RUNID_8 RUNID_60 RUNID_240
-- **Best epochs:** EPOCH_8/N_EPOCHS | EPOCH_60/N_EPOCHS | EPOCH_240/N_EPOCHS
+- **MLflow Run IDs:** RUNID_trial1 RUNID_trial2 RUNID_trial3 etc.
+- **Best epochs:** EPOCH_trial1/N_EPOCHS | EPOCH_trial3/N_EPOCHS | EPOCH_trial3/N_EPOCHS etc.
 
 ## Training Dynamics
 <!-- Stability, convergence speed, notable observations (spikes, plateau, early stopping). -->

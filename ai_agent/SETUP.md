@@ -46,14 +46,10 @@ You may ONLY modify files listed under `mutable` in experiment.yaml. NEVER touch
 The driver rejects any trial that modifies a file outside mutable. Everything not listed is frozen by default — this is the immutable judge that keeps results comparable.
 
 ## Reproducibility rules (project-critical)
-- Never break past results. AE auto-commits go to branch `agent-ae-opti`,
-  never `main`; review via the CSV, merge only what you trust.
-- MLflow metadata (`mlruns/`) is committed for local `mlflow ui`; heavy artifacts
-  (`.pth`, `.joblib`) are gitignored and stay in MLflow.
-- Filenames are case-sensitive on Renku/Linux: write `program.md` (lowercase)
-  consistently everywhere it is referenced.
+- Never break past results. AE auto-commits go to branch `agent-ae-opti`, never `main`; review via the CSV, merge only what you trust.
+- MLflow metadata (`mlruns/`) is committed for local `mlflow ui`; heavy artifacts (`.pth`, `.joblib`) are gitignored and stay in MLflow.
+- Filenames are case-sensitive on Renku/Linux: write `program.md` (lowercase) consistently everywhere it is referenced.
 
 ## End of a campaign
 A campaign = one fixed judge metric. max_trials defined in experiment.yaml. 
-The current number of trials is calculated by counting rows in ai_agent/trial_log.csv (so the count is per-campaign 
-only if the CSV is reset between campaigns).
+The current number of trials is calculated by counting rows in ai_agent/trial_log.csv (so the count is per-campaign only if the CSV is reset between campaigns).

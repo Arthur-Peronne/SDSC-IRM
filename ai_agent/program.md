@@ -9,11 +9,11 @@ decides and the driver applies. Rewrite this file each session.
 -->
 
 ## Objective : GOAL TO MODIFY AP
-Find the single best autoencoder — architecture **and** hyperparameters together
+<!-- Find the single best autoencoder — architecture **and** hyperparameters together
 — that maximizes `avg_validation_R2_mean` (mean validation R² over latent dims
 8 / 60 / 240). This is an OPTIMIZATION goal, not a controlled comparison: you may
 change architecture and hyperparameters at the same time. We want the best model,
-not the isolated effect of any one factor.
+not the isolated effect of any one factor. -->
 
 ## What to explore this session : STRATEGY TO MODIFY AP
 <!-- Edit per session. Examples: -->

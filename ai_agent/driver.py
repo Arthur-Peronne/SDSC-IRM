@@ -107,7 +107,7 @@ def read_frontmatter(md_path: Path) -> dict:
 # -----------------------------------------------------------------------------
 def _repeat_values(cfg: dict) -> list[dict]:
     """Per-run overrides. [{}] means a single run (N=1)."""
-    ro = cfg["eval"].get("repeat_over")
+    ro = cfg["judge"].get("repeat_over")
     if not ro:
         return [{}]
     (axis, values), = ro.items()                 # e.g. ("latent_dim", [8,60,240])
@@ -115,7 +115,7 @@ def _repeat_values(cfg: dict) -> list[dict]:
 
 
 def run_eval(cfg: dict, log_path: Path) -> None:
-    base_cmd = cfg["eval"]["command"].split()
+    base_cmd = cfg["judge"]["command"].split()
     with open(log_path, "w") as logf:
         for override in _repeat_values(cfg):
             cmd = list(base_cmd)
@@ -134,12 +134,12 @@ def run_eval(cfg: dict, log_path: Path) -> None:
 #    The aggregate is TRIAL-level: it goes to <hash>.md, never to MLflow.
 # -----------------------------------------------------------------------------
 def read_primary_metric(cfg: dict) -> float:
-    per_run = cfg["eval"]["per_run_metric"]
+    per_run = cfg["judge"]["per_run_metric"]
     n = len(_repeat_values(cfg))                 # 1 for a single training
     values = _read_recent_run_metrics(per_run, n)
     if len(values) != n:
         raise EvalFailed(f"Expected {n} runs with '{per_run}', found {len(values)}")
-    return _aggregate(values, cfg["eval"]["aggregation"])
+    return _aggregate(values, cfg["judge"]["aggregation"])
 
 
 def _aggregate(values: list[float], how: str) -> float:
@@ -287,7 +287,7 @@ def run_trial(parent: str | None = None) -> None:
     delta = metric - champion if champion is not None else 0.0
 
     # 5. decide (deterministic)
-    keep = is_better(metric, champion, cfg["eval"]["direction"])
+    keep = is_better(metric, champion, cfg["judge"]["direction"])
     status = ("BASELINE" if keep and champion is None
               else "CHAMPION" if keep else "FAILURE")
     if not keep:
@@ -300,7 +300,7 @@ def run_trial(parent: str | None = None) -> None:
         "id": trial_id, "parent": parent or "",
         "model_name": model_name,
         "modification_description": fm.get("summary", ""),
-        "metric_name": cfg["eval"]["primary_metric_name"],
+        "metric_name": cfg["judge"]["primary_metric_name"],
         "metric_value": metric, "metric_delta": delta,
         "decision": "keep" if keep else "revert", "status": status,
     })
