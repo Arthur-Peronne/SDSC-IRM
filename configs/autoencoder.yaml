@@ -23,6 +23,9 @@ n_test: 30
 special_split: null              # null = sequential "splitdefault"; e.g. "split42" for seeded
 stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
 
+# ── Reproducibility ─────────────────────────────────────────────────────────
+seed: 0  # global RNG seed (torch/numpy/random), logged to MLflow. Set to null for a non-reproducible (random) run.
+
 # ── Model ─────────────────────────────────────────────────────────────────────
 model_name: "AE3dAsymResSeparableV2"
 latent_dimensions: 120
@@ -38,7 +41,7 @@ n_epochs: 2                    # max epochs (early stopping triggers earlier if 
 batch_size: 1
 patience_scheduler: null         # null = patience // 5
 # (optimized hyperparameters)
-hyper_automatic_values: true # if True, goes to ae_HPforarchis.yaml. If False, takes values below:
+hyper_automatic_values: false # if True, goes to ae_HPforarchis.yaml. If False, takes values below:
 lr: 5e-5                         # Learning rate; AEoptuna: 1e-5, VAEoptuna: 5e-5
 weight_decay: 0.0            # L2 regularisation; AEoptuna: 6.47e-6, VAEoptuna: 1e-7 
 dropout_rate: 0.0                # 0.0 for AE3dConv and AE3dLinear; AEoptuna: 0.221

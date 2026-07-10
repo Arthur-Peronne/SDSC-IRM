@@ -1,44 +1,69 @@
 ---
-# Copy this file to draft.md, fill the fields below, then run the driver.
-# The driver freezes `identity` at commit 1, computes `id`, and renames the file
-# to <id>.md. `identity` is the hash preimage and is never edited after lock.
-id: null                    # filled by driver at lock: sha256(canonical_json(identity))[:12]
-parent: null                # lineage: trial this one branched FROM (code-wise). null for roots.
-status: draft               # draft | running | completed | failed
-identity:                   # FROZEN at commit 1 — never edit after lock
-  parent: null
-  commit: null              # code HEAD at lock (captures code + all configs + experiment.yaml)
-  command: null             # the driver call (repeat_over lives in experiment.yaml)
-model_name: null            # the AE architecture trained (e.g. AE3dDilatedAttention). Descriptive, NOT the id.
-summary: null               # one-line description of the change (used as CSV modification_description)
-metric:                     # only the PRIMARY aggregated metric is stored — the sole judge.
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
+#   python ai_agent/driver.py run
+# The driver commits the input (that commit's short sha becomes `id`), renames
+# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
+# (These comments are not preserved in the final <id>.md — that's expected.)
+
+# ---- agent-written (fill BEFORE running) ----
+model_name: null      # the AE architecture trained (e.g. AE3dDilatedAttention). Descriptive, NOT the id.
+summary: null         # one-line description of the change (becomes the CSV modification_description)
+parent: null          # lineage: `id` of the trial whose CODE this one branched FROM. null for roots.
+
+# ---- driver-written (leave null; the driver overwrites at lock/result) ----
+id: null              # short sha of commit 1 == the frozen input == this trial's identity
+status: draft         # draft -> completed | failed          (lifecycle, lowercase)
+verdict: null         # BASELINE | CHAMPION | CANDIDATE | FAILURE   (judgement, UPPERCASE)
 created_at: null
+metric:
+  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
 ---
 
-# Trial <ID> — <ModelName> — <CHAMPION / CANDIDATE / FAILURE>
+---
+# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
+#   python ai_agent/driver.py run
+# The driver commits the input (that commit's short sha becomes `id`), renames
+# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
+# (These comments are not preserved in the final <id>.md — that's expected.)
 
-<!-- ===== written BEFORE the run (commit 1), by the agent ===== -->
+# ---- agent-written (fill BEFORE running) ----
+model_name: null      # the AE architecture trained (e.g. AE3dDilatedAttention). Descriptive, NOT the id.
+summary: null         # one-line description of the change (becomes the CSV modification_description)
+parent: null          # lineage: `id` of the trial whose CODE this one branched FROM. null for roots.
+
+# ---- driver-written (leave null; the driver overwrites at lock/result) ----
+id: null              # short sha of commit 1 == the frozen input == this trial's identity
+status: draft         # draft -> completed | failed          (lifecycle, lowercase)
+verdict: null         # BASELINE | CHAMPION | CANDIDATE | FAILURE   (judgement, UPPERCASE)
+created_at: null
+metric:
+  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+---
+
+# Trial <id> — <model_name> — <verdict>
+
+<!-- ===== written BEFORE the run (agent) ===== -->
 
 ## Hypothesis
-<!-- What, why, how: "I modified X in Y because it will address Z via mechanism W."
-     If this trial fuses two prior ideas, name both parent trials and the fusion here. -->
+<!-- What, why, how: "I modified X in Y because it will address Z via mechanism W,
+     which I predict increases avg_validation_R2_mean."
+     If this trial fuses two prior ideas, name both parents and describe the fusion. -->
 
 ## Implementation
-<!-- Key architectural / hyperparameter changes: what was added, where, and how it
-     differs from the current champion. -->
+<!-- The concrete architectural / hyperparameter change: what was added, where, and
+     how it differs from the current champion. Respect the "no skip connections" rule. -->
 
-<!-- ===== written AFTER the run (commit 2): numbers by the driver, prose by the agent ===== -->
+<!-- ===== written AFTER the run ===== -->
 
 ## Results
-- **R2_trial1:** VALUE | **R2_trial2:** VALUE | **R2_trial3:** VALUE etc.
-- **avg_validation_R2_mean:** VALUE
-- **delta_vs_champion** (display only): VALUE
-- **MLflow Run IDs:** RUNID_trial1 RUNID_trial2 RUNID_trial3 etc.
-- **Best epochs:** EPOCH_trial1/N_EPOCHS | EPOCH_trial3/N_EPOCHS | EPOCH_trial3/N_EPOCHS etc.
+<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
+     per-run metric values (by repeat axis), the aggregated primary metric,
+     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
+     For a mechanically failed trial it writes the failure reason instead. -->
 
 ## Training Dynamics
-<!-- Stability, convergence speed, notable observations (spikes, plateau, early stopping). -->
+<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
 
 ## Conclusion
-<!-- Did the hypothesis hold? Mechanistic explanation of why it worked or failed. -->
+<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
+     worked or failed — not just the numbers. -->

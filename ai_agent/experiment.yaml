@@ -1,66 +1,81 @@
 # =============================================================================
 # experiment.yaml — THE CONTRACT
 # -----------------------------------------------------------------------------
-# The ONLY file to edit to adapt the autonomous workflow to a project.
-# The driver reads it; program.md / AGENT.md never repeat these hard rules.
+# The ONLY file to edit to steer the autonomous loop. The driver reads it and
+# ENFORCES it; program.md / SETUP.md never repeat these hard rules.
 #
-# Principles baked in:
-#   - ALLOWLIST, not blocklist: only files under `mutable` may be touched by the
-#     agent. Everything else is frozen by default (deny-by-default).
-#   - ONE judge: a single aggregated metric decides keep/revert. Deterministic.
-#   - The judge is fixed FOR A SESSION. Changing the metric (e.g. archi search ->
-#     hyperparameter tuning) means a NEW session with a champion re-evaluated
-#     under the new metric. Never change the metric mid-session.
+# Principles:
+#   - ALLOWLIST, not blocklist: only files under `mutable` may change. Everything
+#     else is frozen (deny-by-default); the driver rejects any trial touching it.
+#   - ONE judge: a single aggregated metric decides the verdict, deterministically.
+#   - The judge is fixed FOR A CAMPAIGN. Changing the metric means a NEW campaign
+#     (archive trial_log.csv, re-evaluate the champion under the new metric).
+#     Never change the metric mid-campaign.
 # =============================================================================
 
-experiment_name: "test1"
+experiment_name: "ae_archi_search"
 
 # -- 1. Scope: what the agent may modify (ALLOWLIST) --------------------------
-# Any change to a file NOT listed here => driver rejects the trial before training (status: REJECTED_SCOPE). 
+# Any change to a file outside this list (and outside the trial record dir) => the
+# driver aborts the trial BEFORE committing or training. Nothing is recorded;
+# revert the stray change and rerun.
 mutable:
-  - src/models/ae_models.py           # architecture: free
-  - configs/autoencoder.yaml          # hyperparameters: free ("best model" mode)
+  # - src/models/ae_models.py       # architecture definitions + build_autoencoder factory
+  - configs/autoencoder.yaml      # training config (model_name, hyperparameters, ...)
 
-# -- 2. Training -----------------------------------------------
-# A trial = N trainings over `repeat_over` -> each yields a per-run metric from MLflow
-# "One training" is just N=1 with aggregation: identity. Same code path for every case.
+# -- 2. Training: how ONE trial runs ------------------------------------------
+# A trial = N trainings over `repeat_over`. The DRIVER owns the loop: it calls
+# `command` once per value, passing `--set <axis>=<value>` to override that one
+# field of configs/autoencoder.yaml in memory. The script runs exactly ONE MLflow
+# run per call (keep multiple_models_and_dims: false in autoencoder.yaml).
+#
+#   repeat_over — the axis MUST be a real key of configs/autoencoder.yaml:
+#     {latent_dimensions: [8, 60, 240]}  -> archi search   (N=3, one run per dim)
+#     null                                -> single training (N=1, e.g. HP tuning)
+#     {seed: [0, 1, 2]}                   -> seed averaging  (N=3, same config)
 training:
   command: "python scripts/run_autoencoder.py"
-  config: "configs/autoencoder.yaml"
-  # What to repeat the training over:
-  #   {latent_dim: [8, 60, 240]}  -> archi search (N=3, one run per dim)
-  #   null                         -> single training (N=1), e.g. hp tuning
-  #   {seed: [0, 1, 2]}            -> average over seeds (N=3, same config)
-  repeat_over: {latent_dim: [8, 60, 240]}
+  repeat_over: null             #{latent_dimensions: [8, 60, 240]}
 
-# -- 3. Eval metric-----------------------------------------------
-# the driver aggregates the metrics from the repeated trainings into ONE decisional scalar. 
-# The aggregate lives in <hash>.md (a TRIAL-level value), NEVER in MLflow (it belongs to no single model/run).
+# -- 3. Eval: how the N runs collapse into ONE decisional number --------------
+# At launch the driver tags each run with the trial id, then reads back exactly
+# those N runs by tag (never by recency). `per_run_metric` is read from each run;
+# `aggregation` collapses them into the trial scalar the judge compares.
+# That aggregate is a TRIAL-level value: it lives in <id>.md, never in MLflow.
+# NOTE: validation_R2_mean / validation_MSE_mean are only logged when n_val > 0
+# and compute_metrics: true in autoencoder.yaml — keep both for these campaigns.
 eval:
-  per_run_metric: "validation_R2_mean"          # read from EACH MLflow run
-  aggregation: "mean"                            # "identity" (N=1) | "mean" (N>1)
-  primary_metric_name: "avg_validation_R2_mean"  # label for the aggregate
-  direction: "maximize"
-  source: "mlflow"
-  also_log:                                      # tracked, non-decisional
-    - "val_mse"
+  per_run_metric:      "validation_R2_mean"      # final scalar logged per run
+  aggregation:         "mean"                     # "identity" (N=1) | "mean" (N>1)
+  primary_metric_name: "avg_validation_R2_mean"   # label for the aggregate
+  direction:           "maximize"                 # "maximize" | "minimize"
+  also_log:                                       # recorded for context, NON-decisional
+    - "validation_MSE_mean"
 
-# -- 4. Keep / revert decision -------------------------------------------------
+# -- 4. Verdict: deterministic keep / revert (NO LLM) -------------------------
+# Compared against the current champion's aggregate (best BASELINE/CHAMPION row
+# in the ledger).
+#   CHAMPION  : aggregate beats the champion               -> keep code, new champion
+#   CANDIDATE : aggregate does NOT beat it, BUT the best single run is promising
+#               -> keep code, champion unchanged
+#   FAILURE   : neither                                    -> revert code
+# Delete the whole `candidate` block for plain binary keep/revert.
 decision:
-  keep_if: "aggregated metric improves over current champion"
-  auto_commit: true
-  branch: "ai-agent-experiments"      # isolated branch; never main
-  commits_per_trial: 2                # commit 1 = input (identity), commit 2 = result
-  max_trials: 3                      # driver refuses a new trial once the CSV has this many
-  
-# -- 5. Logging / storage ------------------------------------------------------
-logging:
-  experiments_dir: "ai_agent/experiments"   # one <hash>.md per trial
-  template: "ai_agent/experiments/TEMPLATE.md"
-  ledger: "ai_agent/trial_log.csv"          # flat index; header auto-created by driver
-  # All configs (autoencoder.yaml, experiment.yaml) are captured by the input
-  # commit (commit 1) and reachable via identity.commit -> no separate archiving.
+  branch: "agent-ae-opti"        # isolated branch; the driver never commits to main
+  max_trials: 3                  # driver refuses a new trial once the ledger has this many
+  candidate:
+    statistic: "max"             # over the per-run values (before aggregation)
+    margin: 0.03                 # maximize: CANDIDATE if max(values) > champion + margin
+                                 # minimize: CANDIDATE if min(values) < champion - margin
 
-# -- Safety rails the driver enforces ------------------------------------------
+# -- 5. Logging / storage -----------------------------------------------------
+# All configs are captured by the input commit (commit 1) and reachable via the
+# trial id (= that commit's short sha) -> no separate archiving needed.
+logging:
+  experiments_dir: "ai_agent/experiments"           # one <id>.md record per trial
+  template:        "ai_agent/experiments/TEMPLATE.md"
+  ledger:          "ai_agent/trial_log.csv"          # flat index; header owned by the driver
+
+# -- 6. Safety rails the driver enforces --------------------------------------
 safety:
-  nan_abort: true                     # abort + status CRASHED on NaN loss
+  nan_abort: true                # NaN in a per-run metric -> status: failed, code reverted, commit 2 to trace

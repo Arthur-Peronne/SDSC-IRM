@@ -1,45 +1,59 @@
-# program.md — Research Session Intention
-
 <!--
 This file is written by the HUMAN and read by the AGENT. It holds INTENT, not
-hard rules. All machine-enforced rules (which files are mutable, the metric,
-the budget, keep/revert) live in experiment.yaml and are enforced by driver.py.
+hard rules. All machine-enforced rules (mutable files, the metric, the budget,
+the keep/revert verdict) live in experiment.yaml and are enforced by driver.py.
 Keep the two separate: prose here explains WHY and WHAT to explore; the YAML
-decides and the driver applies. Rewrite this file each session.
+decides and the driver applies. Rewrite this file at the start of each campaign.
 -->
 
-## Objective : GOAL TO MODIFY AP
-<!-- Find the single best autoencoder — architecture **and** hyperparameters together
-— that maximizes `avg_validation_R2_mean` (mean validation R² over latent dims
-8 / 60 / 240). This is an OPTIMIZATION goal, not a controlled comparison: you may
-change architecture and hyperparameters at the same time. We want the best model,
-not the isolated effect of any one factor. -->
+# program.md — Research Session Intention
 
-## What to explore this session : STRATEGY TO MODIFY AP
-<!-- Edit per session. Examples: -->
-<!-- - Refine the current champion rather than exploring from scratch. -->
-<!-- - Combining ideas is encouraged. If you merge two prior directions into one
-  architecture (e.g. attention + dilated convs), set `parent` to the trial you
-  branched the CODE from, and describe the fusion explicitly in ## Hypothesis. -->
-<!-- - Motivate every change: each trial costs ~30 min, so propose deliberate,
-  mechanistically-justified changes — not random search. -->
+## Objective
+<!-- EDIT PER CAMPAIGN. Example:
+Find the autoencoder ARCHITECTURE that maximizes avg_validation_R2_mean (mean
+validation R² over latent dims 8 / 60 / 240), hyperparameters held fixed. This is
+an optimization goal, not a controlled comparison — we want the best model. -->
 
-## Hard boundaries (defined in experiment.yaml, enforced by the driver)
-- Modify only files in the mutable allowlist. Everything else is frozen by
-default — the driver rejects any trial that touches it. See SETUP.md.
+## What to explore this session
+<!-- EDIT PER CAMPAIGN. Examples:
+- Refine the current champion, or explore a new architectural family — see the
+  exploration/exploitation balance you want.
+- Combining ideas is encouraged: if you merge two prior directions (e.g. attention
+  + dilated convs), set `parent` to the trial whose CODE you branched from, and
+  describe the fusion explicitly in ## Hypothesis.
+- Motivate every change: each trial costs real compute, so propose deliberate,
+  mechanistically-justified changes — not random search.
+- Architectural constraint for this project: NO skip connections (no U-Net) — all
+  information must pass through the bottleneck. -->
+
+## Hard boundaries (defined in experiment.yaml, enforced by the driver — see SETUP.md)
+- Modify only files in the `mutable` allowlist. Everything else — including
+  experiment.yaml, driver.py and this file — is frozen; the driver rejects any
+  trial that touches it, before committing or training.
+- The judge (metric + verdict rule) is fixed for the whole campaign. Wanting a
+  different metric means a new campaign, not an edit mid-run.
 
 ## How to run a trial
-1. Read the current champion (top-scoring `keep` row in trial_log.csv) and the
-   relevant <hash>.md.
-2. Copy `experiments/TEMPLATE.md` to `experiments/draft.md` — always start from
-   the template, never reinvent the record structure. Fill ## Hypothesis,
-   ## Implementation, and `model_name` in the frontmatter BEFORE running.
-3. Edit a mutable file (see Hard boundaries section).
-4. Run `python ai_agent/driver.py run <parent_id>`. Then wait — do not edit
-   anything while the driver trains. The driver commits the input, renames
-   draft.md to <hash>.md, runs the N trainings, and writes ## Results.
-5. When it returns, write ## Training Dynamics and ## Conclusion. Next trial.
+1. Read the current champion: the best `keep` row in `trial_log.csv` — i.e. the
+   highest-metric row whose `verdict` is CHAMPION or BASELINE — and open its
+   `experiments/<id>.md` for context. (The driver reads the champion the same way.)
+2. Create a new draft from the template: `mkdir -p ai_agent/experiments && cp ai_agent/experiments/TEMPLATE.md ai_agent/experiments/draft.md` 
+   Fill `model_name`, `summary`, `parent` in the frontmatter and the
+   ## Hypothesis + ## Implementation prose BEFORE running. Leave the driver-written
+   fields at null.
+3. Edit a mutable file (see Hard boundaries).
+4. Run the driver, then wait — do not edit anything while it trains:
+   ```bash
+   python ai_agent/driver.py run
+   ```
+   No `parent` argument: lineage is the `parent` field you filled in step 2. The
+   driver commits the input, renames draft.md to `<id>.md`, runs the N trainings,
+   decides the verdict, and writes ## Results.
+5. When it returns, read the verdict and write ## Training Dynamics and
+   ## Conclusion in the `<id>.md`. Then start the next trial.
 
 ## When to stop
 - Stop and flag if you are repeating variations of a failed idea (no loops).
-- Stop if a run crashes twice in a row for the same reason.
+- Stop if a run fails twice in a row for the same reason.
+- The driver enforces the hard budget: once `trial_log.csv` reaches `max_trials`,
+  it refuses new trials until the campaign is archived.

@@ -3,35 +3,43 @@
 driver.py -- the deterministic engine of the autonomous research loop.
 
 The AGENT edits code and writes prose; the DRIVER does the mechanical,
-incorruptible part: lock the input, train, read the metric, decide keep/revert
-by a fixed numeric rule, and commit. The agent and the driver NEVER run at the
-same time -- they take turns. The driver takes NO "intelligent" decision.
+incorruptible part: lock the input, train, read the metric, decide the verdict
+by a fixed numeric rule, and commit. Agent and driver take turns; the driver
+takes NO "intelligent" decision.
 
 Turn structure (one trial):
   [agent]  copies experiments/TEMPLATE.md -> experiments/draft.md, edits a file
-           in `mutable`, writes Hypothesis + Implementation + model_name.
-  [driver] python driver.py run [parent_id]   <-- everything below happens here
-             1. scope check (only `mutable` files changed?)
-             2. commit 1 -> freezes input (code + all configs + experiment.yaml),
-                yields commit sha -> computes id -> renames draft.md to <id>.md
-             3. run eval: N trainings over repeat_over (N=1 if null), fixed epochs
-             4. read per-run metrics from MLflow -> aggregate into trial scalar
-             5. compare to champion -> keep or git revert  (deterministic)
-             6. write ## Results into <id>.md + append CSV row
+           in `mutable`, fills Hypothesis / Implementation / model_name / parent.
+  [driver] python ai_agent/driver.py run       <-- everything below happens here
+             0. campaign cap (refuse if ledger already has max_trials rows)
+             1. scope check: only `mutable` files + the trial record changed?
+             2. commit 1 -> freezes input (code + all configs + experiment.yaml);
+                the commit's short sha IS the trial id; draft.md -> <id>.md
+             3. run eval: N trainings over repeat_over (N=1 if null), each run
+                tagged in MLflow with trial_id. ALL-OR-NOTHING: any failing run
+                fails the whole trial.
+             4. read the N runs back BY TAG, aggregate -> one decisional scalar
+             5. compare to champion -> BASELINE / CHAMPION / CANDIDATE / FAILURE
+             6. write ## Results + frontmatter into <id>.md, append CSV row
              7. commit 2 -> freezes output
   [agent]  reads result, writes Training Dynamics + Conclusion.
 
-SKELETON: functions that touch project specifics (MLflow field names, git
-plumbing, how the training script receives repeat overrides) are marked TODO.
-Everything else is driven by experiment.yaml, so the same driver works on any
-project -- a user edits only the YAML + program.md.
+Two axes, kept separate (never conflated):
+  status  (lifecycle, lowercase) : draft -> completed | failed
+  verdict (judgement, UPPERCASE) : BASELINE | CHAMPION | CANDIDATE | FAILURE
+"failed" = a MECHANICAL failure (crash, NaN, wrong run count); the run never
+produced a comparable metric. "FAILURE" = the run completed fine but lost to the
+champion. Both revert the mutable code; only the reason and the status differ.
+
+The training script must expose two hooks (see the two `HOOK` comments below):
+  --trial-id <id>     set an MLflow tag  trial_id=<id>  on the run
+  --set key=value     override cfg[key] in memory (the on-disk YAML is untouched)
 """
 
 from __future__ import annotations
 
 import csv
-import hashlib
-import json
+import math
 import re
 import subprocess
 import sys
@@ -41,11 +49,20 @@ from pathlib import Path
 import yaml
 
 CONTRACT_PATH = Path("ai_agent/experiment.yaml")
-DRAFT_NAME = "draft.md"          # working name before the hash exists
+DRAFT_NAME = "draft.md"                 # working name before the id (sha) exists
+
+# Project-specific: the MLflow store the training script writes to. Must match
+# src/tracking.py / the `mlflow ui --backend-store-uri` path. The one line to
+# change if this driver is reused on another project.
+MLFLOW_TRACKING_URI = "mlruns"
+
+
+class ScopeViolation(Exception): ...
+class EvalFailed(Exception): ...
 
 
 # -----------------------------------------------------------------------------
-# Contract loading
+# Contract
 # -----------------------------------------------------------------------------
 def load_contract(path: Path = CONTRACT_PATH) -> dict:
     with open(path) as f:
@@ -53,272 +70,431 @@ def load_contract(path: Path = CONTRACT_PATH) -> dict:
 
 
 # -----------------------------------------------------------------------------
-# 1. Scope check -- ALLOWLIST enforcement (deny by default)
+# Git plumbing
 # -----------------------------------------------------------------------------
-def assert_only_mutable_changed(mutable: list[str]) -> None:
-    changed = _git_changed_files()
-    # the draft record itself is allowed to change (agent wrote into it)
-    allowed = set(mutable)
-    illegal = [f for f in changed
-               if f not in allowed and not f.startswith("ai_agent/")]
-    if illegal:
-        raise ScopeViolation(
-            f"Agent modified frozen files: {illegal}. "
-            f"Only {mutable} are mutable. Trial rejected."
-        )
+def _git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], capture_output=True, text=True, check=check)
+
+
+def _git_head() -> str:
+    return _git("rev-parse", "HEAD").stdout.strip()
 
 
 def _git_changed_files() -> list[str]:
-    out = subprocess.run(["git", "diff", "--name-only", "HEAD"],
-                         capture_output=True, text=True, check=True).stdout
-    return [ln.strip() for ln in out.splitlines() if ln.strip()]
+    """Every path git considers dirty vs the index/HEAD, INCLUDING untracked
+    files (so a brand-new frozen file is caught too). Gitignored files (e.g. the
+    heavy .pth artifacts) are excluded by default -- exactly what we want."""
+    out = _git("status", "--porcelain").stdout
+    files = []
+    for ln in out.splitlines():
+        if not ln.strip():
+            continue
+        path = ln[3:]                        # strip the two status chars + space
+        if " -> " in path:                   # rename: keep the destination
+            path = path.split(" -> ", 1)[1]
+        files.append(path.strip().strip('"'))
+    return files
+
+
+def _ensure_branch(branch: str) -> None:
+    """Switch to the experiment branch (carrying the agent's uncommitted edits),
+    creating it from the current HEAD if it does not exist yet."""
+    r = _git("checkout", "-q", branch, check=False)
+    if r.returncode != 0:
+        _git("checkout", "-q", "-b", branch)
+
+
+def git_commit(msg: str) -> str:
+    """Stage everything, commit, return the SHORT sha (used as the trial id)."""
+    _git("add", "-A")
+    _git("commit", "-q", "-m", msg)
+    return _git("rev-parse", "--short", "HEAD").stdout.strip()
+
+
+def _revert_mutable_to(sha: str, mutable: list[str]) -> None:
+    """Restore the mutable files to their pre-trial content (the champion's).
+    NOTE: this must target the PRE-trial sha, not HEAD -- after commit 1 the bad
+    code is committed, so `git checkout -- <path>` would restore the bad code."""
+    for path in mutable:
+        _git("checkout", sha, "--", path, check=False)
 
 
 # -----------------------------------------------------------------------------
-# 2. Identity + hash   id = sha256(canonical_json(identity))[:12]
+# 1. Scope check -- ALLOWLIST (deny by default)
 # -----------------------------------------------------------------------------
-def compute_id(identity: dict) -> str:
-    canonical = json.dumps(identity, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode()).hexdigest()[:12]
-
-
-def build_identity(commit_sha: str, command: str, parent: str | None) -> dict:
-    # `command` is the DRIVER call (not the N sub-trainings): the repeat_over
-    # that defines the N runs lives in experiment.yaml, itself captured by the
-    # input commit. So commit + this command fully pin the trial.
-    # `parent` is lineage metadata only -- for a merged-idea trial it points to
-    # the code we branched FROM; the fusion is described in ## Hypothesis.
-    return {"parent": parent, "commit": commit_sha, "command": command}
+def assert_only_mutable_changed(mutable: list[str], experiments_dir: Path) -> None:
+    """Only the mutable allowlist and the trial record dir may differ from HEAD.
+    Everything else -- including experiment.yaml, driver.py and program.md, which
+    live under ai_agent/ but OUTSIDE experiments_dir -- is frozen. This is what
+    makes the judge itself immutable."""
+    exempt = str(experiments_dir).rstrip("/") + "/"
+    allowed = set(mutable)
+    illegal = [f for f in _git_changed_files()
+               if f not in allowed and not f.startswith(exempt)]
+    if illegal:
+        raise ScopeViolation(
+            f"Modified frozen files: {illegal}. Only {mutable} and {exempt}* "
+            f"may change. Revert the stray change(s) and rerun."
+        )
 
 
 # -----------------------------------------------------------------------------
-# Frontmatter read/write for the <hash>.md record
+# Record frontmatter
 # -----------------------------------------------------------------------------
 def read_frontmatter(md_path: Path) -> dict:
-    text = md_path.read_text()
-    m = re.search(r"^---\n(.*?)\n---\n", text, re.DOTALL)
+    m = re.match(r"^---\n(.*?)\n---\n", md_path.read_text(), re.DOTALL)
     if not m:
         raise ValueError(f"No frontmatter found in {md_path}")
     return yaml.safe_load(m.group(1)) or {}
 
 
 # -----------------------------------------------------------------------------
-# 3. Run the eval: N trainings over `repeat_over` (N=1 if null)
+# 3. Repeat axis + eval launch
 # -----------------------------------------------------------------------------
+def _repeat_axis(cfg: dict) -> str | None:
+    ro = cfg["training"].get("repeat_over")
+    return next(iter(ro)) if ro else None
+
+
 def _repeat_values(cfg: dict) -> list[dict]:
     """Per-run overrides. [{}] means a single run (N=1)."""
-    ro = cfg["judge"].get("repeat_over")
+    ro = cfg["training"].get("repeat_over")
     if not ro:
         return [{}]
-    (axis, values), = ro.items()                 # e.g. ("latent_dim", [8,60,240])
+    (axis, values), = ro.items()                 # e.g. ("latent_dimensions", [8,60,240])
     return [{axis: v} for v in values]
 
 
-def run_eval(cfg: dict, log_path: Path) -> None:
-    base_cmd = cfg["judge"]["command"].split()
+def run_eval(cfg: dict, trial_id: str, overrides: list[dict], log_path: Path) -> None:
+    """Launch the N trainings. All-or-nothing: the first non-zero exit aborts."""
+    base = cfg["training"]["command"].split()
     with open(log_path, "w") as logf:
-        for override in _repeat_values(cfg):
-            cmd = list(base_cmd)
-            # TODO: pass `override` to your script (e.g. --latent_dim 8 / --seed 0)
-            #   for k, v in override.items(): cmd += [f"--{k}", str(v)]
-            # Ensure run_budget.n_epochs is the same ceiling for every run and
-            # early stopping is configured identically (in autoencoder.yaml).
-            logf.write(f"\n=== run override={override} ===\n"); logf.flush()
+        for ov in overrides:
+            cmd = list(base)
+            cmd += ["--trial-id", trial_id]      # HOOK: run_autoencoder.py must set MLflow tag trial_id=<id>
+            for k, v in ov.items():
+                cmd += ["--set", f"{k}={v}"]     # HOOK: run_autoencoder.py must override cfg[k]=v in memory
+            logf.write(f"\n=== {' '.join(cmd)} ===\n"); logf.flush()
             proc = subprocess.run(cmd, stdout=logf, stderr=subprocess.STDOUT)
             if proc.returncode != 0:
-                raise EvalFailed(f"Training failed for override={override} (see {log_path})")
+                raise EvalFailed(
+                    f"Training failed (exit {proc.returncode}) for override={ov}. "
+                    f"See {log_path}."
+                )
 
 
 # -----------------------------------------------------------------------------
-# 4. Read per-run metrics from MLflow, then AGGREGATE into the trial scalar.
-#    The aggregate is TRIAL-level: it goes to <hash>.md, never to MLflow.
+# 4. Read the trial's runs BY TAG, then aggregate
 # -----------------------------------------------------------------------------
-def read_primary_metric(cfg: dict) -> float:
-    per_run = cfg["judge"]["per_run_metric"]
-    n = len(_repeat_values(cfg))                 # 1 for a single training
-    values = _read_recent_run_metrics(per_run, n)
-    if len(values) != n:
-        raise EvalFailed(f"Expected {n} runs with '{per_run}', found {len(values)}")
-    return _aggregate(values, cfg["judge"]["aggregation"])
+def _coerce(s):
+    try:
+        return int(s)
+    except (TypeError, ValueError):
+        try:
+            return float(s)
+        except (TypeError, ValueError):
+            return s
+
+
+def read_trial_runs(trial_id: str, per_run_metric: str,
+                    also_log: list[str], axis: str | None) -> list[dict]:
+    """Exactly the runs tagged with this trial_id (never by recency).
+    Returns one dict per run: {run_id, axis_value, <per_run_metric>, <also_log...>},
+    sorted by the repeat-axis value when it is numeric."""
+    import mlflow
+    import pandas as pd
+
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    df = mlflow.search_runs(search_all_experiments=True,
+                            filter_string=f"tags.trial_id = '{trial_id}'")
+
+    records = []
+    for _, row in df.iterrows():
+        rec = {"run_id": row["run_id"], "axis_value": None}
+        if axis:
+            pcol = f"params.{axis}"
+            if pcol in df.columns and pd.notna(row[pcol]):
+                rec["axis_value"] = _coerce(row[pcol])
+        for name in [per_run_metric, *also_log]:
+            mcol = f"metrics.{name}"
+            rec[name] = float(row[mcol]) if mcol in df.columns and pd.notna(row[mcol]) else float("nan")
+        records.append(rec)
+
+    def _key(r):
+        try:
+            return (0, float(r["axis_value"]))
+        except (TypeError, ValueError):
+            return (1, str(r["run_id"]))
+    records.sort(key=_key)
+    return records
 
 
 def _aggregate(values: list[float], how: str) -> float:
-    if how == "identity":                        # N=1: the value itself
+    if how == "identity":
+        if len(values) != 1:
+            raise ValueError("aggregation 'identity' expects exactly 1 run")
         return values[0]
-    if how == "mean":                            # N>1: average over the axis
+    if how == "mean":
         return sum(values) / len(values)
     raise ValueError(f"Unknown aggregation '{how}'. Use 'identity' or 'mean'.")
-    # (std for seed-averaging will be added here when that campaign starts.)
-
-
-def _read_recent_run_metrics(metric_name: str, n: int) -> list[float]:
-    """The n most recent runs' `metric_name` from MLflow.
-    TODO (robustness): tag this trial's runs with the trial id at launch and
-    filter on that tag instead of recency -- avoids averaging the wrong runs if
-    the same config is relaunched. Sketch with recency:
-        import mlflow
-        runs = mlflow.search_runs(experiment_names=["autoencoder"],
-                                  order_by=["start_time DESC"], max_results=n)
-        return [float(runs.iloc[i][f"metrics.{metric_name}"]) for i in range(n)]
-    """
-    raise NotImplementedError(f"Wire MLflow read for '{metric_name}' (n={n})")
 
 
 # -----------------------------------------------------------------------------
-# 5. Deterministic keep/revert  -- NO LLM here
+# 5. Verdict -- deterministic, NO LLM
 # -----------------------------------------------------------------------------
-def is_better(candidate: float, champion: float | None, direction: str) -> bool:
-    if champion is None:                         # first trial becomes baseline
-        return True
+def _beats(candidate: float, champion: float, direction: str) -> bool:
     return candidate > champion if direction == "maximize" else candidate < champion
 
 
-def read_champion_metric(ledger: Path) -> float | None:
+def read_champion_metric(ledger: Path, direction: str) -> float | None:
+    """Best kept aggregate so far. Filters on verdict, NOT on 'kept-ness':
+    CANDIDATE rows are kept on disk but are NOT champions."""
     if not ledger.exists():
         return None
     best = None
     with open(ledger) as f:
         for row in csv.DictReader(f):
-            if row.get("decision") == "keep":
-                v = float(row["metric_value"])
-                best = v if best is None else max(best, v)
+            if row.get("verdict") in ("BASELINE", "CHAMPION"):
+                try:
+                    v = float(row["metric_value"])
+                except (TypeError, ValueError):
+                    continue
+                if best is None:
+                    best = v
+                else:
+                    best = max(best, v) if direction == "maximize" else min(best, v)
     return best
 
+
+def decide_verdict(aggregate: float, per_run_values: list[float],
+                   champion: float | None, cfg: dict) -> str:
+    direction = cfg["eval"]["direction"]
+    if champion is None:
+        return "BASELINE"
+    if _beats(aggregate, champion, direction):
+        return "CHAMPION"
+    cand = cfg["decision"].get("candidate")
+    if cand:
+        stat = cand.get("statistic", "max")
+        margin = float(cand.get("margin", 0.0))
+        best_run = max(per_run_values) if stat == "max" else min(per_run_values)
+        if direction == "maximize" and best_run > champion + margin:
+            return "CANDIDATE"
+        if direction == "minimize" and best_run < champion - margin:
+            return "CANDIDATE"
+    return "FAILURE"
+
+
 def trial_count(ledger: Path) -> int:
-    """Number of trials in the current campaign = data rows in the CSV (header
-    excluded). Resets to 0 when the CSV is archived+emptied between campaigns."""
+    """Data rows in the ledger = trials in the current campaign (all verdicts,
+    failures included). Resets to 0 only when the CSV is archived+emptied."""
     if not ledger.exists():
         return 0
     with open(ledger) as f:
         return sum(1 for _ in csv.DictReader(f))
 
+
 # -----------------------------------------------------------------------------
-# 6/7. Report + ledger + commits
+# 6. Record + ledger
 # -----------------------------------------------------------------------------
-def write_results_section(md_path: Path, metric: float, delta, status: str) -> None:
-    """Fill ## Results and update the STATUS in the title of the <hash>.md.
-    delta is DISPLAY-ONLY (recomputed for readability, goes stale when champion
-    changes) -- it is never used in the decision.
-    TODO: populate the ## Results block per TEMPLATE.md layout
-    (R2 per dim, MLflow run ids, best epochs) and set the frontmatter fields
-    id/status/metric.primary.value/created_at.
-    """
-    ...
+LEDGER_HEADER = ["timestamp", "id", "parent", "model_name", "modification_description",
+                 "metric_name", "metric_value", "metric_delta", "status", "verdict"]
 
 
 def append_ledger_row(ledger: Path, row: dict) -> None:
-    """Append one row. The driver is the sole owner of the header: it is written
-    automatically on the first trial (when the file does not yet exist) and
+    """Append one row. The driver owns the header: written on the first trial,
     skipped afterwards. Do NOT create this file by hand."""
-    header = ["timestamp", "id", "parent", "model_name", "modification_description",
-              "metric_name", "metric_value", "metric_delta", "decision", "status"]
     exists = ledger.exists()
     with open(ledger, "a", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=header)
+        w = csv.DictWriter(f, fieldnames=LEDGER_HEADER)
         if not exists:
             w.writeheader()
         w.writerow(row)
 
 
-def git_commit(msg: str, branch: str) -> str:
-    subprocess.run(["git", "checkout", "-q", branch], check=False)   # ensure branch
-    subprocess.run(["git", "add", "-A"], check=True)
-    subprocess.run(["git", "commit", "-q", "-m", msg], check=True)
-    return subprocess.run(["git", "rev-parse", "HEAD"],
-                          capture_output=True, text=True, check=True).stdout.strip()
+def _replace_section(body: str, heading: str, content: str) -> str:
+    """Replace the text under '## heading' (up to the next '## ' or EOF),
+    keeping the heading line. Appends the section if absent."""
+    pat = re.compile(rf"(^## {re.escape(heading)}\n)(.*?)(?=^## |\Z)",
+                     re.DOTALL | re.MULTILINE)
+    if pat.search(body):
+        return pat.sub(lambda m: m.group(1) + content.rstrip() + "\n\n", body)
+    return body.rstrip() + f"\n\n## {heading}\n{content.rstrip()}\n"
 
 
-def git_revert_worktree(mutable: list[str]) -> None:
-    """Discard the code change of a rejected trial (keep the .md record)."""
-    # revert only the mutable files, preserving the experiment record under ai_agent/
-    for path in mutable:
-        subprocess.run(["git", "checkout", "--", path], check=False)
+def _update_title(body: str, trial_id: str, model_name: str, label: str) -> str:
+    return re.sub(r"^# Trial .*$",
+                  f"# Trial {trial_id} — {model_name or '?'} — {label}",
+                  body, count=1, flags=re.MULTILINE)
+
+
+def write_record(md_path: Path, trial_id: str, status: str, verdict: str | None,
+                 aggregate: float | None, runs: list[dict] | None,
+                 cfg: dict, created_at: str, delta: float | None,
+                 error: str | None = None) -> None:
+    """Fill the frontmatter + ## Results. Numbers by the driver; the agent adds
+    ## Training Dynamics and ## Conclusion afterwards."""
+    text = md_path.read_text()
+    m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
+    if not m:
+        raise ValueError(f"No frontmatter found in {md_path}")
+    fm = yaml.safe_load(m.group(1)) or {}
+    body = m.group(2)
+
+    fm["id"] = trial_id
+    fm["status"] = status
+    fm["verdict"] = verdict
+    fm["created_at"] = created_at
+    if aggregate is not None:
+        fm["metric"] = {"primary": {
+            "name": cfg["eval"]["primary_metric_name"],
+            "value": round(float(aggregate), 6),
+            "direction": cfg["eval"]["direction"],
+        }}
+
+    if status == "failed":
+        results = (f"- **Trial failed mechanically** — {error}\n"
+                   f"- No comparable metric produced; mutable files reverted to the pre-trial state.")
+        label = "FAILED"
+    else:
+        per = cfg["eval"]["per_run_metric"]
+        also = cfg["eval"].get("also_log", []) or []
+        per_parts = []
+        for r in runs:
+            tag = r["axis_value"] if r["axis_value"] is not None else r["run_id"][:8]
+            per_parts.append(f"{tag}: {r[per]:.6f}")
+        lines = [
+            f"- **{per} per run:** " + " | ".join(per_parts),
+            f"- **{cfg['eval']['primary_metric_name']}:** {aggregate:.6f}",
+            f"- **delta_vs_champion** (display only): {delta:+.6f}",
+        ]
+        for name in also:
+            vals = [r[name] for r in runs]
+            lines.append(f"- **{name}** (mean, non-decisional): {sum(vals) / len(vals):.6f}")
+        lines.append("- **MLflow Run IDs:** " + " ".join(r["run_id"] for r in runs))
+        results = "\n".join(lines)
+        label = verdict
+
+    body = _replace_section(body, "Results", results)
+    body = _update_title(body, trial_id, fm.get("model_name", ""), label)
+    new_fm = yaml.dump(fm, sort_keys=False, default_flow_style=False, allow_unicode=True)
+    md_path.write_text(f"---\n{new_fm}---\n{body}")
 
 
 # -----------------------------------------------------------------------------
 # Orchestration
 # -----------------------------------------------------------------------------
-def run_trial(parent: str | None = None) -> None:
+def run_trial() -> tuple[str, str | None]:
     cfg = load_contract()
     exp_dir = Path(cfg["logging"]["experiments_dir"])
     ledger = Path(cfg["logging"]["ledger"])
+    template = cfg["logging"]["template"]
     branch = cfg["decision"]["branch"]
     mutable = cfg["mutable"]
+    direction = cfg["eval"]["direction"]
 
     draft = exp_dir / DRAFT_NAME
     if not draft.exists():
         raise FileNotFoundError(
-            f"{draft} not found. Copy {cfg['logging']['template']} to {draft} "
-            "and fill Hypothesis / Implementation / model_name before running."
+            f"{draft} not found. Copy {template} to {draft} and fill "
+            "Hypothesis / Implementation / model_name / parent before running."
         )
 
-    # 0. campaign cap — refuse before doing any work (no commit, no training)
+    # 0. campaign cap -- refuse before any work (no commit, no training)
     max_trials = cfg["decision"].get("max_trials")
     if max_trials is not None and trial_count(ledger) >= max_trials:
-        print(f"Reached max_trials={max_trials} for this campaign. "
-              "Archive trial_log.csv + reports and start a new campaign to continue.")
-        return
+        print(f"Reached max_trials={max_trials} for this campaign. Archive "
+              f"{ledger} + reports and start a new campaign to continue.")
+        return ("skipped", None)
 
-    # 1. scope
-    assert_only_mutable_changed(mutable)
+    _ensure_branch(branch)
 
-    # 2. commit 1 (input) -> identity -> id -> rename draft to <id>.md
-    driver_cmd = "python ai_agent/driver.py run" + (f" {parent}" if parent else "")
-    pre_sha = git_commit("[trial] lock input", branch)
-    identity = build_identity(pre_sha, driver_cmd, parent)
-    trial_id = compute_id(identity)
+    # 1. scope check (pre-flight: nothing is committed if this fails)
+    assert_only_mutable_changed(mutable, exp_dir)
+
+    # remember the pre-trial (champion) code, to revert to on failure
+    parent_sha = _git_head()
+
+    # 2. commit 1 (input) -> id = short sha ; rename draft -> <id>.md
+    trial_id = git_commit("[trial] lock input")
     md_path = exp_dir / f"{trial_id}.md"
     if md_path.exists():
-        raise ValueError(f"Duplicate trial id {trial_id} (identical identity). Aborting.")
-    draft.rename(md_path)                          # draft.md -> <id>.md
+        raise ValueError(f"Record {md_path} already exists (sha collision?). Aborting.")
+    draft.rename(md_path)
 
-    # read agent-provided descriptive fields from the frontmatter
     fm = read_frontmatter(md_path)
     model_name = fm.get("model_name", "")
-
-    # 3. train (N runs over repeat_over)
+    summary = fm.get("summary", "")
+    parent = fm.get("parent") or ""
+    created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     log_path = exp_dir / f"{trial_id}.console.log"
-    run_eval(cfg, log_path)
 
-    # 4. read + aggregate metric
-    metric = read_primary_metric(cfg)
-    champion = read_champion_metric(ledger)
-    # delta is DISPLAY-ONLY, never decisional
-    delta = metric - champion if champion is not None else 0.0
+    try:
+        # 3. train (N runs, all-or-nothing)
+        overrides = _repeat_values(cfg)
+        run_eval(cfg, trial_id, overrides, log_path)
 
-    # 5. decide (deterministic)
-    keep = is_better(metric, champion, cfg["judge"]["direction"])
-    status = ("BASELINE" if keep and champion is None
-              else "CHAMPION" if keep else "FAILURE")
-    if not keep:
-        git_revert_worktree(mutable)
+        # 4. read the N runs by tag + aggregate
+        per = cfg["eval"]["per_run_metric"]
+        also = cfg["eval"].get("also_log", []) or []
+        runs = read_trial_runs(trial_id, per, also, _repeat_axis(cfg))
+        if len(runs) != len(overrides):
+            raise EvalFailed(f"Expected {len(overrides)} runs tagged {trial_id}, found {len(runs)}.")
+        values = [r[per] for r in runs]
+        if cfg.get("safety", {}).get("nan_abort") and any(math.isnan(v) for v in values):
+            raise EvalFailed("NaN in a per-run metric.")
+        aggregate = _aggregate(values, cfg["eval"]["aggregation"])
 
-    # 6. write results + ledger row (model_name comes from the .md frontmatter)
-    write_results_section(md_path, metric, delta, status)
-    append_ledger_row(ledger, {
-        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "id": trial_id, "parent": parent or "",
-        "model_name": model_name,
-        "modification_description": fm.get("summary", ""),
-        "metric_name": cfg["judge"]["primary_metric_name"],
-        "metric_value": metric, "metric_delta": delta,
-        "decision": "keep" if keep else "revert", "status": status,
-    })
+        # 5. verdict (deterministic)
+        champion = read_champion_metric(ledger, direction)
+        delta = (aggregate - champion) if champion is not None else 0.0
+        verdict = decide_verdict(aggregate, values, champion, cfg)
+        if verdict == "FAILURE":
+            _revert_mutable_to(parent_sha, mutable)
 
-    # 7. commit 2 (output)
-    git_commit(f"[trial] {trial_id} result: {status} ({metric:.4f})", branch)
-    print(f"Trial {trial_id}: {status}  {cfg['eval']['primary_metric_name']}={metric:.4f}  delta={delta:+.4f}")
+        # 6. record + ledger
+        write_record(md_path, trial_id, "completed", verdict, aggregate, runs,
+                     cfg, created_at, delta)
+        append_ledger_row(ledger, {
+            "timestamp": created_at, "id": trial_id, "parent": parent,
+            "model_name": model_name, "modification_description": summary,
+            "metric_name": cfg["eval"]["primary_metric_name"],
+            "metric_value": f"{aggregate:.6f}", "metric_delta": f"{delta:+.6f}",
+            "status": "completed", "verdict": verdict,
+        })
 
+        # 7. commit 2 (output)
+        git_commit(f"[trial] {trial_id} {verdict} ({aggregate:.4f})")
+        print(f"Trial {trial_id}: {verdict}  "
+              f"{cfg['eval']['primary_metric_name']}={aggregate:.4f}  delta={delta:+.4f}")
+        return ("completed", verdict)
 
-class ScopeViolation(Exception): ...
-class EvalFailed(Exception): ...
+    except Exception as e:
+        # mechanical failure: revert code, still record + commit to leave a trace
+        _revert_mutable_to(parent_sha, mutable)
+        write_record(md_path, trial_id, "failed", None, None, None,
+                     cfg, created_at, None, error=f"{type(e).__name__}: {e}")
+        append_ledger_row(ledger, {
+            "timestamp": created_at, "id": trial_id, "parent": parent,
+            "model_name": model_name, "modification_description": summary,
+            "metric_name": cfg["eval"]["primary_metric_name"],
+            "metric_value": "", "metric_delta": "",
+            "status": "failed", "verdict": "",
+        })
+        git_commit(f"[trial] {trial_id} FAILED ({type(e).__name__})")
+        print(f"Trial {trial_id}: FAILED — {type(e).__name__}: {e}", file=sys.stderr)
+        return ("failed", None)
 
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
-    if cmd == "run":
-        parent = sys.argv[2] if len(sys.argv) > 2 else None
-        run_trial(parent=parent)
-    else:
-        print(f"Unknown command: {cmd}. Use: python driver.py run [parent_id]")
+    if cmd != "run":
+        print(f"Unknown command: {cmd}. Use: python ai_agent/driver.py run", file=sys.stderr)
         sys.exit(1)
+    try:
+        status, _ = run_trial()
+    except (ScopeViolation, FileNotFoundError, ValueError) as e:
+        # pre-flight problems: nothing was committed; fix and rerun
+        print(f"{type(e).__name__}: {e}", file=sys.stderr)
+        sys.exit(2)
+    sys.exit(1 if status == "failed" else 0)
