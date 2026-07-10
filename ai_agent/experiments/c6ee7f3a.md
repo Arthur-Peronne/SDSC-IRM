@@ -1,4 +1,19 @@
 ---
+model_name: null
+summary: null
+parent: null
+id: c6ee7f3a
+status: completed
+verdict: FAILURE
+created_at: '2026-07-10T17:58:11+00:00'
+metric:
+  primary:
+    name: avg_validation_R2_mean
+    value: -10.061935
+    direction: maximize
+---
+
+---
 # Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
 #   python ai_agent/driver.py run
 # The driver commits the input (that commit's short sha becomes `id`), renames
@@ -19,28 +34,7 @@ metric:
   primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
 ---
 
----
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
-model_name: null      # the AE architecture trained (e.g. AE3dDilatedAttention). Descriptive, NOT the id.
-summary: null         # one-line description of the change (becomes the CSV modification_description)
-parent: null          # lineage: `id` of the trial whose CODE this one branched FROM. null for roots.
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null              # short sha of commit 1 == the frozen input == this trial's identity
-status: draft         # draft -> completed | failed          (lifecycle, lowercase)
-verdict: null         # BASELINE | CHAMPION | CANDIDATE | FAILURE   (judgement, UPPERCASE)
-created_at: null
-metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
----
-
-# Trial <id> — <model_name> — <verdict>
+# Trial c6ee7f3a — ? — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -58,10 +52,11 @@ Test 2 avec Modèle ; failure ?
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **validation_R2_mean per run:** 7be812a5: -10.061935
+- **avg_validation_R2_mean:** -10.061935
+- **delta_vs_champion** (display only): -9.974884
+- **validation_MSE_mean** (mean, non-decisional): 10956.210938
+- **MLflow Run IDs:** 7be812a5ba664225bd12738d2a058e37
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
