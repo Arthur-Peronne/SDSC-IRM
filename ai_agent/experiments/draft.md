@@ -49,6 +49,8 @@ metric:
      which I predict increases avg_validation_R2_mean."
      If this trial fuses two prior ideas, name both parents and describe the fusion. -->
 
+Blablabla 
+
 ## Implementation
 <!-- The concrete architectural / hyperparameter change: what was added, where, and
      how it differs from the current champion. Respect the "no skip connections" rule. -->
