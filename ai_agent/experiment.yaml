@@ -74,7 +74,7 @@ decision:
 logging:
   experiments_dir: "ai_agent/experiments"           # one <id>.md record per trial
   template:        "ai_agent/experiments/TEMPLATE.md"
-  ledger:          "ai_agent/trial_log.csv"          # flat index; header owned by the driver
+  ledger:          "ai_agent/experiments/trial_log.csv"          # flat index; header owned by the driver
 
 # -- 6. Safety rails the driver enforces --------------------------------------
 safety:

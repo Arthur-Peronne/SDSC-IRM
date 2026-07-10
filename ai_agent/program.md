@@ -37,10 +37,14 @@ an optimization goal, not a controlled comparison — we want the best model. --
 1. Read the current champion: the best `keep` row in `trial_log.csv` — i.e. the
    highest-metric row whose `verdict` is CHAMPION or BASELINE — and open its
    `experiments/<id>.md` for context. (The driver reads the champion the same way.)
-2. Create a new draft from the template: `mkdir -p ai_agent/experiments && cp ai_agent/experiments/TEMPLATE.md ai_agent/experiments/draft.md` 
-   Fill `model_name`, `summary`, `parent` in the frontmatter and the
-   ## Hypothesis + ## Implementation prose BEFORE running. Leave the driver-written
-   fields at null.
+2. Create a new draft from the template (a real file copy — do not reconstruct the
+   structure by hand):
+   ```bash
+   cp ai_agent/experiments/TEMPLATE.md ai_agent/experiments/draft.md
+   ```
+   Then fill `model_name`, `summary`, `parent` in the frontmatter and the
+   ## Hypothesis + ## Implementation prose BEFORE running. Leave the
+   driver-written fields at null.
 3. Edit a mutable file (see Hard boundaries).
 4. Run the driver, then wait — do not edit anything while it trains:
    ```bash
@@ -52,8 +56,24 @@ an optimization goal, not a controlled comparison — we want the best model. --
 5. When it returns, read the verdict and write ## Training Dynamics and
    ## Conclusion in the `<id>.md`. Then start the next trial.
 
-## When to stop
-- Stop and flag if you are repeating variations of a failed idea (no loops).
-- Stop if a run fails twice in a row for the same reason.
-- The driver enforces the hard budget: once `trial_log.csv` reaches `max_trials`,
-  it refuses new trials until the campaign is archived.
+## How to run a campaign
+A campaign = repeating the trial cycle autonomously until the budget is spent. The
+human starts the loop (e.g. from the CLI: "run trials until the driver refuses, don't
+ask me between trials"). You then iterate WITHOUT waiting for confirmation:
+
+  repeat steps 1–5 of "How to run a trial"
+  until `python ai_agent/driver.py run` prints "Reached max_trials=N".
+
+The stop condition is that driver message — not a count you keep in your head. When it
+appears, the campaign is COMPLETE: stop and write a short summary (the champion, and
+what was learned across the trials).
+
+Between trials there is nothing to reset or clean. The driver has already handled a
+FAILURE end-to-end: reverted its code, purged its MLflow runs, and committed the
+result (its `<id>.md` + CSV row + `<id>.console.log` remain as the trace). Just start
+the next trial by recreating draft.md (step 2). Do NOT run any destructive git or
+filesystem cleanup yourself.
+
+Stop early — and say so clearly — only if:
+- you keep proposing variations of an idea that repeatedly fails (no loops), or
+- a run fails twice in a row for the same reason.

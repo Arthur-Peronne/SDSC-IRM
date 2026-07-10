@@ -34,7 +34,8 @@ produces an untagged run — exactly the classic behaviour.
 - `ai_agent/experiments/<id>.md` — one record per trial (`<id>` = short sha of commit 1).
 - `ai_agent/trial_log.csv` — flat comparison index (owned by the driver; never edit by hand).
 
-Run a trial: copy `experiments/TEMPLATE.md` to `experiments/draft.md`, fill
+Run a trial: create the draft by copying the template
+(`cp ai_agent/experiments/TEMPLATE.md ai_agent/experiments/draft.md`), fill
 `model_name` / `summary` / `parent` and the Hypothesis + Implementation prose,
 edit a mutable file, then:
 ```bash
@@ -87,25 +88,3 @@ A campaign = one fixed judge metric + a budget (`max_trials` in experiment.yaml)
 `max_trials` counts ALL trials in `trial_log.csv`, failures included; the count only
 resets when the CSV is archived and emptied. To start a new campaign: archive the CSV
 and the per-trial records, then edit experiment.yaml (new `mutable` / metric / budget).
-
-Then purge the FAILURE and `failed` runs from MLflow (their `<id>.md` + CSV row remain
-as the trace; only the models leave). The `trial_id` tag identifies them — no run IDs
-to copy by hand. Run from the repo root, ONLY when no trial is running:
-
-```bash
-python3 - <<'PY'
-import csv, subprocess, pathlib
-bad = {r["id"] for r in csv.DictReader(open("ai_agent/trial_log.csv"))
-       if r["verdict"] == "FAILURE" or r["status"] == "failed"}
-for tagfile in pathlib.Path("mlruns").glob("*/*/tags/trial_id"):
-    if tagfile.read_text().strip() in bad:
-        run_dir = tagfile.parent.parent          # mlruns/<experiment_id>/<run_id>
-        print("purging", run_dir)
-        subprocess.run(["rm", "-rf", str(run_dir)])
-PY
-git add -A mlruns/
-git commit -m "cleanup: purge FAILURE/failed runs (end of campaign)"
-```
-This removes only the run directories identified by tag (committed metadata AND
-gitignored `.pth`). NEVER run `rm -rf mlruns/` or `git clean -fdx mlruns/` globally —
-that would wipe CHAMPION and CANDIDATE models too.

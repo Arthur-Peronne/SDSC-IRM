@@ -31,6 +31,10 @@ Two axes, kept separate (never conflated):
 produced a comparable metric. "FAILURE" = the run completed fine but lost to the
 champion. Both revert the mutable code; only the reason and the status differ.
 
+A FAILURE / failed trial also has its MLflow runs purged (identified by the
+trial_id tag) before the output commit, so its models never enter git. Its
+<id>.md record, CSV row and <id>.console.log are kept as the scientific trace.
+
 The training script must expose two hooks (see the two `HOOK` comments below):
   --trial-id <id>     set an MLflow tag  trial_id=<id>  on the run
   --set key=value     override cfg[key] in memory (the on-disk YAML is untouched)
@@ -41,6 +45,7 @@ from __future__ import annotations
 import csv
 import math
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -117,6 +122,24 @@ def _revert_mutable_to(sha: str, mutable: list[str]) -> None:
     code is committed, so `git checkout -- <path>` would restore the bad code."""
     for path in mutable:
         _git("checkout", sha, "--", path, check=False)
+
+
+def _purge_trial_runs(trial_id: str) -> None:
+    """Delete every MLflow run directory tagged with this trial_id (committed
+    metadata AND gitignored .pth). Called for FAILURE / failed trials, BEFORE the
+    output commit, so their models never enter git. Targeted strictly by tag: only
+    this trial's runs, never mlruns/ globally. The <id>.md record, the CSV row and
+    the <id>.console.log are kept -- the scientific trace survives, only models go."""
+    mlruns = Path(MLFLOW_TRACKING_URI)
+    if not mlruns.exists():
+        return
+    for tagfile in mlruns.glob("*/*/tags/trial_id"):
+        try:
+            match = tagfile.read_text().strip() == trial_id
+        except OSError:
+            continue
+        if match:
+            shutil.rmtree(tagfile.parent.parent, ignore_errors=True)  # mlruns/<exp>/<run_id>
 
 
 # -----------------------------------------------------------------------------
@@ -451,6 +474,7 @@ def run_trial() -> tuple[str, str | None]:
         verdict = decide_verdict(aggregate, values, champion, cfg)
         if verdict == "FAILURE":
             _revert_mutable_to(parent_sha, mutable)
+            _purge_trial_runs(trial_id)      # a FAILURE keeps its record + log, not its models
 
         # 6. record + ledger
         write_record(md_path, trial_id, "completed", verdict, aggregate, runs,
@@ -470,8 +494,9 @@ def run_trial() -> tuple[str, str | None]:
         return ("completed", verdict)
 
     except Exception as e:
-        # mechanical failure: revert code, still record + commit to leave a trace
+        # mechanical failure: revert code, purge any tagged runs, still record + commit
         _revert_mutable_to(parent_sha, mutable)
+        _purge_trial_runs(trial_id)          # drop partial models; keep the <id>.md + console.log
         write_record(md_path, trial_id, "failed", None, None, None,
                      cfg, created_at, None, error=f"{type(e).__name__}: {e}")
         append_ledger_row(ledger, {
