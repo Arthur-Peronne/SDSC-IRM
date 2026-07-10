@@ -1,0 +1,2 @@
+timestamp,id,parent,model_name,modification_description,metric_name,metric_value,metric_delta,status,verdict
+2026-07-10T19:30:20+00:00,185cf97f,,AE3dAsymResSeparableV2,"Campaign baseline at latent_dim=240, full budget (n_epochs=200) — HP values carried from the pipeline-smoke-test champion (lr=5e-4, weight_decay=0, dropout_rate=0, noise_std=0, patience=30)",avg_validation_R2_mean,0.807480,+0.000000,completed,BASELINE
