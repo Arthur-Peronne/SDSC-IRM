@@ -13,6 +13,10 @@ decides and the driver applies. Rewrite this file at the start of each campaign.
 Find the autoencoder ARCHITECTURE that maximizes avg_validation_R2_mean (mean
 validation R² over latent dims 8 / 60 / 240), hyperparameters held fixed. This is
 an optimization goal, not a controlled comparison — we want the best model. -->
+The goal of this campaign is to optimize the primary metric by adjusting the 
+autoencoder models hyperpameters. 
+We repeat the experiment over several latent dims (see repeat_over in experiment.yaml) 
+to find hyperparameters suitable accross latent dims.
 
 ## What to explore this session
 <!-- EDIT PER CAMPAIGN. Examples:
@@ -25,6 +29,10 @@ an optimization goal, not a controlled comparison — we want the best model. --
   mechanistically-justified changes — not random search.
 - Architectural constraint for this project: NO skip connections (no U-Net) — all
   information must pass through the bottleneck. -->
+- Modify only the hyperparamers autoencoder.yaml, you can't change the model architecture or other parameters
+- Only 5 hyperparameters opened to change, to optimize: lr, weight_decay, dropout_rate, noise_std, patience
+- Verify that hyper_automatic_values is set to false in experiment.yaml. If not, set it to false!
+- Propose deliberate, mechanistically-justified changes — not random search.
 
 ## Hard boundaries (defined in experiment.yaml, enforced by the driver — see SETUP.md)
 - Modify only files in the `mutable` allowlist. Everything else — including
