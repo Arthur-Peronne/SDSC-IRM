@@ -1,0 +1,13 @@
+
+=== python scripts/run_autoencoder.py --trial-id 51407abe ===
+/home/renku/work/SDSC-IRM/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+special_split = None
+Data loaded | train: 200 | val: 40 | test: 60 | split: splitdefault
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=30 | max_epochs=2
+Epoch 1/2 | train: 0.107463 | val: 0.040846 | lr: 5.00e-05 ✓ best
+Epoch 2/2 | train: 0.023881 | val: 0.011729 | lr: 5.00e-05 ✓ best
+Loss plot saved: /home/renku/work/SDSC-IRM/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_splitdefault_120dims_hp_test3_train_val_loss.png
+[train] R2 mean=-2.9396 std=3.5296 | MSE mean=3504.318848
+[validation] R2 mean=-4.1437 std=4.0013 | MSE mean=3092.094238
+[test] R2 mean=-3.0367 std=2.8798 | MSE mean=3096.680908
