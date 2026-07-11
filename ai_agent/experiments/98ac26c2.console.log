@@ -1,0 +1,43 @@
+
+=== python scripts/run_autoencoder.py --trial-id 98ac26c2 ===
+/home/renku/work/SDSC-IRM/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+special_split = None
+Data loaded | train: 200 | val: 40 | test: 60 | split: splitdefault
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=15 | max_epochs=200
+Epoch 1/200 | train: 0.016334 | val: 0.001438 | lr: 8.00e-04 ✓ best
+Epoch 2/200 | train: 0.003878 | val: 0.001756 | lr: 8.00e-04 (no improvement for 1 epochs)
+Epoch 3/200 | train: 0.003890 | val: 0.001705 | lr: 8.00e-04 (no improvement for 2 epochs)
+Epoch 4/200 | train: 0.003625 | val: 0.002335 | lr: 8.00e-04 (no improvement for 3 epochs)
+Epoch 5/200 | train: 0.003577 | val: 0.001936 | lr: 4.00e-04 (no improvement for 4 epochs)
+Epoch 6/200 | train: 0.003311 | val: 0.001154 | lr: 4.00e-04 ✓ best
+Epoch 7/200 | train: 0.002941 | val: 0.001143 | lr: 4.00e-04 ✓ best
+Epoch 8/200 | train: 0.002871 | val: 0.001199 | lr: 4.00e-04 (no improvement for 1 epochs)
+Epoch 9/200 | train: 0.002732 | val: 0.000980 | lr: 4.00e-04 ✓ best
+Epoch 10/200 | train: 0.002691 | val: 0.002173 | lr: 4.00e-04 (no improvement for 1 epochs)
+Epoch 11/200 | train: 0.002607 | val: 0.001299 | lr: 4.00e-04 (no improvement for 2 epochs)
+Epoch 12/200 | train: 0.002575 | val: 0.002142 | lr: 4.00e-04 (no improvement for 3 epochs)
+Epoch 13/200 | train: 0.002569 | val: 0.001457 | lr: 2.00e-04 (no improvement for 4 epochs)
+Epoch 14/200 | train: 0.002254 | val: 0.000968 | lr: 2.00e-04 ✓ best
+Epoch 15/200 | train: 0.002097 | val: 0.000826 | lr: 2.00e-04 ✓ best
+Epoch 16/200 | train: 0.002014 | val: 0.000893 | lr: 2.00e-04 (no improvement for 1 epochs)
+Epoch 17/200 | train: 0.001944 | val: 0.001118 | lr: 2.00e-04 (no improvement for 2 epochs)
+Epoch 18/200 | train: 0.001887 | val: 0.001012 | lr: 2.00e-04 (no improvement for 3 epochs)
+Epoch 19/200 | train: 0.001847 | val: 0.001295 | lr: 1.00e-04 (no improvement for 4 epochs)
+Epoch 20/200 | train: 0.001700 | val: 0.000863 | lr: 1.00e-04 (no improvement for 5 epochs)
+Epoch 21/200 | train: 0.001638 | val: 0.000853 | lr: 1.00e-04 (no improvement for 6 epochs)
+Epoch 22/200 | train: 0.001602 | val: 0.001003 | lr: 1.00e-04 (no improvement for 7 epochs)
+Epoch 23/200 | train: 0.001561 | val: 0.000887 | lr: 5.00e-05 (no improvement for 8 epochs)
+Epoch 24/200 | train: 0.001513 | val: 0.000903 | lr: 5.00e-05 (no improvement for 9 epochs)
+Epoch 25/200 | train: 0.001491 | val: 0.000860 | lr: 5.00e-05 (no improvement for 10 epochs)
+Epoch 26/200 | train: 0.001470 | val: 0.000870 | lr: 5.00e-05 (no improvement for 11 epochs)
+Epoch 27/200 | train: 0.001456 | val: 0.000922 | lr: 2.50e-05 (no improvement for 12 epochs)
+Epoch 28/200 | train: 0.001424 | val: 0.000933 | lr: 2.50e-05 (no improvement for 13 epochs)
+Epoch 29/200 | train: 0.001409 | val: 0.000889 | lr: 2.50e-05 (no improvement for 14 epochs)
+Epoch 30/200 | train: 0.001395 | val: 0.000915 | lr: 2.50e-05 (no improvement for 15 epochs)
+
+Early stopping at epoch 30. Best epoch: 15 (val loss: 0.000826).
+Loss plot saved: /home/renku/work/SDSC-IRM/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_splitdefault_240dims_ai_hpopti_train_val_loss.png
+[train] R2 mean=0.7013 std=0.1489 | MSE mean=551.777283
+[validation] R2 mean=0.6910 std=0.1827 | MSE mean=217.725006
+[test] R2 mean=0.7288 std=0.1294 | MSE mean=265.164825
