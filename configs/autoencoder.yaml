@@ -44,7 +44,7 @@ patience_scheduler: null         # null = patience // 5
 hyper_automatic_values: false # if True, goes to ae_HPforarchis.yaml. If False, takes values below:
 lr: 8e-4                         # Learning rate; AEoptuna: 1e-5, VAEoptuna: 5e-5
 weight_decay: 0.0            # L2 regularisation; AEoptuna: 6.47e-6, VAEoptuna: 1e-7
-dropout_rate: 0.05                # 0.0 for AE3dConv and AE3dLinear; AEoptuna: 0.221
+dropout_rate: 0.04                # 0.0 for AE3dConv and AE3dLinear; AEoptuna: 0.221
 noise_std: 0.0                   # 0.0 = no denoising; AEoptuna: 0.002
 patience: 30                     # early stopping patience (used only if n_val > 0), VAEoptuna: 27
 
