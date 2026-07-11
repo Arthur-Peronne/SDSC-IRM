@@ -1,25 +1,20 @@
 ---
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
 model_name: AE3dAsymResSeparableV2
-summary: "Third control replicate of the champion (lr=8e-4, dropout=0.05), with remaining campaign budget dedicated to a robust confidence estimate"
+summary: Third control replicate of the champion (lr=8e-4, dropout=0.05), with remaining
+  campaign budget dedicated to a robust confidence estimate
 parent: 3e07b08d
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null              # short sha of commit 1 == the frozen input == this trial's identity
-status: draft         # draft -> completed | failed          (lifecycle, lowercase)
-verdict: null         # BASELINE | CHAMPION | CANDIDATE | FAILURE   (judgement, UPPERCASE)
-created_at: null
+id: bb2f2c0f
+status: completed
+verdict: FAILURE
+created_at: '2026-07-11T04:01:46+00:00'
 metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+  primary:
+    name: avg_validation_R2_mean
+    value: 0.779857
+    direction: maximize
 ---
 
-# Trial <id> — <model_name> — <verdict>
+# Trial bb2f2c0f — AE3dAsymResSeparableV2 — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -41,10 +36,11 @@ No change to `configs/autoencoder.yaml` relative to the champion (`lr=8e-4`,
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **validation_R2_mean per run:** 70856698: 0.779857
+- **avg_validation_R2_mean:** 0.779857
+- **delta_vs_champion** (display only): -0.047867
+- **validation_MSE_mean** (mean, non-decisional): 162.334946
+- **MLflow Run IDs:** 70856698927e4d02afc579eef136b89e
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
