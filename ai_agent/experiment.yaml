@@ -62,7 +62,7 @@ eval:
 # Delete the whole `candidate` block for plain binary keep/revert.
 decision:
   branch: "agent-ae-opti"        # isolated branch; the driver never commits to main
-  max_trials: 30                  # driver refuses a new trial once the ledger has this many
+  max_trials: 50                  # driver refuses a new trial once the ledger has this many
   # candidate:
   #   statistic: "max"             # over the per-run values (before aggregation)
   #   margin: 0.03                 # maximize: CANDIDATE if max(values) > champion + margin
