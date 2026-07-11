@@ -40,8 +40,19 @@ the baseline defaults. No architectural change.
 - **MLflow Run IDs:** b60df0db07e44f9bab202b8a55a1f59f
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Ran 97 epochs, early-stopped at `best_epoch=67` (+30 = 97), stable throughout
+(`validation_R2_std=0.078`), best `val_loss=0.000621`. No instability signal.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Confirms the transfer pattern at a third point: `dropout=0.06` is absorbed without
+instability at `lr=6e-4` (delta -0.043, but stable), same as at `lr=5e-4`. Only
+`lr=8e-4` shows real, non-noise sensitivity to dropout values away from 0.05. The
+dropout "ceiling" is specific to the champion's narrow lr peak, not a general
+property of this architecture — a now well-replicated finding (3 lr points × 2
+dropout values confirming the same asymmetry). Champion remains 3e07b08d. The
+campaign's mechanistic picture is essentially complete: a fragile, narrow
+lr=8e-4/dropout=0.05 peak (best found, ~0.80-0.83 typical, 0.828 recorded) versus a
+wider, more robust but not-quite-as-high plateau at lr∈{5e-4,6e-4} with dropout
+anywhere in [0.05,0.08] (~0.78-0.81 typical). Remaining trials will focus on
+confirming this recommendation-relevant distinction rather than further grid
+expansion.
