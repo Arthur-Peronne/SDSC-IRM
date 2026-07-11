@@ -41,8 +41,14 @@ unchanged from the baseline defaults. No architectural change.
 - **MLflow Run IDs:** a6dd21373f494741a42dfa0459d7d87c
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Ran 96 epochs, early-stopped at `best_epoch=66` (+30 = 96), stable throughout
+(`validation_R2_std=0.068`), best `val_loss=0.000566`. Unremarkable, healthy run.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Confirms the pattern: `weight_decay=1e-6` is neutral here too (delta -0.026, inside
+the noise band), same as it was at lr=8e-4 (trial de0f5947, delta -0.017). Across
+both known-good lr points, stacking a tiny weight_decay behaves identically
+(redundant, not additive or harmful) — a consistent, generalizable finding rather
+than an lr=8e-4-specific quirk. Champion remains 3e07b08d. This completes the
+regularizer-stacking question across both good lr values with a clean, negative
+answer: weight_decay does not help at either point.
