@@ -1,25 +1,20 @@
 ---
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
 model_name: AE3dAsymResSeparableV2
-summary: Stack weight_decay=1e-6 AND noise_std=0.0001 together (both individually neutral) on the champion's lr=8e-4 + dropout=0.05
+summary: Stack weight_decay=1e-6 AND noise_std=0.0001 together (both individually
+  neutral) on the champion's lr=8e-4 + dropout=0.05
 parent: 3e07b08d
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null              # short sha of commit 1 == the frozen input == this trial's identity
-status: draft         # draft -> completed | failed          (lifecycle, lowercase)
-verdict: null         # BASELINE | CHAMPION | CANDIDATE | FAILURE   (judgement, UPPERCASE)
-created_at: null
+id: 1a7b6adf
+status: completed
+verdict: FAILURE
+created_at: '2026-07-11T03:40:18+00:00'
 metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+  primary:
+    name: avg_validation_R2_mean
+    value: 0.803182
+    direction: maximize
 ---
 
-# Trial <id> — <model_name> — <verdict>
+# Trial 1a7b6adf — AE3dAsymResSeparableV2 — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -43,10 +38,11 @@ unchanged from the baseline default. No architectural change.
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **validation_R2_mean per run:** f126bb35: 0.803182
+- **avg_validation_R2_mean:** 0.803182
+- **delta_vs_champion** (display only): -0.024542
+- **validation_MSE_mean** (mean, non-decisional): 149.093445
+- **MLflow Run IDs:** f126bb35b9994d2d83f3d5d3d7b7a3ad
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
