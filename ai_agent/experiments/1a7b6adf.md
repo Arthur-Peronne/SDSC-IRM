@@ -45,8 +45,21 @@ unchanged from the baseline default. No architectural change.
 - **MLflow Run IDs:** f126bb35b9994d2d83f3d5d3d7b7a3ad
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Ran 114 epochs, early-stopped at `best_epoch=84` (+30 = 114) — a long, healthy
+training window comparable to the champion's 80. Best `val_loss` was 0.000566, close
+to the champion's 0.000493 and squarely inside the range of the other neutral
+stacking trials. `validation_R2_std` (0.074) is unremarkable.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+No synergy detected: stacking both individually-neutral regularizers together
+(delta -0.025) lands right where each did alone (weight_decay alone: -0.017;
+noise_std alone: -0.030) — not better, not measurably worse either. This confirms
+the "regularization budget" reading from earlier trials: dropout=0.05 at lr=8e-4 is
+doing essentially all the useful regularization this architecture can absorb at
+`latent_dim=240`; additional regularizers, alone or combined, are consistently
+redundant rather than harmful or additive. Champion remains 3e07b08d. This closes
+out the combination search — every mechanistically distinct addition to the
+champion's core (lr, dropout) pairing has now been tried, individually and in this
+one combined form, with no result exceeding 0.828. Remaining trials will be used to
+consolidate confidence in the current champion rather than search further variations
+in this well-mapped neighborhood.
