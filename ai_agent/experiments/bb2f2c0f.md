@@ -43,8 +43,20 @@ No change to `configs/autoencoder.yaml` relative to the champion (`lr=8e-4`,
 - **MLflow Run IDs:** 70856698927e4d02afc579eef136b89e
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Ran 86 epochs, early-stopped at `best_epoch=56` (+30 = 86). Best `val_loss` was
+0.000616, the worst of the three exact-champion replicates so far. `validation_R2_std`
+(0.101) is elevated relative to the champion's own 0.059, though not extreme.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Third exact replicate of the champion config: {0.828, 0.803, 0.805, 0.780}. Mean
+≈0.804, and the spread keeps widening rather than tightening around 0.828 — this
+replicate is the lowest yet, below both previous replicates. This further confirms
+(now with 3 independent samples) that 0.828 was a favorable outlier draw, not the
+typical outcome of `lr=8e-4` + `dropout=0.05`; a realistic expectation for this
+config is closer to 0.78-0.83, materially overlapping the old baseline's single
+0.8075 sample. Champion remains 3e07b08d per the fixed ledger rule. Given the user
+has now approved extending the campaign to `max_trials=50` (mid-campaign, applied as
+a direct commit to experiment.yaml outside the trial mechanism, not through this
+trial), the remaining ~1 replicate originally planned is enough for this data point;
+subsequent trials will resume the deliberate-HP-change protocol now that the extra
+budget is confirmed.
