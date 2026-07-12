@@ -1,25 +1,21 @@
 ---
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
 model_name: AE3dAsymResSeparableV2
-summary: "Test small input-space denoising (noise_std 0.0 -> 0.0001) on top of the champion's lr=6e-4, the one regularization mechanism not yet tried (dropout and weight_decay both failed)"
+summary: Test small input-space denoising (noise_std 0.0 -> 0.0001) on top of the
+  champion's lr=6e-4, the one regularization mechanism not yet tried (dropout and
+  weight_decay both failed)
 parent: 97d513a3
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null
-status: draft
-verdict: null
-created_at: null
+id: 319dacea
+status: completed
+verdict: CHAMPION
+created_at: '2026-07-12T20:44:49+00:00'
 metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+  primary:
+    name: avg_validation_R2_mean
+    value: 0.79996
+    direction: maximize
 ---
 
-# Trial <id> — <model_name> — <verdict>
+# Trial 319dacea — AE3dAsymResSeparableV2 — CHAMPION
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -45,10 +41,11 @@ unchanged. No architecture change.
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **validation_R2_mean per run:** c8052396: 0.799960
+- **avg_validation_R2_mean:** 0.799960
+- **delta_vs_champion** (display only): +0.002720
+- **validation_MSE_mean** (mean, non-decisional): 150.229004
+- **MLflow Run IDs:** c80523969edd4e969b6dfbe0d634bb60
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->

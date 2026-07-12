@@ -1,0 +1,15 @@
+artifact_uri: mlruns/269771982328891039/c80523969edd4e969b6dfbe0d634bb60/artifacts
+end_time: 1783890365922
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: c80523969edd4e969b6dfbe0d634bb60
+run_name: AE_AE3dAsymResSeparableV2_200patients_splitdefault_60dims_ai_hpopti
+run_uuid: c80523969edd4e969b6dfbe0d634bb60
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1783889102758
+status: 3
+tags: []
+user_id: renku
