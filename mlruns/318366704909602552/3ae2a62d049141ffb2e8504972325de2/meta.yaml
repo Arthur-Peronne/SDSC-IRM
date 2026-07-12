@@ -1,0 +1,14 @@
+artifact_uri: file:///home/renku/work/SDSC-arthur-project-1/mlruns/318366704909602552/3ae2a62d049141ffb2e8504972325de2/artifacts
+end_time: 1783644862952
+entry_point_name: ''
+experiment_id: '318366704909602552'
+lifecycle_stage: active
+run_id: 3ae2a62d049141ffb2e8504972325de2
+run_name: optuna_aiarchi_sepv2_dim8_splitdefault
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1783597846337
+status: 3
+tags: []
+user_id: renku

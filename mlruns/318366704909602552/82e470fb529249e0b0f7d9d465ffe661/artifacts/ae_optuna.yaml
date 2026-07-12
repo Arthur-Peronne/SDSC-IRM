@@ -4,8 +4,8 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Optuna study ──────────────────────────────────────────────────────────────
-study_name: "aiarchi_sepv2_dim240"
-n_trials: 40
+study_name: "aiarchi_sepv2_dim60"
+n_trials: 30
 plot_only: false                 # true = skip optimization, load existing study and replot
 load_run_id: ""   # required when plot_only: true
 
@@ -27,7 +27,7 @@ stratify_ongroup: true          # true = stratify on ACDC group when special_spl
 
 # ── Fixed hyperparameters ─────────────────────────────────────────────────────
 model_name: "AE3dAsymResSeparableV2"
-latent_dimensions: 240
+latent_dimensions: 60
 n_epochs: 300
 batch_size: 1
 # dropout_rate: 0.0

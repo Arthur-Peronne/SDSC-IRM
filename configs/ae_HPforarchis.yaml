@@ -18,39 +18,39 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 AE3dAsymResSeparableV2:
-  dim_8:
-    lr: 1.0e-5
-    weight_decay: 1.0e-5
-    dropout_rate: 0.0
-    noise_std: 0.02
-    patience: 30
-  dim_60:
-    lr: 1.0e-5
-    weight_decay: 1.0e-6
-    dropout_rate: 0.1
-    noise_std: 0.0
-    patience: 50
-  dim_240:
-    lr: 1.0e-5
-    weight_decay: 1.0e-4
-    dropout_rate: 0.01
-    noise_std: 0.01
-    patience: 40
+  dim_8: # From 318366704909602552/3ae2a62d049141ffb2e8504972325de2
+    lr: 3.854772886344723e-05
+    weight_decay: 6.71580872374353e-08
+    dropout_rate: 0.26774249628288005
+    noise_std: 0.0014927173142226585
+    patience: 29
+  dim_60: # From 318366704909602552/82e470fb529249e0b0f7d9d465ffe661
+    lr: 1.646103945130924e-05
+    weight_decay: 5.302221339138936e-06
+    dropout_rate: 0.1360014680817604
+    noise_std: 0.0028108512715691865
+    patience: 42
+  dim_240: # From 318366704909602552/e6b5f08074924236bb76d9006d5ba94b
+    lr: 5.8482319517158025e-05
+    weight_decay: 3.443487676670848e-06
+    dropout_rate: 0.07234677265330755
+    noise_std: 0.00017707924362405834
+    patience: 20
 
-AE3dFCDeep:
+AE3dFCDeep: # From 318366704909602552/e29079b82775483eb83fd21a567b429e
   dim_120:
-    lr: 4.23e-5
-    weight_decay: 4.84e-6
-    dropout_rate: 0.221
-    noise_std: 0.002
-    patience: 45
+    lr: 2.3856915604176607e-05
+    weight_decay: 4.840553122947839e-06
+    dropout_rate: 0.3683010491804376
+    noise_std: 0.002321617743478317
+    patience: 43
 
-AE3dFCDeep_VAE:
+AE3dFCDeep_VAE: # From 318366704909602552/6dd09c42bf424020a3f3796dfd01f456
   dim_120:
-    lr: 4.77e-5
-    weight_decay: 1.09e-7
+    lr: 4.775116545835735e-05
+    weight_decay: 1.0857172290081103e-07
     patience: 27
-    beta: 0.00022
+    beta: 0.00022228404407614584
     beta_warmup_epochs: 41
 
 # ─────────────────────────────────────────────────────────────────────────────
