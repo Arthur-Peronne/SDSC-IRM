@@ -1,25 +1,21 @@
 ---
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
 model_name: AE3dAsymResSeparableV2
-summary: "Last lr step (6e-4 -> 8e-4), matching the dim=240 champion exactly, to close the lr axis given sharply diminishing gains and the first visible raw-lr noise at 6e-4"
+summary: Last lr step (6e-4 -> 8e-4), matching the dim=240 champion exactly, to close
+  the lr axis given sharply diminishing gains and the first visible raw-lr noise at
+  6e-4
 parent: 97d513a3
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null
-status: draft
-verdict: null
-created_at: null
+id: 7ecd5a5d
+status: completed
+verdict: FAILURE
+created_at: '2026-07-12T19:28:56+00:00'
 metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+  primary:
+    name: avg_validation_R2_mean
+    value: 0.789637
+    direction: maximize
 ---
 
-# Trial <id> — <model_name> — <verdict>
+# Trial 7ecd5a5d — AE3dAsymResSeparableV2 — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -42,10 +38,11 @@ architecture change.
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **validation_R2_mean per run:** 1c69fc89: 0.789637
+- **avg_validation_R2_mean:** 0.789637
+- **delta_vs_champion** (display only): -0.007603
+- **validation_MSE_mean** (mean, non-decisional): 157.305435
+- **MLflow Run IDs:** 1c69fc899a4a41f490c095e0cc9d8ff9
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
