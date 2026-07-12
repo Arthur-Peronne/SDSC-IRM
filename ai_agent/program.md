@@ -9,7 +9,7 @@ decides and the driver applies. Rewrite this file at the start of each campaign.
 # program.md — Research Session Intention
 
 ## Objective
-The goal of this campaign is to optimize the hyperparameters of the autoencoder "AE3dAsymResSeparableV2" at latent_dimensions = 240, by running trials in order
+The goal of this campaign is to optimize the hyperparameters of the autoencoder "AE3dAsymResSeparableV2" at latent_dimensions = 60, by running trials in order
 to maximize the primary metric.
 
 ## What to explore this session
