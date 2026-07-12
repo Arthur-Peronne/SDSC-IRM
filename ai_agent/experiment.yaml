@@ -34,7 +34,7 @@ mutable:
 #     null                                -> single training (N=1, e.g. HP tuning)
 #     {seed: [0, 1, 2]}                   -> seed averaging  (N=3, same config)
 training:
-  command: "python scripts/run_autoencoder.py"
+  command: "python -u scripts/run_autoencoder.py"
   repeat_over: null # {latent_dimensions: [8, 40, 200]}
 
 # -- 3. Eval: how the N runs collapse into ONE decisional number --------------
