@@ -45,8 +45,29 @@ architecture change.
 - **MLflow Run IDs:** 1c69fc899a4a41f490c095e0cc9d8ff9
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Clearest instability yet: epoch 7 spikes to val=0.004516 (vs 0.000932 the epoch
+before) — a 4-5x jump, the largest single-epoch excursion seen in this campaign,
+before recovering. Several other rough patches follow (epoch 39: 0.001345, epoch 41:
+0.001157) that were not present at 6e-4's already-noisier-than-3e-4 profile. Needed
+3 scheduler decays (8e-4->4e-4->2e-4->1e-4->...) and 101 epochs (vs 78 at 6e-4) to
+reach its best (epoch 71), i.e. slower AND rougher than the champion, not faster.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Hypothesis resolved cleanly: FAILURE, avg_validation_R2_mean 0.7972 -> 0.7896
+(-0.0076), and validation R2 std reversed its 4-trial improving streak (0.0869, up
+from 0.0653) — both the mean and the uniformity got worse. This closes the lr axis:
+6e-4 (champion 97d513a3) is the practical optimum for this architecture at
+latent_dim=60 with batch_size=1, not 8e-4 despite that being what worked best at
+latent_dim=240 — HPs did not fully transfer across bottleneck sizes, confirming the
+campaign's opening hypothesis that dim=60 needed its own search rather than
+inheriting dim=240's champion. Mechanistically, batch_size=1 makes each step a
+single-sample gradient estimate; at 8e-4 the step size is large enough that some
+unlucky samples produce a destabilizing update (the epoch-7 spike) even though the
+scheduler/patience mechanism still recovers a usable model eventually — just a worse
+and slower one. Exploration now moves to the other 4 opened HPs. The champion
+(97d513a3, lr=6e-4) already has a fairly tight train/val gap (0.8422 vs 0.7972,
+0.045) — much tighter than the neutral baseline's (0.183) — so classic
+regularizers (dropout, weight_decay, noise) have less overfitting left to correct
+than they would have against the baseline; testing them is still worthwhile but
+expectations should be modest, and it is plausible some or all will FAIL by removing
+capacity the model needs rather than curbing overfitting it no longer has.
