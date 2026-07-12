@@ -1,0 +1,2 @@
+timestamp,id,parent,model_name,modification_description,metric_name,metric_value,metric_delta,status,verdict
+2026-07-12T17:57:13+00:00,20fa5d8e,,AE3dAsymResSeparableV2,"Campaign baseline at latent_dim=60, full budget (n_epochs=200) — HP reset to neutral/near-zero values (lr=1e-5, weight_decay=0, dropout_rate=0, noise_std=0, patience=30) rather than carried from the dim=240 champion, since a 4x smaller bottleneck likely needs a different regularization/lr operating point",avg_validation_R2_mean,0.651708,+0.000000,completed,BASELINE
