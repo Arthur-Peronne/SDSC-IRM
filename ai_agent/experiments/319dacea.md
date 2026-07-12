@@ -48,8 +48,25 @@ unchanged. No architecture change.
 - **MLflow Run IDs:** c80523969edd4e969b6dfbe0d634bb60
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Similar raw-lr noise as the champion (epoch 7: val 0.002473 vs epoch 6's 0.001076;
+epoch 28: 0.001356) — the small input noise did not visibly add to or reduce that.
+Best epoch 45 (val loss 0.000570, the lowest of the campaign), early stopped at 75 —
+essentially the same shape and length as the champion (best 48, stop 78), just
+converging to a marginally better point.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Hypothesis partially confirmed — I predicted another FAILURE but got the third
+CHAMPION of the campaign: avg_validation_R2_mean 0.7972 -> 0.8000 (+0.0027), a small
+but genuine reversal of the "tight gap leaves no room" pattern from the two prior
+regularization attempts. Train R2 (0.8404) is essentially flat vs the champion's
+(0.8422) — unlike dropout, this mechanism did not cost train-set fit — while val R2
+improved slightly. This is consistent with the mechanistic distinction I expected:
+input-space noise acts like a light data-augmentation, encouraging robustness to
+voxel-level noise the scanner/registration pipeline already introduces, rather than
+taxing model capacity the way dropout or weight_decay do. The gain is small enough to
+be partly within run-to-run noise (as weight_decay's -0.0024 likely was), but its
+sign is the opposite of the other two regularizers', which is itself informative.
+Given a small positive result at 0.0001, the natural next test is a modest increase
+(e.g. 0.0003) to see whether this specific mechanism has more headroom, while staying
+well below the 0.002 magnitude that caused catastrophic failure in the dim=240
+campaign.
