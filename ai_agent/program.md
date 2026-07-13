@@ -69,3 +69,18 @@ filesystem cleanup yourself.
 Stop early — and say so clearly — only if:
 - you keep proposing variations of an idea that repeatedly fails (no loops), or
 - a run fails twice in a row for the same reason.
+
+## Known noise floor (measured empirically, not a strategy hint)
+Prior campaigns on this architecture/pipeline (batch_size=1, seed fixed) showed
+substantial run-to-run variance even with identical config and seed — roughly
+0.03-0.04 standard deviation on avg_validation_R2_mean, likely from non-deterministic
+GPU ops. A single-run delta smaller than this is not reliably distinguishable from
+noise. How to use this (replication strategy, tolerance margins, whether to trust a
+single run) is your call.
+
+## Budget discipline
+You have exactly `max_trials` trials for this campaign (see `decision.max_trials` in
+experiment.yaml), no more. Move decisively from the first trial — don't spend early
+trials re-deriving things you can already reason about from config/code or from the
+noise-floor note above. Pace your exploration so that by the last trial you have
+converged on your best candidate, not still mid-sweep.
