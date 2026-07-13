@@ -45,8 +45,22 @@ patience=50, latent_dimensions=8.
 - **MLflow Run IDs:** b181a5c58c6142e693ac167eb9121189
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Much earlier plateau than baseline: early stopping at epoch 82 (vs 126), best epoch
+32 (vs 76) — the lower lr converges to its optimum faster but to a worse plateau.
+Train R² (0.7886) is *below* baseline's train R² (0.8653) too, not just val/test,
+so this isn't extra overfitting being penalized on val — the model is genuinely
+undertrained/underfit at this lr within the same epoch budget, consistent with
+too-slow effective steps for this bottleneck size rather than an optimization
+instability.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Hypothesis rejected: lr=3e-4 is clearly worse (-0.025), a larger and more
+convincing drop than trial 2's weight_decay result and outside the ambiguous
+noise-floor zone. The dim=60 lr-optimum does NOT shift lower at dim=8 — if
+anything the smaller bottleneck wants to keep the higher step size to reach a good
+optimum within the epoch/patience budget, the opposite of my "sharper landscape
+wants gentler steps" mechanism. 6e-4 stands confirmed as (at least) locally optimal
+at dim=8. Closing the lr axis here — testing above 6e-4 would likely just replicate
+the dim=60 cliff (7e-4/8e-4 already failed there) without new information, not a
+good use of remaining budget. Moving to noise_std next (ablation check: does the
+denoising mechanism still matter at this bottleneck size).
