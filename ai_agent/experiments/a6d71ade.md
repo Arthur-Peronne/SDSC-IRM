@@ -44,8 +44,23 @@ architecture change.
 - **MLflow Run IDs:** 09db381174c041afa925483db972ef29
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Best epoch 65 (val 0.000540), close to the champion's epoch 92/0.000526 — a small
+gap, not the dramatic degradation seen with dropout. Early stopped at 125 (vs 152),
+a somewhat shorter run than the champion, but the overall shape (lr timing at
+patience_scheduler=12, noise pattern) tracks closely throughout.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Hypothesis confirmed but the magnitude prediction was off: FAILURE at -0.0040, close
+to (not clearly larger than) the original -0.0024 under patience=30 — weight_decay's
+near-neutral character held even under a schedule more than 2x longer, unlike
+dropout's failure which roughly tripled. This is consistent with the two
+regularizers' different mechanisms: dropout's stochastic capacity cut compounds with
+every additional epoch it is active, while weight_decay's smooth, deterministic
+shrinkage does not accumulate damage the same way — a longer schedule doesn't
+meaningfully change how much it costs. This completes the regularizer-under-new-schedule
+sweep: dropout and weight_decay both remain rejected at any schedule length tested,
+while noise_std remains a confirmed contributor. Champion remains bed745a0. The
+5-axis sweep and its main pairwise interactions with the found optimum are now
+exhaustively mapped (18 trials); remaining budget is better spent on control
+replicates to quantify batch_size=1 run-to-run variance around the champion, which
+would put a confidence band on every delta reported so far.
