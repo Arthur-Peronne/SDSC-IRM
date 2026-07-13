@@ -41,8 +41,22 @@ replicate of the patience=45 config.
 - **MLflow Run IDs:** 507b56973ab74a83b6c1db708755e4fd
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Best epoch 51 (val 0.000535), the earliest-best and highest-val-loss-lowest draw of
+all 5 patience=45 replicates, yet the closest to the champion's own value
+(-0.0018) — a short, efficient run rather than a long noisy one.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+5th point for patience=45: {0.8089, 0.8060, 0.7913, 0.7954, 0.8131}, mean≈0.8029,
+std≈0.0083 — the tight cluster held up at n=5, now on equal footing with
+patience=60's n=5 (std≈0.0346), a >4x difference in spread that has survived every
+additional replicate. This closes the campaign's schedule-length variance
+investigation with a well-supported (though not definitively proven) finding:
+patience values landing on patience_scheduler=9 (45, 49) show both a slightly higher
+mean (~0.80) and markedly lower run-to-run variance than patience_scheduler=10-12
+(50, 60, mean~0.79, std~0.036).
+
+Per explicit user direction, this closes the patience axis for the remainder of the
+campaign: no further patience changes will be made. Remaining trials will focus on
+combinations among lr, weight_decay, dropout_rate, and noise_std — an axis-interaction
+gap correctly flagged as under-explored relative to the extensive patience/schedule
+investigation above. Champion remains bc589070 (patience=50, lr=6e-4, noise_std=0.0001).
