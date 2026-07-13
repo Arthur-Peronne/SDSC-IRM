@@ -28,7 +28,7 @@ seed: 0  # global RNG seed (torch/numpy/random), logged to MLflow. Set to null f
 
 # ── Model ─────────────────────────────────────────────────────────────────────
 model_name: "AE3dAsymResSeparableV2"
-latent_dimensions: 60
+latent_dimensions: 8
 multiple_models_and_dims: false  # true = loop over models_list × latdim_list
 models_list: ["AE3dAsymResidualV4", "AE3dAsymResSeparable", "AE3dAsymResSeparableV2"]
 latdim_list: [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
