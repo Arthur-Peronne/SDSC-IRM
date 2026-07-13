@@ -1,25 +1,20 @@
 ---
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
 model_name: AE3dAsymResSeparableV2
-summary: "Fifth replicate of patience=45, bringing its sample to parity (n=5) with patience=60, for the final variance comparison in the campaign report"
+summary: Fifth replicate of patience=45, bringing its sample to parity (n=5) with
+  patience=60, for the final variance comparison in the campaign report
 parent: bc589070
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null
-status: draft
-verdict: null
-created_at: null
+id: f0c8feaf
+status: completed
+verdict: FAILURE
+created_at: '2026-07-13T08:23:29+00:00'
 metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+  primary:
+    name: avg_validation_R2_mean
+    value: 0.813083
+    direction: maximize
 ---
 
-# Trial <id> — <model_name> — <verdict>
+# Trial f0c8feaf — AE3dAsymResSeparableV2 — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -39,10 +34,11 @@ replicate of the patience=45 config.
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **validation_R2_mean per run:** 507b5697: 0.813083
+- **avg_validation_R2_mean:** 0.813083
+- **delta_vs_champion** (display only): -0.001756
+- **validation_MSE_mean** (mean, non-decisional): 140.997147
+- **MLflow Run IDs:** 507b56973ab74a83b6c1db708755e4fd
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
