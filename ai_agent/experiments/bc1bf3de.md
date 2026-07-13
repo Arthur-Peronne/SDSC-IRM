@@ -45,8 +45,27 @@ change.
 - **MLflow Run IDs:** 3b275ecfd16541489e33ee6a751da99a
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Best epoch 69 (val 0.000641) — between the original champion's 0.000526 and the
+worst replicate's 0.000739, landing this 4th draw roughly in the middle of the
+observed range. Train R2 (0.8637) is close to the champion's (0.8948), but val R2
+(0.7783) trails well behind — the train/val gap here (0.086) is the widest of the
+4 replicates, suggesting this run's model fit training data about as well as usual
+but generalized somewhat worse.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+4-point sample of the identical config: {0.8148, 0.8050, 0.7396, 0.7783}. Mean≈0.784,
+range 0.075, roughly 3 of 4 draws below the originally-recorded champion value —
+confirming possibility (a) from the hypothesis: the variance is genuinely this wide,
+not driven by one outlier, and 0.8148 looks like it sits on the upper side of the
+distribution rather than at its center. This is a materially important campaign-level
+finding: at batch_size=1 with this architecture/data, single-run avg_validation_R2_mean
+has a standard deviation on the order of 0.03, meaning roughly two-thirds of the HP
+comparisons made from trial 8 onward (deltas mostly in the ±0.01 to ±0.02 range) are
+not statistically resolved by a single run each. The campaign's verdict rule
+(deterministic, single-run comparison per experiment.yaml) is a reasonable and
+necessary simplification for tractability, but its practical implication is that
+"champion" here should be read as "best point observed," not "provably best
+in expectation." Given 4 points already characterize the noise floor reasonably well
+and further replicates have diminishing marginal information, remaining budget is
+better spent on real HP exploration — interpreting future deltas against this ~0.03
+noise floor rather than treating any single-run improvement as conclusively real.
