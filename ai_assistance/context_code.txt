@@ -1,8 +1,338 @@
 ======================================================================
 FULL PROJECT CODE — ALL .py FILES
 Root : /home/renku/work/SDSC-IRM
-Files: 36
+Files: 38
 ======================================================================
+
+
+######################################################################
+# FILE: ai_agent/driver.py
+######################################################################
+
+#!/usr/bin/env python
+"""
+driver.py -- the deterministic engine of the autonomous research loop.
+
+The AGENT edits code and writes prose; the DRIVER does the mechanical,
+incorruptible part: lock the input, train, read the metric, decide keep/revert
+by a fixed numeric rule, and commit. The agent and the driver NEVER run at the
+same time -- they take turns. The driver takes NO "intelligent" decision.
+
+Turn structure (one trial):
+  [agent]  copies experiments/TEMPLATE.md -> experiments/draft.md, edits a file
+           in `mutable`, writes Hypothesis + Implementation + model_name.
+  [driver] python driver.py run [parent_id]   <-- everything below happens here
+             1. scope check (only `mutable` files changed?)
+             2. commit 1 -> freezes input (code + all configs + experiment.yaml),
+                yields commit sha -> computes id -> renames draft.md to <id>.md
+             3. run eval: N trainings over repeat_over (N=1 if null), fixed epochs
+             4. read per-run metrics from MLflow -> aggregate into trial scalar
+             5. compare to champion -> keep or git revert  (deterministic)
+             6. write ## Results into <id>.md + append CSV row
+             7. commit 2 -> freezes output
+  [agent]  reads result, writes Training Dynamics + Conclusion.
+
+SKELETON: functions that touch project specifics (MLflow field names, git
+plumbing, how the training script receives repeat overrides) are marked TODO.
+Everything else is driven by experiment.yaml, so the same driver works on any
+project -- a user edits only the YAML + program.md.
+"""
+
+from __future__ import annotations
+
+import csv
+import hashlib
+import json
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+import yaml
+
+CONTRACT_PATH = Path("ai_agent/experiment.yaml")
+DRAFT_NAME = "draft.md"          # working name before the hash exists
+
+
+# -----------------------------------------------------------------------------
+# Contract loading
+# -----------------------------------------------------------------------------
+def load_contract(path: Path = CONTRACT_PATH) -> dict:
+    with open(path) as f:
+        return yaml.safe_load(f)
+
+
+# -----------------------------------------------------------------------------
+# 1. Scope check -- ALLOWLIST enforcement (deny by default)
+# -----------------------------------------------------------------------------
+def assert_only_mutable_changed(mutable: list[str]) -> None:
+    changed = _git_changed_files()
+    # the draft record itself is allowed to change (agent wrote into it)
+    allowed = set(mutable)
+    illegal = [f for f in changed
+               if f not in allowed and not f.startswith("ai_agent/")]
+    if illegal:
+        raise ScopeViolation(
+            f"Agent modified frozen files: {illegal}. "
+            f"Only {mutable} are mutable. Trial rejected."
+        )
+
+
+def _git_changed_files() -> list[str]:
+    out = subprocess.run(["git", "diff", "--name-only", "HEAD"],
+                         capture_output=True, text=True, check=True).stdout
+    return [ln.strip() for ln in out.splitlines() if ln.strip()]
+
+
+# -----------------------------------------------------------------------------
+# 2. Identity + hash   id = sha256(canonical_json(identity))[:12]
+# -----------------------------------------------------------------------------
+def compute_id(identity: dict) -> str:
+    canonical = json.dumps(identity, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()[:12]
+
+
+def build_identity(commit_sha: str, command: str, parent: str | None) -> dict:
+    # `command` is the DRIVER call (not the N sub-trainings): the repeat_over
+    # that defines the N runs lives in experiment.yaml, itself captured by the
+    # input commit. So commit + this command fully pin the trial.
+    # `parent` is lineage metadata only -- for a merged-idea trial it points to
+    # the code we branched FROM; the fusion is described in ## Hypothesis.
+    return {"parent": parent, "commit": commit_sha, "command": command}
+
+
+# -----------------------------------------------------------------------------
+# Frontmatter read/write for the <hash>.md record
+# -----------------------------------------------------------------------------
+def read_frontmatter(md_path: Path) -> dict:
+    text = md_path.read_text()
+    m = re.search(r"^---\n(.*?)\n---\n", text, re.DOTALL)
+    if not m:
+        raise ValueError(f"No frontmatter found in {md_path}")
+    return yaml.safe_load(m.group(1)) or {}
+
+
+# -----------------------------------------------------------------------------
+# 3. Run the eval: N trainings over `repeat_over` (N=1 if null)
+# -----------------------------------------------------------------------------
+def _repeat_values(cfg: dict) -> list[dict]:
+    """Per-run overrides. [{}] means a single run (N=1)."""
+    ro = cfg["judge"].get("repeat_over")
+    if not ro:
+        return [{}]
+    (axis, values), = ro.items()                 # e.g. ("latent_dim", [8,60,240])
+    return [{axis: v} for v in values]
+
+
+def run_eval(cfg: dict, log_path: Path) -> None:
+    base_cmd = cfg["judge"]["command"].split()
+    with open(log_path, "w") as logf:
+        for override in _repeat_values(cfg):
+            cmd = list(base_cmd)
+            # TODO: pass `override` to your script (e.g. --latent_dim 8 / --seed 0)
+            #   for k, v in override.items(): cmd += [f"--{k}", str(v)]
+            # Ensure run_budget.n_epochs is the same ceiling for every run and
+            # early stopping is configured identically (in autoencoder.yaml).
+            logf.write(f"\n=== run override={override} ===\n"); logf.flush()
+            proc = subprocess.run(cmd, stdout=logf, stderr=subprocess.STDOUT)
+            if proc.returncode != 0:
+                raise EvalFailed(f"Training failed for override={override} (see {log_path})")
+
+
+# -----------------------------------------------------------------------------
+# 4. Read per-run metrics from MLflow, then AGGREGATE into the trial scalar.
+#    The aggregate is TRIAL-level: it goes to <hash>.md, never to MLflow.
+# -----------------------------------------------------------------------------
+def read_primary_metric(cfg: dict) -> float:
+    per_run = cfg["judge"]["per_run_metric"]
+    n = len(_repeat_values(cfg))                 # 1 for a single training
+    values = _read_recent_run_metrics(per_run, n)
+    if len(values) != n:
+        raise EvalFailed(f"Expected {n} runs with '{per_run}', found {len(values)}")
+    return _aggregate(values, cfg["judge"]["aggregation"])
+
+
+def _aggregate(values: list[float], how: str) -> float:
+    if how == "identity":                        # N=1: the value itself
+        return values[0]
+    if how == "mean":                            # N>1: average over the axis
+        return sum(values) / len(values)
+    raise ValueError(f"Unknown aggregation '{how}'. Use 'identity' or 'mean'.")
+    # (std for seed-averaging will be added here when that campaign starts.)
+
+
+def _read_recent_run_metrics(metric_name: str, n: int) -> list[float]:
+    """The n most recent runs' `metric_name` from MLflow.
+    TODO (robustness): tag this trial's runs with the trial id at launch and
+    filter on that tag instead of recency -- avoids averaging the wrong runs if
+    the same config is relaunched. Sketch with recency:
+        import mlflow
+        runs = mlflow.search_runs(experiment_names=["autoencoder"],
+                                  order_by=["start_time DESC"], max_results=n)
+        return [float(runs.iloc[i][f"metrics.{metric_name}"]) for i in range(n)]
+    """
+    raise NotImplementedError(f"Wire MLflow read for '{metric_name}' (n={n})")
+
+
+# -----------------------------------------------------------------------------
+# 5. Deterministic keep/revert  -- NO LLM here
+# -----------------------------------------------------------------------------
+def is_better(candidate: float, champion: float | None, direction: str) -> bool:
+    if champion is None:                         # first trial becomes baseline
+        return True
+    return candidate > champion if direction == "maximize" else candidate < champion
+
+
+def read_champion_metric(ledger: Path) -> float | None:
+    if not ledger.exists():
+        return None
+    best = None
+    with open(ledger) as f:
+        for row in csv.DictReader(f):
+            if row.get("decision") == "keep":
+                v = float(row["metric_value"])
+                best = v if best is None else max(best, v)
+    return best
+
+def trial_count(ledger: Path) -> int:
+    """Number of trials in the current campaign = data rows in the CSV (header
+    excluded). Resets to 0 when the CSV is archived+emptied between campaigns."""
+    if not ledger.exists():
+        return 0
+    with open(ledger) as f:
+        return sum(1 for _ in csv.DictReader(f))
+
+# -----------------------------------------------------------------------------
+# 6/7. Report + ledger + commits
+# -----------------------------------------------------------------------------
+def write_results_section(md_path: Path, metric: float, delta, status: str) -> None:
+    """Fill ## Results and update the STATUS in the title of the <hash>.md.
+    delta is DISPLAY-ONLY (recomputed for readability, goes stale when champion
+    changes) -- it is never used in the decision.
+    TODO: populate the ## Results block per TEMPLATE.md layout
+    (R2 per dim, MLflow run ids, best epochs) and set the frontmatter fields
+    id/status/metric.primary.value/created_at.
+    """
+    ...
+
+
+def append_ledger_row(ledger: Path, row: dict) -> None:
+    """Append one row. The driver is the sole owner of the header: it is written
+    automatically on the first trial (when the file does not yet exist) and
+    skipped afterwards. Do NOT create this file by hand."""
+    header = ["timestamp", "id", "parent", "model_name", "modification_description",
+              "metric_name", "metric_value", "metric_delta", "decision", "status"]
+    exists = ledger.exists()
+    with open(ledger, "a", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=header)
+        if not exists:
+            w.writeheader()
+        w.writerow(row)
+
+
+def git_commit(msg: str, branch: str) -> str:
+    subprocess.run(["git", "checkout", "-q", branch], check=False)   # ensure branch
+    subprocess.run(["git", "add", "-A"], check=True)
+    subprocess.run(["git", "commit", "-q", "-m", msg], check=True)
+    return subprocess.run(["git", "rev-parse", "HEAD"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+def git_revert_worktree(mutable: list[str]) -> None:
+    """Discard the code change of a rejected trial (keep the .md record)."""
+    # revert only the mutable files, preserving the experiment record under ai_agent/
+    for path in mutable:
+        subprocess.run(["git", "checkout", "--", path], check=False)
+
+
+# -----------------------------------------------------------------------------
+# Orchestration
+# -----------------------------------------------------------------------------
+def run_trial(parent: str | None = None) -> None:
+    cfg = load_contract()
+    exp_dir = Path(cfg["logging"]["experiments_dir"])
+    ledger = Path(cfg["logging"]["ledger"])
+    branch = cfg["decision"]["branch"]
+    mutable = cfg["mutable"]
+
+    draft = exp_dir / DRAFT_NAME
+    if not draft.exists():
+        raise FileNotFoundError(
+            f"{draft} not found. Copy {cfg['logging']['template']} to {draft} "
+            "and fill Hypothesis / Implementation / model_name before running."
+        )
+
+    # 0. campaign cap — refuse before doing any work (no commit, no training)
+    max_trials = cfg["decision"].get("max_trials")
+    if max_trials is not None and trial_count(ledger) >= max_trials:
+        print(f"Reached max_trials={max_trials} for this campaign. "
+              "Archive trial_log.csv + reports and start a new campaign to continue.")
+        return
+
+    # 1. scope
+    assert_only_mutable_changed(mutable)
+
+    # 2. commit 1 (input) -> identity -> id -> rename draft to <id>.md
+    driver_cmd = "python ai_agent/driver.py run" + (f" {parent}" if parent else "")
+    pre_sha = git_commit("[trial] lock input", branch)
+    identity = build_identity(pre_sha, driver_cmd, parent)
+    trial_id = compute_id(identity)
+    md_path = exp_dir / f"{trial_id}.md"
+    if md_path.exists():
+        raise ValueError(f"Duplicate trial id {trial_id} (identical identity). Aborting.")
+    draft.rename(md_path)                          # draft.md -> <id>.md
+
+    # read agent-provided descriptive fields from the frontmatter
+    fm = read_frontmatter(md_path)
+    model_name = fm.get("model_name", "")
+
+    # 3. train (N runs over repeat_over)
+    log_path = exp_dir / f"{trial_id}.console.log"
+    run_eval(cfg, log_path)
+
+    # 4. read + aggregate metric
+    metric = read_primary_metric(cfg)
+    champion = read_champion_metric(ledger)
+    # delta is DISPLAY-ONLY, never decisional
+    delta = metric - champion if champion is not None else 0.0
+
+    # 5. decide (deterministic)
+    keep = is_better(metric, champion, cfg["judge"]["direction"])
+    status = ("BASELINE" if keep and champion is None
+              else "CHAMPION" if keep else "FAILURE")
+    if not keep:
+        git_revert_worktree(mutable)
+
+    # 6. write results + ledger row (model_name comes from the .md frontmatter)
+    write_results_section(md_path, metric, delta, status)
+    append_ledger_row(ledger, {
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "id": trial_id, "parent": parent or "",
+        "model_name": model_name,
+        "modification_description": fm.get("summary", ""),
+        "metric_name": cfg["judge"]["primary_metric_name"],
+        "metric_value": metric, "metric_delta": delta,
+        "decision": "keep" if keep else "revert", "status": status,
+    })
+
+    # 7. commit 2 (output)
+    git_commit(f"[trial] {trial_id} result: {status} ({metric:.4f})", branch)
+    print(f"Trial {trial_id}: {status}  {cfg['eval']['primary_metric_name']}={metric:.4f}  delta={delta:+.4f}")
+
+
+class ScopeViolation(Exception): ...
+class EvalFailed(Exception): ...
+
+
+if __name__ == "__main__":
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
+    if cmd == "run":
+        parent = sys.argv[2] if len(sys.argv) > 2 else None
+        run_trial(parent=parent)
+    else:
+        print(f"Unknown command: {cmd}. Use: python driver.py run [parent_id]")
+        sys.exit(1)
 
 
 ######################################################################
@@ -397,6 +727,12 @@ Usage:
 
 LOAD mode: set recalculate_ae: false and load_run_id: <mlflow_run_id> in the YAML.
 CALC mode: set recalculate_ae: true.
+
+Hyperparameter resolution (hyper_automatic_values in autoencoder.yaml):
+  false → values taken directly from autoencoder.yaml
+  true  → values resolved via ae_hparam_loader from configs/ae_HPforarchis.yaml
+          (interpolated, single-point, or default depending on the model)
+  The resolved values are always what is logged to MLflow — never the yaml placeholders.
 """
 
 import yaml
@@ -408,26 +744,46 @@ from src.config import RESULTS_FOLDER
 from src.data import loader
 from src.models.ae_models import build_autoencoder
 from src.training import ae_training as aet
+from src.training.ae_hparam_loader import load_hp_table, resolve_hyperparams
 from src.visualization import ae_plots as aep
 from src import tracking
 
 CONFIG_PATH = Path(__file__).parent.parent / "configs" / "autoencoder.yaml"
+HP_TABLE_PATH = Path(__file__).parent.parent / "configs" / "ae_HPforarchis.yaml"
 
 
 def _run_one(cfg, model_name, latent_dimensions, split_name,
              n_train_images, n_val_images,
-             train_dataset, val_dataset, test_dataset, X_maxnorm):
+             train_dataset, val_dataset, test_dataset, X_maxnorm,
+             hp_table):
     """Train (or load) one AE model and log everything to a single MLflow run."""
 
-    recalculate  = cfg["recalculate_ae"]
-    load_run_id  = cfg.get("load_run_id") if not recalculate else None
-    frame_tag    = "ED+ES" if cfg["use_both_frames"] else cfg["frame_type"]
-    n_train      = cfg["n_train"]
-    n_val        = cfg["n_val"]
+    recalculate    = cfg["recalculate_ae"]
+    load_run_id    = cfg.get("load_run_id") if not recalculate else None
+    frame_tag      = "ED+ES" if cfg["use_both_frames"] else cfg["frame_type"]
+    n_train        = cfg["n_train"]
+    n_val          = cfg["n_val"]
     experiment_tag = cfg["experiment_tag"]
 
     if not recalculate and not load_run_id:
         raise ValueError("recalculate_ae: false requires load_run_id in YAML")
+
+    # ── Resolve hyperparameters ───────────────────────────────────────────────
+    # These are the single source of truth for training and MLflow logging.
+    # cfg values for these keys are ignored when hyper_automatic_values=True.
+    lr, weight_decay, dropout_rate, noise_std, patience, beta, beta_warmup_epochs = \
+        resolve_hyperparams(model_name, latent_dimensions, hp_table, cfg)
+
+    # print(
+    #     f"Hyperparameters resolved:\n"
+    #     f"  lr                 = {lr:.2e}\n"
+    #     f"  weight_decay       = {weight_decay:.2e}\n"
+    #     f"  dropout_rate       = {dropout_rate}\n"
+    #     f"  noise_std          = {noise_std}\n"
+    #     f"  patience           = {patience}\n"
+    #     f"  beta               = {beta:.2e}\n"
+    #     f"  beta_warmup_epochs = {beta_warmup_epochs}"
+    # )    
 
     run_name = (
         f"AE_{model_name}_{n_train_images}patients_{split_name}"
@@ -446,28 +802,35 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
         # ── CALC mode ─────────────────────────────────────────────────────────
         if recalculate:
             tracking.log_artifact(CONFIG_PATH)
+
+            # ── Log fixed parameters ──────────────────────────────────────────
             tracking.log_params({
-                "source_folder":    cfg["source_folder"],
-                "model_name":       model_name,
-                "latent_dimensions": latent_dimensions,
-                "n_train":          n_train,
-                "n_val":            n_val,
-                "n_test":           cfg["n_test"],
-                "split_name":       split_name,
-                "stratify_ongroup": cfg.get("stratify_ongroup", False),
-                "frame_tag":        frame_tag,
-                "image_roi_only":   cfg["image_roi_only"],
-                "mask_ys":          cfg["mask_ys"],
-                "mask_bin":         cfg["mask_bin"],
-                "experiment_tag":   experiment_tag,
-                "n_epochs":         cfg["n_epochs"],
-                "batch_size":       cfg["batch_size"],
-                "lr":               cfg["lr"],
-                "weight_decay":     cfg["weight_decay"],
-                "dropout_rate":     cfg["dropout_rate"],
-                "noise_std":        cfg["noise_std"],
-                "patience":         cfg["patience"],
+                "source_folder":      cfg["source_folder"],
+                "model_name":         model_name,
+                "latent_dimensions":  latent_dimensions,
+                "n_train":            n_train,
+                "n_val":              n_val,
+                "n_test":             cfg["n_test"],
+                "split_name":         split_name,
+                "stratify_ongroup":   cfg.get("stratify_ongroup", False),
+                "frame_tag":          frame_tag,
+                "image_roi_only":     cfg["image_roi_only"],
+                "mask_ys":            cfg["mask_ys"],
+                "mask_bin":           cfg["mask_bin"],
+                "experiment_tag":     experiment_tag,
+                "n_epochs":           cfg["n_epochs"],
+                "batch_size":         cfg["batch_size"],
                 "patience_scheduler": cfg["patience_scheduler"],
+                # Traceability: was this run using automatic HP or manual?
+                "hyper_automatic_values": cfg.get("hyper_automatic_values", False),
+                # Resolved hyperparameters (always the real values used) ────────
+                "lr":                 lr,
+                "weight_decay":       weight_decay,
+                "dropout_rate":       dropout_rate,
+                "noise_std":          noise_std,
+                "patience":           patience,
+                "beta":               beta,
+                "beta_warmup_epochs": beta_warmup_epochs,
             })
 
             if n_val > 0:
@@ -478,14 +841,14 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
                     latent_dimensions=latent_dimensions,
                     n_epochs=cfg["n_epochs"],
                     batch_size=cfg["batch_size"],
-                    lr=cfg["lr"],
-                    patience=cfg["patience"],
+                    lr=lr,
+                    patience=patience,
                     patience_scheduler=cfg["patience_scheduler"],
-                    weight_decay=cfg["weight_decay"],
-                    dropout_rate=cfg["dropout_rate"],
-                    noise_std=cfg["noise_std"],
-                    beta=cfg["beta"],
-                    beta_warmup_epochs=cfg["beta_warmup_epochs"],
+                    weight_decay=weight_decay,
+                    dropout_rate=dropout_rate,
+                    noise_std=noise_std,
+                    beta=beta,
+                    beta_warmup_epochs=beta_warmup_epochs,
                 )
                 tracking.log_params({"best_epoch": best_epoch})
             else:
@@ -495,14 +858,14 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
                     latent_dimensions=latent_dimensions,
                     n_epochs=cfg["n_epochs"],
                     batch_size=cfg["batch_size"],
-                    lr=cfg["lr"],
-                    weight_decay=cfg["weight_decay"],
-                    dropout_rate=cfg["dropout_rate"],
-                    noise_std=cfg["noise_std"],
+                    lr=lr,
+                    weight_decay=weight_decay,
+                    dropout_rate=dropout_rate,
+                    noise_std=noise_std,
                 )
                 best_epoch = cfg["n_epochs"]
 
-            # ── Log loss history in MLflow ────────────────────────────────────────────
+            # ── Log loss history ──────────────────────────────────────────────
             for step, value in enumerate(loss_history.get("train", [])):
                 tracking.log_metric("train_loss", value, step=step + 1)
             for step, value in enumerate(loss_history.get("validation", [])):
@@ -516,10 +879,8 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
             for step, value in enumerate(loss_history.get("val_kl", [])):
                 tracking.log_metric("val_kl", value, step=step + 1)
 
-            # Save model artifact in MLflow
             tracking.log_model_state_dict(model, filename=f"model_{best_epoch}epochs.pth")
 
-            # Loss plot (always produced when training)
             loss_plot_path = RESULTS_FOLDER / f"{run_name}_train_val_loss.png"
             aep.plot_train_val_loss(
                 loss_history=loss_history,
@@ -538,17 +899,17 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
             client = mlflow.MlflowClient()
             saved  = client.get_run(load_run_id).data.params
             expected = {
-                "split_name":       split_name,
-                "n_train":          str(n_train),
-                "n_val":            str(n_val),
-                "n_test":           str(cfg["n_test"]),
-                "frame_tag":        frame_tag,
-                "model_name":       model_name,
+                "split_name":        split_name,
+                "n_train":           str(n_train),
+                "n_val":             str(n_val),
+                "n_test":            str(cfg["n_test"]),
+                "frame_tag":         frame_tag,
+                "model_name":        model_name,
                 "latent_dimensions": str(latent_dimensions),
-                "source_folder":  cfg["source_folder"],
-                "image_roi_only": str(cfg["image_roi_only"]),
-                "mask_ys":        str(cfg["mask_ys"]),
-                "mask_bin":       str(cfg["mask_bin"]),
+                "source_folder":     cfg["source_folder"],
+                "image_roi_only":    str(cfg["image_roi_only"]),
+                "mask_ys":           str(cfg["mask_ys"]),
+                "mask_bin":          str(cfg["mask_bin"]),
             }
             mismatches = [
                 f"  {k}: saved={saved.get(k)!r}, current={v!r}"
@@ -565,7 +926,8 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
             local_path     = client.download_artifacts(load_run_id, model_filename)
             device         = aet.get_device()
             model          = build_autoencoder(
-                model_name, latent_dimensions, dropout_rate=cfg["dropout_rate"]
+                model_name, latent_dimensions,
+                dropout_rate=dropout_rate,
             ).to(device)
             model.load_state_dict(torch.load(local_path, map_location=device))
             model.eval()
@@ -606,11 +968,15 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
             n_development = n_train + n_val
 
             if cfg["recons_auto"]:
-                # Compute metrics on test set at this latent_dim for patient selection
                 test_metrics = []
                 for i, patient_tensor in enumerate(test_dataset):
                     x_true, x_pred = aet.ae_reconstructX(patient_tensor, X_maxnorm, model)
-                    test_metrics.append(aet.reconstruction_metrics(x_true, x_pred, n_train_images + n_val_images + 1 + i))
+                    test_metrics.append(
+                        aet.reconstruction_metrics(
+                            x_true, x_pred,
+                            n_train_images + n_val_images + 1 + i,
+                        )
+                    )
                 selected = aep.ae_select_representative_patients(
                     test_metrics,
                     use_both_frames=cfg["use_both_frames"],
@@ -644,18 +1010,26 @@ def main():
     with open(CONFIG_PATH) as f:
         cfg = yaml.safe_load(f)
 
-    # ── Float fix ────────────────────────────────────────────────────
+    # ── Float fix for manual HP values in cfg ─────────────────────────────────
+    # (only needed when hyper_automatic_values=False, but harmless otherwise)
     for key in ("lr", "weight_decay", "dropout_rate", "noise_std", "beta"):
-        cfg[key] = float(cfg[key])
-    
-    # ── Derived parameters ────────────────────────────────────────────────────
+        if key in cfg:
+            cfg[key] = float(cfg[key])
+
+    # ── Load HP table once (used by resolve_hyperparams inside the loop) ──────
+    if cfg.get("hyper_automatic_values", False):
+        hp_table = load_hp_table(HP_TABLE_PATH)
+    else:
+        hp_table = {}  # not used in case 1, but resolve_hyperparams handles it
+
+    # ── Derived parameters ─────────────────────────────────────────────────────
     n_train         = cfg["n_train"]
     n_val           = cfg["n_val"]
     use_both_frames = cfg["use_both_frames"]
     n_train_images  = n_train * 2 if use_both_frames else n_train
     n_val_images    = n_val   * 2 if use_both_frames else n_val
 
-    # ── Load data (before MLflow — split_name needed for run_name) ────────────
+    # ── Load data ──────────────────────────────────────────────────────────────
     train_dataset, val_dataset, test_dataset, X_maxnorm, split_name = loader.load_tensor_datasets(
         source_folder=cfg["source_folder"],
         cache_folder=cfg["cache_folder"],
@@ -667,8 +1041,8 @@ def main():
         use_both_frames=use_both_frames,
         frame_type=cfg["frame_type"],
         image_roi_only=cfg["image_roi_only"],
-        mask=cfg["mask_ys"],         
-        binary_mask=cfg["mask_bin"], 
+        mask=cfg["mask_ys"],
+        binary_mask=cfg["mask_bin"],
         recalculate=cfg["recalculate_x"],
     )
     print(
@@ -677,7 +1051,7 @@ def main():
         f"test: {len(test_dataset)} | split: {split_name}"
     )
 
-    # ── Run ───────────────────────────────────────────────────────────────────
+    # ── Run ────────────────────────────────────────────────────────────────────
     if cfg["multiple_models_and_dims"]:
         if not cfg["recalculate_ae"]:
             raise ValueError("multiple_models_and_dims: true requires recalculate_ae: true")
@@ -688,17 +1062,19 @@ def main():
                     cfg, model_name, latent_dimensions, split_name,
                     n_train_images, n_val_images,
                     train_dataset, val_dataset, test_dataset, X_maxnorm,
+                    hp_table=hp_table,
                 )
     else:
         _run_one(
             cfg, cfg["model_name"], cfg["latent_dimensions"], split_name,
             n_train_images, n_val_images,
             train_dataset, val_dataset, test_dataset, X_maxnorm,
+            hp_table=hp_table,
         )
+
 
 if __name__ == "__main__":
     main()
-
 
 
 ######################################################################
@@ -3643,7 +4019,7 @@ def load_tensor_datasets(
     elif frame_type != "ED":
         X_ED = _load_frame(frame_type=frame_type, **kwargs)
 
-    print(special_split)
+    print(f"special_split = {special_split}")
     strat_array = (
         load_patient_metadata("group", len(X_ED)) if (stratify_ongroup and special_split is not None) else None
     )
@@ -5415,40 +5791,881 @@ class AutoEncoder3D_SeparableDilated(nn.Module):
         x_recon = self.decode(z)
         return x_recon, z
 
+class AutoEncoder3D_FCDeepAsym(nn.Module):
+    """
+    AE3dFCDeep with anisotropic stage-1 downsampling.
+    Stage 1 uses (1,2,2) pooling to preserve z-depth (32 slices → 32);
+    stages 2–4 use isotropic (2,2,2) pooling. FC bottleneck identical to champion.
+    Rationale: cardiac MRI z-axis (32) is 4x smaller than y/x (128); standard
+    (2,2,2) pooling in stage 1 immediately discards half the z-slices, losing
+    early 3D context. Preserving z through stage 1 gives later blocks richer
+    volumetric features before isotropic compression begins.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        # Encoder: stage 1 uses anisotropic (1,2,2) pool; stages 2-4 isotropic
+        self.enc1 = Conv3DBlock(1, 8, downsample=False)                  # 8×32×128×128
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))  # 8×32×64×64
+        self.enc2 = Conv3DBlock(8, 16, downsample=True)                  # 16×16×32×32
+        self.enc3 = Conv3DBlock(16, 32, downsample=True)                 # 32×8×16×16
+        self.enc4 = Conv3DBlock(32, 64, downsample=True)                 # 64×4×8×8
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+        )                                                                # 128×4×8×8
+
+        # Asymmetric final compression: (4,8,8) → (1,4,4) via kernel/stride (4,2,2)
+        self.final_down = nn.Conv3d(128, 128, kernel_size=(4, 2, 2), stride=(4, 2, 2))
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        # Decoder: symmetric asymmetric upsample
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, kernel_size=(4, 2, 2), stride=(4, 2, 2))
+
+        self.dec1 = UpConv3DBlock(128, 64)   # 64×8×16×16
+        self.dec2 = UpConv3DBlock(64, 32)    # 32×16×32×32
+        self.dec3 = UpConv3DBlock(32, 16)    # 16×32×64×64
+
+        # Anisotropic final decode: (1,2,2) upsample only y/x
+        self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
+        self.dec4_conv = Conv3DBlock(16, 8, downsample=False)            # 8×32×128×128
+
+        self.final_conv = nn.Conv3d(8, 1, kernel_size=3, stride=1, padding=1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.pool1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4_up(x)
+        x = self.dec4_conv(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+
+class AutoEncoder3D_FCDeepAsymV2(nn.Module):
+    """
+    AE3dFCDeepAsym with two-step z-collapse before FC.
+    Champion uses final_down(kernel=(4,2,2)) to collapse z 4→1 in one step.
+    This model inserts MaxPool3d(2,1,1) between bottleneck_conv and final_down,
+    then replaces final_down with Conv3d(k=2,s=2) (identical to AE3dFCDeep).
+    Two-step z-collapse (4→2→1) helps dim=8 by spreading the z-compression
+    burden; retains the anisotropic stage-1 benefit for large dims.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        # Encoder: anisotropic stage-1 pool identical to AE3dFCDeepAsym
+        self.enc1 = Conv3DBlock(1, 8, downsample=False)                  # 8×32×128×128
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))  # 8×32×64×64
+        self.enc2 = Conv3DBlock(8, 16, downsample=True)                  # 16×16×32×32
+        self.enc3 = Conv3DBlock(16, 32, downsample=True)                 # 32×8×16×16
+        self.enc4 = Conv3DBlock(32, 64, downsample=True)                 # 64×4×8×8
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+        )                                                                # 128×4×8×8
+
+        # Two-step z-collapse: first halve z via MaxPool (4→2), then compress via Conv3d (2→1)
+        self.z_pool = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))  # 128×2×8×8
+        self.final_down = nn.Conv3d(128, 128, kernel_size=2, stride=2)        # 128×1×4×4
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        # Decoder: reverse the two-step z-collapse
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, kernel_size=2, stride=2)  # 128×2×8×8
+        self.z_up = nn.Upsample(scale_factor=(2, 1, 1), mode='trilinear', align_corners=False)  # 128×4×8×8
+
+        self.dec1 = UpConv3DBlock(128, 64)   # 64×8×16×16
+        self.dec2 = UpConv3DBlock(64, 32)    # 32×16×32×32
+        self.dec3 = UpConv3DBlock(32, 16)    # 16×32×64×64
+
+        # Anisotropic final decode: (1,2,2) upsample only y/x (mirrors pool1)
+        self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
+        self.dec4_conv = Conv3DBlock(16, 8, downsample=False)            # 8×32×128×128
+
+        self.final_conv = nn.Conv3d(8, 1, kernel_size=3, stride=1, padding=1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.pool1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.z_pool(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.z_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4_up(x)
+        x = self.dec4_conv(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+
+class AutoEncoder3D_FCDeepAsymV4(nn.Module):
+    """
+    AE3dFCDeepAsymV2 with MaxPool(2,1,1) z-halving moved earlier:
+    between enc3 and enc4 instead of between bottleneck_conv and final_down.
+    After the z-pool enc4 processes z=4 features, and bottleneck_conv operates
+    on 128×2×8×8 — the same z-context as AE3dFCDeep (which achieves 0.772 at dim=8).
+    The asymmetric stage-1 encoding (pool1=(1,2,2)) still preserves z-diversity
+    through enc2 and enc3, maintaining the benefit for large dims. Decoder mirrors V2.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        # Encoder: anisotropic stage-1 pool then extra z-halving before enc4
+        self.enc1 = Conv3DBlock(1, 8, downsample=False)                   # 8×32×128×128
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))   # 8×32×64×64
+        self.enc2 = Conv3DBlock(8, 16, downsample=True)                   # 16×16×32×32
+        self.enc3 = Conv3DBlock(16, 32, downsample=True)                  # 32×8×16×16
+        # z-halving here: z 8→4 before enc4, then enc4's MaxPool(2,2,2) gives z 4→2
+        self.z_pool3 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))  # 32×4×16×16
+        self.enc4 = Conv3DBlock(32, 64, downsample=True)                  # 64×2×8×8
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, kernel_size=3, stride=1, padding=1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+        )                                                                 # 128×2×8×8
+
+        # Same final compression as AE3dFCDeep: 2→1 in z, 8→4 in spatial
+        self.final_down = nn.Conv3d(128, 128, kernel_size=2, stride=2)   # 128×1×4×4
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        # Decoder: mirrors V2 (initial_up + z_up restores 128×1×4×4 → 128×4×8×8)
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, kernel_size=2, stride=2)  # 128×2×8×8
+        self.z_up = nn.Upsample(scale_factor=(2, 1, 1), mode='trilinear', align_corners=False)  # 128×4×8×8
+
+        self.dec1 = UpConv3DBlock(128, 64)   # 64×8×16×16
+        self.dec2 = UpConv3DBlock(64, 32)    # 32×16×32×32
+        self.dec3 = UpConv3DBlock(32, 16)    # 16×32×64×64
+
+        self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
+        self.dec4_conv = Conv3DBlock(16, 8, downsample=False)            # 8×32×128×128
+
+        self.final_conv = nn.Conv3d(8, 1, kernel_size=3, stride=1, padding=1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.pool1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.z_pool3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.z_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4_up(x)
+        x = self.dec4_conv(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+
+class ResConv3DBlock(nn.Module):
+    """
+    Residual 3D encoder block: output = ReLU(F(x) + shortcut(x)).
+    F(x) = Conv3d->IN->ReLU->Conv3d->IN. Shortcut is 1x1x1 conv when channels differ.
+    MaxPool3d downsampling is applied after the residual sum (not inside the residual path).
+    """
+    def __init__(self, in_channels, out_channels, downsample=True):
+        super().__init__()
+        self.conv1 = nn.Conv3d(in_channels, out_channels, 3, 1, 1)
+        self.norm1 = nn.InstanceNorm3d(out_channels)
+        self.relu1 = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv3d(out_channels, out_channels, 3, 1, 1)
+        self.norm2 = nn.InstanceNorm3d(out_channels)
+        self.shortcut = nn.Conv3d(in_channels, out_channels, 1) if in_channels != out_channels else nn.Identity()
+        self.relu_out = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        if self.downsample:
+            self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
+
+    def forward(self, x):
+        residual = self.shortcut(x)
+        out = self.conv1(x)
+        out = self.norm1(out)
+        out = self.relu1(out)
+        out = self.conv2(out)
+        out = self.norm2(out)
+        out = self.relu_out(out + residual)
+        if self.downsample:
+            out = self.pool(out)
+        return out
+
+
+class ResUpConv3DBlock(nn.Module):
+    """
+    Residual 3D decoder block: ConvTranspose3d upsampling, then residual conv block.
+    After upsampling, channels are fixed so shortcut is Identity.
+    """
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.upconv = nn.ConvTranspose3d(in_channels, out_channels, 2, 2)
+        self.conv1 = nn.Conv3d(out_channels, out_channels, 3, 1, 1)
+        self.norm1 = nn.InstanceNorm3d(out_channels)
+        self.relu1 = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv3d(out_channels, out_channels, 3, 1, 1)
+        self.norm2 = nn.InstanceNorm3d(out_channels)
+        self.relu_out = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        x = self.upconv(x)
+        residual = x
+        out = self.conv1(x)
+        out = self.norm1(out)
+        out = self.relu1(out)
+        out = self.conv2(out)
+        out = self.norm2(out)
+        out = self.relu_out(out + residual)
+        return out
+
+
+class AutoEncoder3D_AsymResidual(nn.Module):
+    """
+    AE3dFCDeepAsymV4 with residual blocks in encoder and decoder.
+    Pooling structure identical to V4: anisotropic pool1=(1,2,2) at stage 1,
+    z_pool3=(2,1,1) between enc3 and enc4. Encoder Conv3DBlocks replaced
+    by ResConv3DBlocks; decoder UpConv3DBlocks replaced by ResUpConv3DBlocks.
+    No encoder-to-decoder skip connections.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        # Encoder: identical pooling to V4, residual conv blocks
+        self.enc1 = ResConv3DBlock(1, 8, downsample=False)                    # 8×32×128×128
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))    # 8×32×64×64
+        self.enc2 = ResConv3DBlock(8, 16, downsample=True)                    # 16×16×32×32
+        self.enc3 = ResConv3DBlock(16, 32, downsample=True)                   # 32×8×16×16
+        self.z_pool3 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1)) # 32×4×16×16
+        self.enc4 = ResConv3DBlock(32, 64, downsample=True)                   # 64×2×8×8
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+        )                                                                      # 128×2×8×8
+
+        self.final_down = nn.Conv3d(128, 128, 2, 2)                           # 128×1×4×4
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        # Decoder: mirrors V4 structure with residual blocks
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, 2, 2)                  # 128×2×8×8
+        self.z_up = nn.Upsample(scale_factor=(2, 1, 1), mode='trilinear', align_corners=False)  # 128×4×8×8
+
+        self.dec1 = ResUpConv3DBlock(128, 64)   # 64×8×16×16
+        self.dec2 = ResUpConv3DBlock(64, 32)    # 32×16×32×32
+        self.dec3 = ResUpConv3DBlock(32, 16)    # 16×32×64×64
+
+        self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
+        self.dec4_conv = ResConv3DBlock(16, 8, downsample=False)              # 8×32×128×128
+
+        self.final_conv = nn.Conv3d(8, 1, 3, 1, 1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.pool1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.z_pool3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.z_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4_up(x)
+        x = self.dec4_conv(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+
+class AutoEncoder3D_AsymResidualV4(nn.Module):
+    """
+    AE3dAsymResidual (trial 12) with enc4 changed from ResConv3DBlock to plain Conv3DBlock.
+    enc1-enc3 keep residual shortcuts; enc4 (post-z_pool3) uses a standard conv block
+    to allow freer transformation of z-compressed features. Decoder and bottleneck identical to trial 12.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        self.enc1 = ResConv3DBlock(1, 8, downsample=False)                     # 8×32×128×128
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))    # 8×32×64×64
+        self.enc2 = ResConv3DBlock(8, 16, downsample=True)                    # 16×16×32×32
+        self.enc3 = ResConv3DBlock(16, 32, downsample=True)                   # 32×8×16×16
+        self.z_pool3 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1)) # 32×4×16×16
+        self.enc4 = Conv3DBlock(32, 64, downsample=True)                      # 64×2×8×8 — plain conv
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+        )                                                                       # 128×2×8×8
+
+        self.final_down = nn.Conv3d(128, 128, 2, 2)                            # 128×1×4×4
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, 2, 2)                  # 128×2×8×8
+        self.z_up = nn.Upsample(scale_factor=(2, 1, 1), mode='trilinear', align_corners=False)  # 128×4×8×8
+
+        self.dec1 = ResUpConv3DBlock(128, 64)   # 64×8×16×16
+        self.dec2 = ResUpConv3DBlock(64, 32)    # 32×16×32×32
+        self.dec3 = ResUpConv3DBlock(32, 16)    # 16×32×64×64
+
+        self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
+        self.dec4_conv = ResConv3DBlock(16, 8, downsample=False)               # 8×32×128×128
+
+        self.final_conv = nn.Conv3d(8, 1, 3, 1, 1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.pool1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.z_pool3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.z_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4_up(x)
+        x = self.dec4_conv(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+
+class ResSeparableConv3DBlock(nn.Module):
+    """
+    Residual 3D block with depthwise separable convolutions.
+    output = ReLU(DW+PW path(x) + shortcut(x)). Shortcut = 1×1×1 conv when channels differ.
+    MaxPool applied after residual sum (not inside the residual path).
+    """
+    def __init__(self, in_channels, out_channels, downsample=True):
+        super().__init__()
+        self.dw1 = nn.Conv3d(in_channels, in_channels, 3, 1, 1, groups=in_channels)
+        self.pw1 = nn.Conv3d(in_channels, out_channels, 1)
+        self.norm1 = nn.InstanceNorm3d(out_channels)
+        self.relu1 = nn.ReLU(inplace=True)
+        self.dw2 = nn.Conv3d(out_channels, out_channels, 3, 1, 1, groups=out_channels)
+        self.pw2 = nn.Conv3d(out_channels, out_channels, 1)
+        self.norm2 = nn.InstanceNorm3d(out_channels)
+        self.shortcut = nn.Conv3d(in_channels, out_channels, 1) if in_channels != out_channels else nn.Identity()
+        self.relu_out = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        if self.downsample:
+            self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
+
+    def forward(self, x):
+        residual = self.shortcut(x)
+        out = self.dw1(x)
+        out = self.pw1(out)
+        out = self.norm1(out)
+        out = self.relu1(out)
+        out = self.dw2(out)
+        out = self.pw2(out)
+        out = self.norm2(out)
+        out = self.relu_out(out + residual)
+        if self.downsample:
+            out = self.pool(out)
+        return out
+
+
+class AutoEncoder3D_AsymSeparable(nn.Module):
+    """
+    Depthwise separable convolutions with V4's anisotropic pooling.
+    Trial 19 Exploration: SeparableConv3DBlock encoder + V4 pooling (pool1=(1,2,2), z_pool3=(2,1,1)).
+    Bottleneck/FC identical to V4 (flattened_size=2048). Plain UpConv3DBlock decoder.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        self.enc1 = SeparableConv3DBlock(1, 8, downsample=False)                  # 8×32×128×128
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))       # 8×32×64×64
+        self.enc2 = SeparableConv3DBlock(8, 16, downsample=True)                  # 16×16×32×32
+        self.enc3 = SeparableConv3DBlock(16, 32, downsample=True)                 # 32×8×16×16
+        self.z_pool3 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))    # 32×4×16×16
+        self.enc4 = SeparableConv3DBlock(32, 64, downsample=True)                 # 64×2×8×8
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+        )                                                                           # 128×2×8×8
+
+        self.final_down = nn.Conv3d(128, 128, 2, 2)                               # 128×1×4×4
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, 2, 2)                     # 128×2×8×8
+        self.z_up = nn.Upsample(scale_factor=(2, 1, 1), mode='trilinear', align_corners=False)  # 128×4×8×8
+
+        self.dec1 = UpConv3DBlock(128, 64)                                        # 64×8×16×16
+        self.dec2 = UpConv3DBlock(64, 32)                                         # 32×16×32×32
+        self.dec3 = UpConv3DBlock(32, 16)                                         # 16×32×64×64
+
+        self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
+        self.dec4_conv = Conv3DBlock(16, 8, downsample=False)                     # 8×32×128×128
+
+        self.final_conv = nn.Conv3d(8, 1, 3, 1, 1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.pool1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.z_pool3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.z_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4_up(x)
+        x = self.dec4_conv(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+
+class AutoEncoder3D_AsymResSeparable(nn.Module):
+    """
+    Trial 20 Exploitation: ResSeparableConv3DBlock enc1-enc3, plain SeparableConv3DBlock enc4.
+    V4 pooling. ResUpConv3DBlock decoder. Combines separable dim=60 strength with residual
+    gradient flow for dim=240; enc4 plain to allow free transformation post-z_pool3.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        self.enc1 = ResSeparableConv3DBlock(1, 8, downsample=False)               # 8×32×128×128
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))       # 8×32×64×64
+        self.enc2 = ResSeparableConv3DBlock(8, 16, downsample=True)               # 16×16×32×32
+        self.enc3 = ResSeparableConv3DBlock(16, 32, downsample=True)              # 32×8×16×16
+        self.z_pool3 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))    # 32×4×16×16
+        self.enc4 = SeparableConv3DBlock(32, 64, downsample=True)                 # 64×2×8×8 — plain sep
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+        )                                                                           # 128×2×8×8
+
+        self.final_down = nn.Conv3d(128, 128, 2, 2)                               # 128×1×4×4
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, 2, 2)                     # 128×2×8×8
+        self.z_up = nn.Upsample(scale_factor=(2, 1, 1), mode='trilinear', align_corners=False)  # 128×4×8×8
+
+        self.dec1 = ResUpConv3DBlock(128, 64)                                     # 64×8×16×16
+        self.dec2 = ResUpConv3DBlock(64, 32)                                      # 32×16×32×32
+        self.dec3 = ResUpConv3DBlock(32, 16)                                      # 16×32×64×64
+
+        self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
+        self.dec4_conv = ResConv3DBlock(16, 8, downsample=False)                  # 8×32×128×128
+
+        self.final_conv = nn.Conv3d(8, 1, 3, 1, 1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.pool1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.z_pool3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.z_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4_up(x)
+        x = self.dec4_conv(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+
+class ResUpSeparableConv3DBlock(nn.Module):
+    """
+    Residual 3D decoder block with depthwise separable convolutions.
+    ConvTranspose3d upsampling, then residual DW+PW block with identity shortcut.
+    """
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.upconv = nn.ConvTranspose3d(in_channels, out_channels, 2, 2)
+        self.dw1 = nn.Conv3d(out_channels, out_channels, 3, 1, 1, groups=out_channels)
+        self.pw1 = nn.Conv3d(out_channels, out_channels, 1)
+        self.norm1 = nn.InstanceNorm3d(out_channels)
+        self.relu1 = nn.ReLU(inplace=True)
+        self.dw2 = nn.Conv3d(out_channels, out_channels, 3, 1, 1, groups=out_channels)
+        self.pw2 = nn.Conv3d(out_channels, out_channels, 1)
+        self.norm2 = nn.InstanceNorm3d(out_channels)
+        self.relu_out = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        x = self.upconv(x)
+        residual = x
+        out = self.dw1(x)
+        out = self.pw1(out)
+        out = self.norm1(out)
+        out = self.relu1(out)
+        out = self.dw2(out)
+        out = self.pw2(out)
+        out = self.norm2(out)
+        out = self.relu_out(out + residual)
+        return out
+
+
+class AutoEncoder3D_AsymResSeparableV2(nn.Module):
+    """
+    Trial 21: Full separable architecture. ResSeparableConv3DBlock enc1-enc3, plain SeparableConv3DBlock
+    enc4, ResUpSeparableConv3DBlock decoder. V4 anisotropic pooling. Entirely separable throughout.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        self.enc1 = ResSeparableConv3DBlock(1, 8, downsample=False)               # 8×32×128×128
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))       # 8×32×64×64
+        self.enc2 = ResSeparableConv3DBlock(8, 16, downsample=True)               # 16×16×32×32
+        self.enc3 = ResSeparableConv3DBlock(16, 32, downsample=True)              # 32×8×16×16
+        self.z_pool3 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))    # 32×4×16×16
+        self.enc4 = SeparableConv3DBlock(32, 64, downsample=True)                 # 64×2×8×8
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+        )
+        self.final_down = nn.Conv3d(128, 128, 2, 2)                               # 128×1×4×4
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, 2, 2)                     # 128×2×8×8
+        self.z_up = nn.Upsample(scale_factor=(2, 1, 1), mode='trilinear', align_corners=False)
+
+        self.dec1 = ResUpSeparableConv3DBlock(128, 64)                            # 64×8×16×16
+        self.dec2 = ResUpSeparableConv3DBlock(64, 32)                             # 32×16×32×32
+        self.dec3 = ResUpSeparableConv3DBlock(32, 16)                             # 16×32×64×64
+
+        self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
+        self.dec4_conv = ResSeparableConv3DBlock(16, 8, downsample=False)         # 8×32×128×128
+
+        self.final_conv = nn.Conv3d(8, 1, 3, 1, 1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.pool1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.z_pool3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.z_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4_up(x)
+        x = self.dec4_conv(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+
 # Building
 
 def build_autoencoder(model_name, latent_dimensions, dropout_rate=0.0):
     """
     Build one of the available AE models.
     """
-    if model_name == "AE3dCurrent":
+
+    # BASE MODELS 
+    
+    if model_name == "AE3dCurrent": # 0.713189
         return AutoEncoder3D_Current(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dFCDeep":
+    elif model_name == "AE3dFCDeep": # 0.751709
         return AutoEncoder3D_FCDeep(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dConv":
+    elif model_name == "AE3dConv": # 0.744460
         return AutoEncoder3D_Conv(latent_dim=latent_dimensions)
 
-    elif model_name == "AE3dLinear":
+    elif model_name == "AE3dLinear": # O.590524
         return AutoEncoder3D_Linear(latent_dim=latent_dimensions)
     
-    elif model_name == "AE3dFCDeep_VAE":
+    elif model_name == "AE3dFCDeep_VAE": # 0.741339
         return AutoEncoder3D_FCDeep_VAE(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    # AI Agent
+    # AI Agent Pi
 
-    elif model_name == "AE3dAttention":
+    elif model_name == "AE3dAttention": # 0.745631
         return AutoEncoder3D_Attention(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dDilated":
+    elif model_name == "AE3dDilated": # 0.748160
         return AutoEncoder3D_Dilated(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dDilatedAttention":
+    elif model_name == "AE3dDilatedAttention": # 0.733706
         return AutoEncoder3D_DilatedAttention(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dSeparableDilated":
+    elif model_name == "AE3dSeparableDilated": # 0.737950
         return AutoEncoder3D_SeparableDilated(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+    
+    # AI Agent Claude
+
+    elif model_name == "AE3dFCDeepAsym": # 0.762770
+        return AutoEncoder3D_FCDeepAsym(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dFCDeepAsymV2": # 0.766463
+        return AutoEncoder3D_FCDeepAsymV2(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dFCDeepAsymV4": # 0.766648
+        return AutoEncoder3D_FCDeepAsymV4(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dAsymResidual": # 0.762058
+        return AutoEncoder3D_AsymResidual(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dAsymResidualV4": # 0.773806 -> TO TRAIN ALL DIMS?
+        return AutoEncoder3D_AsymResidualV4(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dAsymSeparable": # 0.755189
+        return AutoEncoder3D_AsymSeparable(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dAsymResSeparable": # 0.795874 -> TO TRAIN ALL DIMS?
+        return AutoEncoder3D_AsymResSeparable(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    elif model_name == "AE3dAsymResSeparableV2": # 0.811539 -> TO TRAIN ALL DIMS?
+        return AutoEncoder3D_AsymResSeparableV2(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    # ELSE 
 
     else:
         raise ValueError(f"Unknown model_name: {model_name}")
@@ -6197,6 +7414,336 @@ def download_artifact(run_id: str) -> Path:
 ######################################################################
 
 
+
+
+######################################################################
+# FILE: src/training/ae_hparam_loader.py
+######################################################################
+
+# src/training/ae_hparam_loader.py
+"""
+Hyperparameter resolution for autoencoder training.
+
+Implements 4 cases depending on hyper_automatic_values and ae_HPforarchis.yaml content:
+  1. hyper_automatic_values = False
+     → use values directly from autoencoder.yaml (cfg)
+
+  2. hyper_automatic_values = True, model not in hp table
+     → use 'default' block from ae_HPforarchis.yaml
+
+  3. hyper_automatic_values = True, model in hp table with exactly 1 dim entry
+     → use that single entry regardless of the requested latent_dim
+
+  4. hyper_automatic_values = True, model in hp table with 2+ dim entries
+     → interpolate (log-log for lr/weight_decay/beta, log-linear for others)
+        no extrapolation: clamp to nearest boundary dim
+
+Public API
+----------
+  load_hp_table(path)                           → dict (call once before the loop)
+  resolve_hyperparams(model_name, latent_dim, hp_table, cfg)
+      → tuple: (lr, weight_decay, dropout_rate, noise_std, patience,
+                beta, beta_warmup_epochs)
+        Always 7 values in this fixed order. Hyperparameters absent from the
+        source fall back to cfg (or 0) so the tuple is always complete.
+"""
+
+from __future__ import annotations
+
+import math
+import warnings
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import yaml
+
+
+# ── Hyperparameters that live on a log scale (Optuna: log=True) ──────────────
+_HP_LOG_SCALE: frozenset[str] = frozenset({"lr", "weight_decay", "beta"})
+
+# ── All recognised HP keys (used for completeness checks) ────────────────────
+_ALL_HP_KEYS: tuple[str, ...] = (
+    "lr", "weight_decay", "dropout_rate", "noise_std", "patience",
+    "beta", "beta_warmup_epochs",
+)
+
+# ── Fixed return order of resolve_hyperparams (must match unpacking order) ────
+_RETURN_ORDER: tuple[str, ...] = (
+    "lr", "weight_decay", "dropout_rate", "noise_std", "patience",
+    "beta", "beta_warmup_epochs",
+)
+
+# ── Path to ae_HPforarchis.yaml (relative to project root) ───────────────────
+_DEFAULT_HP_TABLE_PATH = Path(__file__).parent.parent.parent / "configs" / "ae_HPforarchis.yaml"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public functions
+# ─────────────────────────────────────────────────────────────────────────────
+
+def load_hp_table(path: Path | str | None = None) -> dict:
+    """
+    Read ae_HPforarchis.yaml and return its content as a plain dict.
+
+    Call this ONCE before the training loop, then pass the result to
+    resolve_hyperparams() at every (model_name, latent_dim) iteration.
+
+    Parameters
+    ----------
+    path : Path or str, optional
+        Path to ae_HPforarchis.yaml. Defaults to configs/ae_HPforarchis.yaml
+        relative to the project root.
+
+    Returns
+    -------
+    dict
+        Raw YAML content, e.g.:
+        {
+          'AE3dAsymResSeparableV2': {'dim_8': {...}, 'dim_60': {...}, ...},
+          'AE3dFCDeep': {'dim_120': {...}},
+          'default': {...},
+        }
+    """
+    p = Path(path) if path is not None else _DEFAULT_HP_TABLE_PATH
+    if not p.exists():
+        raise FileNotFoundError(
+            f"ae_HPforarchis.yaml not found at {p}. "
+            "Create it or set hyper_automatic_values: false in autoencoder.yaml."
+        )
+    with open(p) as f:
+        table = yaml.safe_load(f)
+    if table is None:
+        table = {}
+    return table
+
+
+def resolve_hyperparams(
+    model_name: str,
+    latent_dim: int,
+    hp_table: dict,
+    cfg: dict,
+) -> tuple:
+    """
+    Return hyperparameter values for (model_name, latent_dim) as a fixed tuple.
+
+    Implements the 4-case logic described in the module docstring.
+
+    Returns
+    -------
+    tuple
+        (lr, weight_decay, dropout_rate, noise_std, patience,
+         beta, beta_warmup_epochs)
+        Always 7 values in this order. Missing hyperparameters fall back to
+        cfg[key] if present, else 0.
+
+    Example
+    -------
+        lr, weight_decay, dropout_rate, noise_std, patience, beta, beta_warmup_epochs = \\
+            resolve_hyperparams(model_name, latent_dim, hp_table, cfg)
+    """
+    hp = _resolve_dict(model_name, latent_dim, hp_table, cfg)
+    return _dict_to_tuple(hp, cfg)
+
+
+def _resolve_dict(
+    model_name: str,
+    latent_dim: int,
+    hp_table: dict,
+    cfg: dict,
+) -> dict:
+    """Internal: resolve hyperparameters as a dict (4-case logic)."""
+    auto = cfg.get("hyper_automatic_values", False)
+
+    # ── Case 1: manual mode ───────────────────────────────────────────────────
+    if not auto:
+        return _hp_from_cfg(cfg)
+
+    # ── Cases 2-4: automatic mode ─────────────────────────────────────────────
+    model_entry = hp_table.get(model_name)
+
+    # Case 2: model not in table → use default
+    if model_entry is None:
+        default = hp_table.get("default")
+        if default is None:
+            raise KeyError(
+                f"Model '{model_name}' not found in ae_HPforarchis.yaml "
+                "and no 'default' block exists."
+            )
+        print(
+            f"[hp_loader] '{model_name}' not in hp table → using default hyperparameters"
+        )
+        return _clean_hp(default)
+
+    # Parse dim entries: keys are 'dim_8', 'dim_60', etc.
+    dim_map = _parse_dim_map(model_entry)
+
+    if len(dim_map) == 0:
+        raise ValueError(
+            f"Model '{model_name}' is in ae_HPforarchis.yaml but has no "
+            "valid 'dim_<int>' entries."
+        )
+
+    # Case 3: single dim entry → use as-is
+    if len(dim_map) == 1:
+        only_dim, only_hp = next(iter(dim_map.items()))
+        print(
+            f"[hp_loader] '{model_name}' has a single Optuna point "
+            f"(dim={only_dim}) → applying to dim={latent_dim} unchanged"
+        )
+        return _clean_hp(only_hp)
+
+    # Case 4: 2+ dim entries → interpolate (no extrapolation)
+    return _interpolate(model_name, latent_dim, dim_map)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Internal helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _hp_from_cfg(cfg: dict) -> dict:
+    """Extract HP values from autoencoder.yaml (case 1)."""
+    hp = {}
+    for key in _ALL_HP_KEYS:
+        if key in cfg:
+            hp[key] = cfg[key]
+    return hp
+
+
+def _dict_to_tuple(hp: dict, cfg: dict) -> tuple:
+    """
+    Convert a resolved HP dict into the fixed-order tuple.
+
+    Missing keys fall back to cfg[key] if present, else 0.
+    Applies correct types (int for patience / beta_warmup_epochs, float otherwise).
+    """
+    out = []
+    for key in _RETURN_ORDER:
+        if key in hp:
+            val = hp[key]
+        elif key in cfg:
+            val = cfg[key]
+        else:
+            val = 0
+        if key in ("patience", "beta_warmup_epochs"):
+            out.append(int(val))
+        else:
+            out.append(float(val))
+    return tuple(out)
+
+
+def _clean_hp(raw: dict) -> dict:
+    """Return only recognised HP keys from a raw dict, with correct types."""
+    hp = {}
+    for key in _ALL_HP_KEYS:
+        if key in raw:
+            val = raw[key]
+            # patience and beta_warmup_epochs are ints
+            if key in ("patience", "beta_warmup_epochs"):
+                hp[key] = int(val)
+            else:
+                hp[key] = float(val)
+    return hp
+
+
+def _parse_dim_map(model_entry: dict) -> dict[int, dict]:
+    """
+    Convert {'dim_8': {...}, 'dim_60': {...}} → {8: {...}, 60: {...}}.
+    Non-dim_ keys are silently ignored.
+    """
+    dim_map: dict[int, dict] = {}
+    for key, val in model_entry.items():
+        if key.startswith("dim_"):
+            try:
+                d = int(key[4:])
+                dim_map[d] = val
+            except ValueError:
+                warnings.warn(f"Skipping malformed key '{key}' in ae_HPforarchis.yaml")
+    return dict(sorted(dim_map.items()))  # sorted by dim for clarity
+
+
+def _interpolate(model_name: str, latent_dim: int, dim_map: dict[int, dict]) -> dict:
+    """
+    Interpolate hyperparameters for latent_dim given 2+ Optuna reference points.
+
+    - log-log   interpolation for HP in _HP_LOG_SCALE  (lr, weight_decay, beta)
+    - log-linear interpolation for all other HP
+
+    No extrapolation: dims outside [min_dim, max_dim] are clamped to the
+    nearest boundary values.
+    """
+    sorted_dims = sorted(dim_map.keys())
+    min_dim, max_dim = sorted_dims[0], sorted_dims[-1]
+
+    # Clamp: no extrapolation
+    if latent_dim <= min_dim:
+        if latent_dim < min_dim:
+            print(
+                f"[hp_loader] dim={latent_dim} < min Optuna dim ({min_dim}) "
+                f"for '{model_name}' → clamping to dim={min_dim}"
+            )
+        return _clean_hp(dim_map[min_dim])
+
+    if latent_dim >= max_dim:
+        if latent_dim > max_dim:
+            print(
+                f"[hp_loader] dim={latent_dim} > max Optuna dim ({max_dim}) "
+                f"for '{model_name}' → clamping to dim={max_dim}"
+            )
+        return _clean_hp(dim_map[max_dim])
+
+    # Exact match: no interpolation needed
+    if latent_dim in dim_map:
+        print(
+            f"[hp_loader] '{model_name}' dim={latent_dim}: exact Optuna point"
+        )
+        return _clean_hp(dim_map[latent_dim])
+
+    # Find the two bracketing dims
+    lower_dim = max(d for d in sorted_dims if d <= latent_dim)
+    upper_dim = min(d for d in sorted_dims if d >= latent_dim)
+
+    # t in [0, 1] on the log(dim) axis
+    log_lower = math.log(lower_dim)
+    log_upper = math.log(upper_dim)
+    log_target = math.log(latent_dim)
+    t = (log_target - log_lower) / (log_upper - log_lower)
+
+    lower_hp = dim_map[lower_dim]
+    upper_hp = dim_map[upper_dim]
+
+    # Collect all HP keys present in at least one boundary point
+    all_keys = set(lower_hp.keys()) | set(upper_hp.keys())
+
+    result: dict[str, Any] = {}
+    for key in all_keys:
+        if key not in lower_hp or key not in upper_hp:
+            # Key present in only one boundary: use whichever exists
+            val = lower_hp.get(key, upper_hp.get(key))
+            warnings.warn(
+                f"[hp_loader] HP '{key}' missing in one boundary for '{model_name}' "
+                f"(dims {lower_dim}/{upper_dim}) — using available value {val}"
+            )
+            result[key] = val
+            continue
+
+        v_lower = lower_hp[key]
+        v_upper = upper_hp[key]
+
+        if key in _HP_LOG_SCALE:
+            # log-log: interpolate log(hp) linearly in log(dim)
+            interp = math.exp(math.log(v_lower) + t * (math.log(v_upper) - math.log(v_lower)))
+        else:
+            # log-linear: interpolate hp linearly in log(dim)
+            interp = v_lower + t * (v_upper - v_lower)
+
+        result[key] = interp
+
+    print(
+        f"[hp_loader] '{model_name}' dim={latent_dim}: interpolated between "
+        f"dim={lower_dim} and dim={upper_dim} (t={t:.3f})"
+    )
+    return _clean_hp(result)
 
 
 ######################################################################

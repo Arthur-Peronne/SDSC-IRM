@@ -1,0 +1,85 @@
+
+=== python -u scripts/run_autoencoder.py --trial-id 5722444c ===
+special_split = None
+Data loaded | train: 200 | val: 40 | test: 60 | split: splitdefault
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=30 | max_epochs=200
+Epoch 1/200 | train: 0.025662 | val: 0.002022 | lr: 6.00e-04 ✓ best
+Epoch 2/200 | train: 0.003784 | val: 0.001220 | lr: 6.00e-04 ✓ best
+Epoch 3/200 | train: 0.003597 | val: 0.001347 | lr: 6.00e-04 (no improvement for 1 epochs)
+Epoch 4/200 | train: 0.003216 | val: 0.001692 | lr: 6.00e-04 (no improvement for 2 epochs)
+Epoch 5/200 | train: 0.003095 | val: 0.001709 | lr: 6.00e-04 (no improvement for 3 epochs)
+Epoch 6/200 | train: 0.002735 | val: 0.001138 | lr: 6.00e-04 ✓ best
+Epoch 7/200 | train: 0.002726 | val: 0.001688 | lr: 6.00e-04 (no improvement for 1 epochs)
+Epoch 8/200 | train: 0.002857 | val: 0.001075 | lr: 6.00e-04 ✓ best
+Epoch 9/200 | train: 0.002617 | val: 0.001327 | lr: 6.00e-04 (no improvement for 1 epochs)
+Epoch 10/200 | train: 0.002428 | val: 0.000971 | lr: 6.00e-04 ✓ best
+Epoch 11/200 | train: 0.002572 | val: 0.000975 | lr: 6.00e-04 (no improvement for 1 epochs)
+Epoch 12/200 | train: 0.002291 | val: 0.000932 | lr: 6.00e-04 ✓ best
+Epoch 13/200 | train: 0.002538 | val: 0.001129 | lr: 6.00e-04 (no improvement for 1 epochs)
+Epoch 14/200 | train: 0.002248 | val: 0.001247 | lr: 6.00e-04 (no improvement for 2 epochs)
+Epoch 15/200 | train: 0.002125 | val: 0.001072 | lr: 6.00e-04 (no improvement for 3 epochs)
+Epoch 16/200 | train: 0.002098 | val: 0.001093 | lr: 6.00e-04 (no improvement for 4 epochs)
+Epoch 17/200 | train: 0.002062 | val: 0.001033 | lr: 6.00e-04 (no improvement for 5 epochs)
+Epoch 18/200 | train: 0.002014 | val: 0.000816 | lr: 6.00e-04 ✓ best
+Epoch 19/200 | train: 0.002162 | val: 0.000886 | lr: 6.00e-04 (no improvement for 1 epochs)
+Epoch 20/200 | train: 0.001884 | val: 0.000940 | lr: 6.00e-04 (no improvement for 2 epochs)
+Epoch 21/200 | train: 0.001833 | val: 0.000837 | lr: 6.00e-04 (no improvement for 3 epochs)
+Epoch 22/200 | train: 0.001788 | val: 0.000885 | lr: 6.00e-04 (no improvement for 4 epochs)
+Epoch 23/200 | train: 0.001938 | val: 0.000784 | lr: 6.00e-04 ✓ best
+Epoch 24/200 | train: 0.001777 | val: 0.000839 | lr: 6.00e-04 (no improvement for 1 epochs)
+Epoch 25/200 | train: 0.001795 | val: 0.001035 | lr: 6.00e-04 (no improvement for 2 epochs)
+Epoch 26/200 | train: 0.001655 | val: 0.000809 | lr: 6.00e-04 (no improvement for 3 epochs)
+Epoch 27/200 | train: 0.001567 | val: 0.000855 | lr: 6.00e-04 (no improvement for 4 epochs)
+Epoch 28/200 | train: 0.001669 | val: 0.001473 | lr: 6.00e-04 (no improvement for 5 epochs)
+Epoch 29/200 | train: 0.001622 | val: 0.000839 | lr: 6.00e-04 (no improvement for 6 epochs)
+Epoch 30/200 | train: 0.001703 | val: 0.000775 | lr: 6.00e-04 ✓ best
+Epoch 31/200 | train: 0.001523 | val: 0.000778 | lr: 6.00e-04 (no improvement for 1 epochs)
+Epoch 32/200 | train: 0.001631 | val: 0.001043 | lr: 6.00e-04 (no improvement for 2 epochs)
+Epoch 33/200 | train: 0.001681 | val: 0.001062 | lr: 6.00e-04 (no improvement for 3 epochs)
+Epoch 34/200 | train: 0.001546 | val: 0.000847 | lr: 6.00e-04 (no improvement for 4 epochs)
+Epoch 35/200 | train: 0.001445 | val: 0.000791 | lr: 6.00e-04 (no improvement for 5 epochs)
+Epoch 36/200 | train: 0.001518 | val: 0.000824 | lr: 6.00e-04 (no improvement for 6 epochs)
+Epoch 37/200 | train: 0.001460 | val: 0.000871 | lr: 3.00e-04 (no improvement for 7 epochs)
+Epoch 38/200 | train: 0.001303 | val: 0.000824 | lr: 3.00e-04 (no improvement for 8 epochs)
+Epoch 39/200 | train: 0.001213 | val: 0.000873 | lr: 3.00e-04 (no improvement for 9 epochs)
+Epoch 40/200 | train: 0.001182 | val: 0.000793 | lr: 3.00e-04 (no improvement for 10 epochs)
+Epoch 41/200 | train: 0.001126 | val: 0.000757 | lr: 3.00e-04 ✓ best
+Epoch 42/200 | train: 0.001106 | val: 0.000708 | lr: 3.00e-04 ✓ best
+Epoch 43/200 | train: 0.001117 | val: 0.000790 | lr: 3.00e-04 (no improvement for 1 epochs)
+Epoch 44/200 | train: 0.001097 | val: 0.000754 | lr: 3.00e-04 (no improvement for 2 epochs)
+Epoch 45/200 | train: 0.001116 | val: 0.000880 | lr: 3.00e-04 (no improvement for 3 epochs)
+Epoch 46/200 | train: 0.001152 | val: 0.000838 | lr: 3.00e-04 (no improvement for 4 epochs)
+Epoch 47/200 | train: 0.001175 | val: 0.000845 | lr: 3.00e-04 (no improvement for 5 epochs)
+Epoch 48/200 | train: 0.001100 | val: 0.000889 | lr: 3.00e-04 (no improvement for 6 epochs)
+Epoch 49/200 | train: 0.001088 | val: 0.000822 | lr: 1.50e-04 (no improvement for 7 epochs)
+Epoch 50/200 | train: 0.001007 | val: 0.000783 | lr: 1.50e-04 (no improvement for 8 epochs)
+Epoch 51/200 | train: 0.000959 | val: 0.000788 | lr: 1.50e-04 (no improvement for 9 epochs)
+Epoch 52/200 | train: 0.000940 | val: 0.000789 | lr: 1.50e-04 (no improvement for 10 epochs)
+Epoch 53/200 | train: 0.000922 | val: 0.000791 | lr: 1.50e-04 (no improvement for 11 epochs)
+Epoch 54/200 | train: 0.000910 | val: 0.000806 | lr: 1.50e-04 (no improvement for 12 epochs)
+Epoch 55/200 | train: 0.000899 | val: 0.000788 | lr: 1.50e-04 (no improvement for 13 epochs)
+Epoch 56/200 | train: 0.000894 | val: 0.000801 | lr: 7.50e-05 (no improvement for 14 epochs)
+Epoch 57/200 | train: 0.000864 | val: 0.000808 | lr: 7.50e-05 (no improvement for 15 epochs)
+Epoch 58/200 | train: 0.000853 | val: 0.000793 | lr: 7.50e-05 (no improvement for 16 epochs)
+Epoch 59/200 | train: 0.000845 | val: 0.000809 | lr: 7.50e-05 (no improvement for 17 epochs)
+Epoch 60/200 | train: 0.000838 | val: 0.000823 | lr: 7.50e-05 (no improvement for 18 epochs)
+Epoch 61/200 | train: 0.000831 | val: 0.000832 | lr: 7.50e-05 (no improvement for 19 epochs)
+Epoch 62/200 | train: 0.000828 | val: 0.000812 | lr: 7.50e-05 (no improvement for 20 epochs)
+Epoch 63/200 | train: 0.000820 | val: 0.000820 | lr: 3.75e-05 (no improvement for 21 epochs)
+Epoch 64/200 | train: 0.000805 | val: 0.000801 | lr: 3.75e-05 (no improvement for 22 epochs)
+Epoch 65/200 | train: 0.000800 | val: 0.000809 | lr: 3.75e-05 (no improvement for 23 epochs)
+Epoch 66/200 | train: 0.000797 | val: 0.000806 | lr: 3.75e-05 (no improvement for 24 epochs)
+Epoch 67/200 | train: 0.000792 | val: 0.000802 | lr: 3.75e-05 (no improvement for 25 epochs)
+Epoch 68/200 | train: 0.000789 | val: 0.000785 | lr: 3.75e-05 (no improvement for 26 epochs)
+Epoch 69/200 | train: 0.000786 | val: 0.000822 | lr: 3.75e-05 (no improvement for 27 epochs)
+Epoch 70/200 | train: 0.000782 | val: 0.000821 | lr: 1.87e-05 (no improvement for 28 epochs)
+Epoch 71/200 | train: 0.000774 | val: 0.000798 | lr: 1.87e-05 (no improvement for 29 epochs)
+Epoch 72/200 | train: 0.000772 | val: 0.000812 | lr: 1.87e-05 (no improvement for 30 epochs)
+
+Early stopping at epoch 72. Best epoch: 42 (val loss: 0.000708).
+/home/renku/work/SDSC-IRM/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+Loss plot saved: /home/renku/work/SDSC-IRM/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_splitdefault_60dims_ai_hpopti_train_val_loss.png
+[train] R2 mean=0.8279 std=0.0636 | MSE mean=285.403137
+[validation] R2 mean=0.7477 std=0.1191 | MSE mean=186.703079
+[test] R2 mean=0.7728 std=0.0822 | MSE mean=224.654144

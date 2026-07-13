@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "optuna_sepv2" # "baseline_aiarchi"
+experiment_tag: "ai_hpopti" # "baseline_aiarchi"
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
@@ -23,27 +23,30 @@ n_test: 30
 special_split: null              # null = sequential "splitdefault"; e.g. "split42" for seeded
 stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
 
+# ── Reproducibility ─────────────────────────────────────────────────────────
+seed: 0  # global RNG seed (torch/numpy/random), logged to MLflow. Set to null for a non-reproducible (random) run.
+
 # ── Model ─────────────────────────────────────────────────────────────────────
 model_name: "AE3dAsymResSeparableV2"
-latent_dimensions: 120
-multiple_models_and_dims: true  # true = loop over models_list × latdim_list
-models_list: ["AE3dAsymResSeparableV2"]
-latdim_list: [28, 120] # [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
+latent_dimensions: 60
+multiple_models_and_dims: false  # true = loop over models_list × latdim_list
+models_list: ["AE3dAsymResidualV4", "AE3dAsymResSeparable", "AE3dAsymResSeparableV2"]
+latdim_list: [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
 
 # ── Training ──────────────────────────────────────────────────────────────────
 recalculate_ae: true             # false = load existing model (requires load_run_id)
 load_run_id: null                # MLflow run ID — required when recalculate_ae: false
 # (non-optimized hyperparameters)
-n_epochs: 300                    # max epochs (early stopping triggers earlier if n_val > 0)
+n_epochs: 200                    # max epochs (early stopping triggers earlier if n_val > 0)
 batch_size: 1
 patience_scheduler: null         # null = patience // 5
 # (optimized hyperparameters)
-hyper_automatic_values: true # if True, goes to ae_HPforarchis.yaml. If False, takes values below:
-lr: 5e-5                         # Learning rate; AEoptuna: 1e-5, VAEoptuna: 5e-5
-weight_decay: 0.0            # L2 regularisation; AEoptuna: 6.47e-6, VAEoptuna: 1e-7 
+hyper_automatic_values: false # if True, goes to ae_HPforarchis.yaml. If False, takes values below:
+lr: 6e-4                        # Learning rate; AEoptuna: 1e-5, VAEoptuna: 5e-5
+weight_decay: 0.0            # L2 regularisation; AEoptuna: 6.47e-6, VAEoptuna: 1e-7
 dropout_rate: 0.0                # 0.0 for AE3dConv and AE3dLinear; AEoptuna: 0.221
-noise_std: 0.0                   # 0.0 = no denoising; AEoptuna: 0.002
-patience: 30                     # early stopping patience (used only if n_val > 0), VAEoptuna: 27
+noise_std: 0.0001                   # 0.0 = no denoising; AEoptuna: 0.002
+patience: 50                     # early stopping patience (used only if n_val > 0), VAEoptuna: 27
 
 # ── VAE parameters (AE3dFCDeep_VAE only) ──────────────────────────────────────
 beta: 0.00022                    # KL weight in VAE loss, VAEoptuna: 0.00022

@@ -5,38 +5,80 @@ Root : /home/renku/work/SDSC-IRM
 
 SDSC-IRM/
 ├── ai_agent/
-│   ├── archive/
-│   │   └── experiment_architecture_1/
-│   │       ├── trial_10_AE3dDilatedAttentionResidual.md
-│   │       ├── trial_11_AE3dDilatedAttentionBottleneckSE.md
-│   │       ├── trial_12_AE3dStrided.md
-│   │       ├── trial_13_AE3dDilatedCBAM.md
-│   │       ├── trial_14_AE3dDilatedGroupNorm.md
-│   │       ├── trial_15_AE3dDilatedAttentionSEDecoder.md
-│   │       ├── trial_16_AE3dDilatedBottleneckCompress.md
-│   │       ├── trial_17_AE3dDilated1242.md
-│   │       ├── trial_18_AE3dDilatedMSBottleneck.md
-│   │       ├── trial_19_AE3dDilatedAttentionSEDecoder2.md
-│   │       ├── trial_20_AE3dDilatedAttentionReduction4.md
-│   │       ├── trial_21_AE3dMBConv.md
-│   │       ├── trial_22_AE3dCompact.md
-│   │       ├── trial_23_AE3dDilatedDecoder.md
-│   │       ├── trial_24_AE3dDilatedDecRefinement.md
-│   │       ├── trial_25_AE3dDilatedAttentionLatentNorm.md
-│   │       ├── trial_26_AE3dDilatedAttentionSEDecoderR2.md
-│   │       ├── trial_27_AE3dDilatedAttentionSpatialDecoder.md
-│   │       ├── trial_28_AE3dTrilinDecoder.md
-│   │       ├── trial_8_AE3dDilatedAttentionDeep.md
-│   │       ├── trial_9_AE3dDilatedAttentionWide.md
-│   │       └── trial_log_EXP1.csv
-│   ├── trials_conclusions/
-│   │   ├── TEMPLATE.md
-│   │   └── trial_log.csv
+│   ├── ai_agent_structure_obsolete/
+│   │   ├── old_compaigns/
+│   │   │   ├── experiment_architecture_1/
+│   │   │   │   ├── trial_10_AE3dDilatedAttentionResidual.md
+│   │   │   │   ├── trial_11_AE3dDilatedAttentionBottleneckSE.md
+│   │   │   │   ├── trial_12_AE3dStrided.md
+│   │   │   │   ├── trial_13_AE3dDilatedCBAM.md
+│   │   │   │   ├── trial_14_AE3dDilatedGroupNorm.md
+│   │   │   │   ├── trial_15_AE3dDilatedAttentionSEDecoder.md
+│   │   │   │   ├── trial_16_AE3dDilatedBottleneckCompress.md
+│   │   │   │   ├── trial_17_AE3dDilated1242.md
+│   │   │   │   ├── trial_18_AE3dDilatedMSBottleneck.md
+│   │   │   │   ├── trial_19_AE3dDilatedAttentionSEDecoder2.md
+│   │   │   │   ├── trial_20_AE3dDilatedAttentionReduction4.md
+│   │   │   │   ├── trial_21_AE3dMBConv.md
+│   │   │   │   ├── trial_22_AE3dCompact.md
+│   │   │   │   ├── trial_23_AE3dDilatedDecoder.md
+│   │   │   │   ├── trial_24_AE3dDilatedDecRefinement.md
+│   │   │   │   ├── trial_25_AE3dDilatedAttentionLatentNorm.md
+│   │   │   │   ├── trial_26_AE3dDilatedAttentionSEDecoderR2.md
+│   │   │   │   ├── trial_27_AE3dDilatedAttentionSpatialDecoder.md
+│   │   │   │   ├── trial_28_AE3dTrilinDecoder.md
+│   │   │   │   ├── trial_8_AE3dDilatedAttentionDeep.md
+│   │   │   │   ├── trial_9_AE3dDilatedAttentionWide.md
+│   │   │   │   └── trial_log_EXP1.csv
+│   │   │   └── experiment_architecture_2/
+│   │   │       ├── TEMPLATE.md
+│   │   │       ├── existing_AE3dAttention.md
+│   │   │       ├── existing_AE3dConv.md
+│   │   │       ├── existing_AE3dCurrent.md
+│   │   │       ├── existing_AE3dDilated.md
+│   │   │       ├── existing_AE3dDilatedAttention.md
+│   │   │       ├── existing_AE3dFCDeep.md
+│   │   │       ├── existing_AE3dFCDeep_VAE.md
+│   │   │       ├── existing_AE3dLinear.md
+│   │   │       ├── existing_AE3dSeparableDilated.md
+│   │   │       ├── trial_10_AE3dFCDeepAsymV8.md
+│   │   │       ├── trial_11_AE3dResidual.md
+│   │   │       ├── trial_12_AE3dAsymResidual.md
+│   │   │       ├── trial_13_AE3dAsymResidualV2.md
+│   │   │       ├── trial_14_AE3dAsymResidualV3.md
+│   │   │       ├── trial_15_AE3dAsymGated.md
+│   │   │       ├── trial_16_AE3dAsymResidualV4.md
+│   │   │       ├── trial_17_AE3dAsymResidualV5.md
+│   │   │       ├── trial_18_AE3dAsymV4ResDec.md
+│   │   │       ├── trial_19_AE3dAsymSeparable.md
+│   │   │       ├── trial_1_AE3dFCDeepDilated.md
+│   │   │       ├── trial_20_AE3dAsymResSeparable.md
+│   │   │       ├── trial_21_AE3dAsymResSeparableV2.md
+│   │   │       ├── trial_22_AE3dAsymResSeparableV3.md
+│   │   │       ├── trial_2_AE3dFCDeepSE.md
+│   │   │       ├── trial_3_AE3dFCDeepAsym.md
+│   │   │       ├── trial_4_AE3dFCDeepAsymV2.md
+│   │   │       ├── trial_5_AE3dFCDeepAsymV3.md
+│   │   │       ├── trial_6_AE3dFCDeepAsymV4.md
+│   │   │       ├── trial_7_AE3dFCDeepAsymV5.md
+│   │   │       ├── trial_8_AE3dFCDeepAsymV6.md
+│   │   │       ├── trial_9_AE3dFCDeepAsymV7.md
+│   │   │       └── trial_log.csv
+│   │   ├── trials_conclusions/
+│   │   │   ├── TEMPLATE.md
+│   │   │   └── trial_log.csv
+│   │   ├── AGENT.md
+│   │   ├── CODEBASE.md
+│   │   ├── EXPERIMENT.md
+│   │   ├── EXPERIMENT_EXISTING.md
+│   │   └── SUMMARY.md
+│   ├── experiments/
+│   │   └── TEMPLATE.md
 │   ├── AGENT.md
-│   ├── CODEBASE.md
-│   ├── EXPERIMENT.md
-│   ├── EXPERIMENT_EXISTING.md
-│   └── SUMMARY.md
+│   ├── SETUP.md
+│   ├── driver.py  # driver.py -- the deterministic engine of the autonomous research loop.
+│   ├── experiment.yaml
+│   └── program.md
 ├── ai_assistance/
 │   ├── What the code must perform.txt
 │   ├── context_arborescence.txt
@@ -44,6 +86,7 @@ SDSC-IRM/
 │   ├── context_yaml.txt
 │   └── dump_context.py
 ├── configs/
+│   ├── ae_HPforarchis.yaml
 │   ├── ae_optuna.yaml
 │   ├── autoencoder.yaml
 │   ├── comparison.yaml
@@ -106,6 +149,7 @@ SDSC-IRM/
 │   │   └── top_level.txt
 │   ├── training/
 │   │   ├── __init__.py
+│   │   ├── ae_hparam_loader.py  # Hyperparameter resolution for autoencoder training.
 │   │   ├── ae_optuna.py  # Optuna hyperparameter optimisation for 3D autoencoders.
 │   │   └── ae_training.py  # Training and evaluation utilities for the 3D autoencoder.
 │   ├── visualization/
@@ -126,6 +170,35 @@ SDSC-IRM/
 ======================================================================
 DETAILED DOCSTRINGS PER FILE
 ======================================================================
+
+# ai_agent/driver.py
+"""
+driver.py -- the deterministic engine of the autonomous research loop.
+
+The AGENT edits code and writes prose; the DRIVER does the mechanical,
+incorruptible part: lock the input, train, read the metric, decide keep/revert
+by a fixed numeric rule, and commit. The agent and the driver NEVER run at the
+same time -- they take turns. The driver takes NO "intelligent" decision.
+
+Turn structure (one trial):
+  [agent]  copies experiments/TEMPLATE.md -> experiments/draft.md, edits a file
+           in `mutable`, writes Hypothesis + Implementation + model_name.
+  [driver] python driver.py run [parent_id]   <-- everything below happens here
+             1. scope check (only `mutable` files changed?)
+             2. commit 1 -> freezes input (code + all configs + experiment.yaml),
+                yields commit sha -> computes id -> renames draft.md to <id>.md
+             3. run eval: N trainings over repeat_over (N=1 if null), fixed epochs
+             4. read per-run metrics from MLflow -> aggregate into trial scalar
+             5. compare to champion -> keep or git revert  (deterministic)
+             6. write ## Results into <id>.md + append CSV row
+             7. commit 2 -> freezes output
+  [agent]  reads result, writes Training Dynamics + Conclusion.
+
+SKELETON: functions that touch project specifics (MLflow field names, git
+plumbing, how the training script receives repeat overrides) are marked TODO.
+Everything else is driven by experiment.yaml, so the same driver works on any
+project -- a user edits only the YAML + program.md.
+"""
 
 # experiments/pca_testiris.py
 """
@@ -166,6 +239,12 @@ Usage:
 
 LOAD mode: set recalculate_ae: false and load_run_id: <mlflow_run_id> in the YAML.
 CALC mode: set recalculate_ae: true.
+
+Hyperparameter resolution (hyper_automatic_values in autoencoder.yaml):
+  false → values taken directly from autoencoder.yaml
+  true  → values resolved via ae_hparam_loader from configs/ae_HPforarchis.yaml
+          (interpolated, single-point, or default depending on the model)
+  The resolved values are always what is logged to MLflow — never the yaml placeholders.
 """
 
 # scripts/run_comparison_aepca.py
@@ -407,6 +486,34 @@ run_name : "{simulation_name}_{experiment_tag}"
 # src/training/__init__.py
 """
 (no module docstring)
+"""
+
+# src/training/ae_hparam_loader.py
+"""
+Hyperparameter resolution for autoencoder training.
+
+Implements 4 cases depending on hyper_automatic_values and ae_HPforarchis.yaml content:
+  1. hyper_automatic_values = False
+     → use values directly from autoencoder.yaml (cfg)
+
+  2. hyper_automatic_values = True, model not in hp table
+     → use 'default' block from ae_HPforarchis.yaml
+
+  3. hyper_automatic_values = True, model in hp table with exactly 1 dim entry
+     → use that single entry regardless of the requested latent_dim
+
+  4. hyper_automatic_values = True, model in hp table with 2+ dim entries
+     → interpolate (log-log for lr/weight_decay/beta, log-linear for others)
+        no extrapolation: clamp to nearest boundary dim
+
+Public API
+----------
+  load_hp_table(path)                           → dict (call once before the loop)
+  resolve_hyperparams(model_name, latent_dim, hp_table, cfg)
+      → tuple: (lr, weight_decay, dropout_rate, noise_std, patience,
+                beta, beta_warmup_epochs)
+        Always 7 values in this fixed order. Hyperparameters absent from the
+        source fall back to cfg (or 0) so the tuple is always complete.
 """
 
 # src/training/ae_optuna.py

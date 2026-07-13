@@ -1,0 +1,81 @@
+# =============================================================================
+# experiment.yaml — THE CONTRACT
+# -----------------------------------------------------------------------------
+# The ONLY file to edit to steer the autonomous loop. The driver reads it and
+# ENFORCES it; program.md / SETUP.md never repeat these hard rules.
+#
+# Principles:
+#   - ALLOWLIST, not blocklist: only files under `mutable` may change. Everything
+#     else is frozen (deny-by-default); the driver rejects any trial touching it.
+#   - ONE judge: a single aggregated metric decides the verdict, deterministically.
+#   - The judge is fixed FOR A CAMPAIGN. Changing the metric means a NEW campaign
+#     (archive trial_log.csv, re-evaluate the champion under the new metric).
+#     Never change the metric mid-campaign.
+# =============================================================================
+
+experiment_name: "ai_hpopti_sepv2_dim60"
+
+# -- 1. Scope: what the agent may modify (ALLOWLIST) --------------------------
+# Any change to a file outside this list (and outside the trial record dir) => the
+# driver aborts the trial BEFORE committing or training. Nothing is recorded;
+# revert the stray change and rerun.
+mutable:
+  # - src/models/ae_models.py       # architecture definitions + build_autoencoder factory
+  - configs/autoencoder.yaml      # training config (model_name, hyperparameters, ...)
+
+# -- 2. Training: how ONE trial runs ------------------------------------------
+# A trial = N trainings over `repeat_over`. The DRIVER owns the loop: it calls
+# `command` once per value, passing `--set <axis>=<value>` to override that one
+# field of configs/autoencoder.yaml in memory. The script runs exactly ONE MLflow
+# run per call (keep multiple_models_and_dims: false in autoencoder.yaml).
+#
+#   repeat_over — the axis MUST be a real key of configs/autoencoder.yaml:
+#     {latent_dimensions: [8, 60, 240]}  -> archi search   (N=3, one run per dim)
+#     null                                -> single training (N=1, e.g. HP tuning)
+#     {seed: [0, 1, 2]}                   -> seed averaging  (N=3, same config)
+training:
+  command: "python -u scripts/run_autoencoder.py"
+  repeat_over: null # {latent_dimensions: [8, 40, 200]}
+
+# -- 3. Eval: how the N runs collapse into ONE decisional number --------------
+# At launch the driver tags each run with the trial id, then reads back exactly
+# those N runs by tag (never by recency). `per_run_metric` is read from each run;
+# `aggregation` collapses them into the trial scalar the judge compares.
+# That aggregate is a TRIAL-level value: it lives in <id>.md, never in MLflow.
+# NOTE: validation_R2_mean / validation_MSE_mean are only logged when n_val > 0
+# and compute_metrics: true in autoencoder.yaml — keep both for these campaigns.
+eval:
+  per_run_metric:      "validation_R2_mean"      # final scalar logged per run
+  aggregation:         "identity"                     # "identity" (N=1) | "mean" (N>1)
+  primary_metric_name: "avg_validation_R2_mean"   # label for the aggregate
+  direction:           "maximize"                 # "maximize" | "minimize"
+  also_log:                                       # recorded for context, NON-decisional
+    - "validation_MSE_mean"
+
+# -- 4. Verdict: deterministic keep / revert (NO LLM) -------------------------
+# Compared against the current champion's aggregate (best BASELINE/CHAMPION row
+# in the ledger).
+#   CHAMPION  : aggregate beats the champion               -> keep code, new champion
+#   CANDIDATE : aggregate does NOT beat it, BUT the best single run is promising
+#               -> keep code, champion unchanged
+#   FAILURE   : neither                                    -> revert code
+# Delete the whole `candidate` block for plain binary keep/revert.
+decision:
+  branch: "agent-ae-opti"        # isolated branch; the driver never commits to main
+  max_trials: 40                  # driver refuses a new trial once the ledger has this many
+  # candidate:
+  #   statistic: "max"             # over the per-run values (before aggregation)
+  #   margin: 0.03                 # maximize: CANDIDATE if max(values) > champion + margin
+  #                                # minimize: CANDIDATE if min(values) < champion - margin
+
+# -- 5. Logging / storage -----------------------------------------------------
+# All configs are captured by the input commit (commit 1) and reachable via the
+# trial id (= that commit's short sha) -> no separate archiving needed.
+logging:
+  experiments_dir: "ai_agent/experiments"           # one <id>.md record per trial
+  template:        "ai_agent/experiments/TEMPLATE.md"
+  ledger:          "ai_agent/experiments/trial_log.csv"          # flat index; header owned by the driver
+
+# -- 6. Safety rails the driver enforces --------------------------------------
+safety:
+  nan_abort: true                # NaN in a per-run metric -> status: failed, code reverted, commit 2 to trace

@@ -7,9 +7,22 @@ Results (model + metrics + plots) are tracked in MLflow under experiment "autoen
 
 Usage:
     python scripts/run_autoencoder.py
+    python scripts/run_autoencoder.py --set latent_dimensions=60 --set seed=1
+    python scripts/run_autoencoder.py --trial-id a3f9c1e --set latent_dimensions=8
 
 LOAD mode: set recalculate_ae: false and load_run_id: <mlflow_run_id> in the YAML.
 CALC mode: set recalculate_ae: true.
+
+CLI overrides (used by ai_agent/driver.py; harmless when run by hand):
+  --set KEY=VALUE   override one existing key of autoencoder.yaml IN MEMORY
+                    (repeatable). The on-disk YAML is never modified; the MLflow
+                    param logged is the overridden value, so it stays faithful.
+  --trial-id ID     tag every MLflow run of this invocation with trial_id=ID, so
+                    the driver can read back exactly its own runs (never by recency).
+
+Reproducibility:
+  `seed` in autoencoder.yaml seeds torch/numpy/random before training. Override
+  per run with --set seed=N (the driver uses this for repeat_over: {seed: [...]}).
 
 Hyperparameter resolution (hyper_automatic_values in autoencoder.yaml):
   false → values taken directly from autoencoder.yaml
@@ -18,8 +31,12 @@ Hyperparameter resolution (hyper_automatic_values in autoencoder.yaml):
   The resolved values are always what is logged to MLflow — never the yaml placeholders.
 """
 
+import argparse
+import random
+
 import yaml
 import mlflow
+import numpy as np
 import torch
 from pathlib import Path
 
@@ -35,11 +52,66 @@ CONFIG_PATH = Path(__file__).parent.parent / "configs" / "autoencoder.yaml"
 HP_TABLE_PATH = Path(__file__).parent.parent / "configs" / "ae_HPforarchis.yaml"
 
 
+def _parse_args():
+    p = argparse.ArgumentParser(description="Train / evaluate a 3D autoencoder.")
+    p.add_argument("--trial-id", default=None,
+                   help="Tag every MLflow run of this invocation with trial_id=<id> "
+                        "(used by ai_agent/driver.py to read back exactly its runs).")
+    p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                   help="Override one existing key of autoencoder.yaml in memory "
+                        "(repeatable). The on-disk file is not modified.")
+    return p.parse_args()
+
+
+def _apply_overrides(cfg, set_args):
+    """Apply --set KEY=VALUE overrides to cfg in memory. VALUE is parsed with
+    yaml.safe_load so types are natural ("8"->8, "8.5"->float, "false"->False,
+    "ED"->"ED"). One YAML quirk is patched: exponent-without-dot forms like
+    "1e-4" parse as a string, so a leftover numeric string is coerced to int/float.
+    Overriding an unknown key is refused, to catch typos and enforce the rule
+    'the repeat_over axis must be a real key of autoencoder.yaml'."""
+    for item in set_args:
+        if "=" not in item:
+            raise SystemExit(f"--set expects KEY=VALUE, got: {item!r}")
+        key, raw = item.split("=", 1)
+        key = key.strip()
+        if key not in cfg:
+            raise SystemExit(
+                f"--set: unknown key {key!r} — it must already exist in {CONFIG_PATH.name}."
+            )
+        val = yaml.safe_load(raw)
+        if isinstance(val, str):                 # patch "1e-4"/"5e-5" -> float
+            try:
+                val = int(val)
+            except ValueError:
+                try:
+                    val = float(val)
+                except ValueError:
+                    pass
+        cfg[key] = val
+
+
+def _set_seed(seed):
+    """Seed torch/numpy/random for reproducibility. No-op if seed is None."""
+    if seed is None:
+        return
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def _run_one(cfg, model_name, latent_dimensions, split_name,
              n_train_images, n_val_images,
              train_dataset, val_dataset, test_dataset, X_maxnorm,
-             hp_table):
+             hp_table, trial_id=None):
     """Train (or load) one AE model and log everything to a single MLflow run."""
+
+    # Reproducibility: seed HERE (not in main) so that in multiple_models_and_dims
+    # mode every sub-run starts from the same RNG state, independent of the others.
+    # Runs after overrides are applied, so `--set seed=N` still wins.
+    _set_seed(cfg.get("seed"))
 
     recalculate    = cfg["recalculate_ae"]
     load_run_id    = cfg.get("load_run_id") if not recalculate else None
@@ -74,7 +146,8 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
     )
 
     run_ctx = (
-        tracking.start_run("autoencoder", run_name)
+        tracking.start_run("autoencoder", run_name,
+                           tags={"trial_id": trial_id} if trial_id else None)
         if recalculate
         else tracking.resume_run(load_run_id)
     )
@@ -96,6 +169,7 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
                 "n_test":             cfg["n_test"],
                 "split_name":         split_name,
                 "stratify_ongroup":   cfg.get("stratify_ongroup", False),
+                "seed":               cfg.get("seed"),
                 "frame_tag":          frame_tag,
                 "image_roi_only":     cfg["image_roi_only"],
                 "mask_ys":            cfg["mask_ys"],
@@ -290,8 +364,12 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
 
 
 def main():
+    args = _parse_args()
     with open(CONFIG_PATH) as f:
         cfg = yaml.safe_load(f)
+
+    # ── CLI overrides (--set key=value) applied in memory; on-disk YAML untouched ──
+    _apply_overrides(cfg, args.set)
 
     # ── Float fix for manual HP values in cfg ─────────────────────────────────
     # (only needed when hyper_automatic_values=False, but harmless otherwise)
@@ -345,14 +423,14 @@ def main():
                     cfg, model_name, latent_dimensions, split_name,
                     n_train_images, n_val_images,
                     train_dataset, val_dataset, test_dataset, X_maxnorm,
-                    hp_table=hp_table,
+                    hp_table=hp_table, trial_id=args.trial_id,
                 )
     else:
         _run_one(
             cfg, cfg["model_name"], cfg["latent_dimensions"], split_name,
             n_train_images, n_val_images,
             train_dataset, val_dataset, test_dataset, X_maxnorm,
-            hp_table=hp_table,
+            hp_table=hp_table, trial_id=args.trial_id,
         )
 
 
