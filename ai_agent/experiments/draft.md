@@ -1,0 +1,57 @@
+---
+# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
+#   python ai_agent/driver.py run
+# The driver commits the input (that commit's short sha becomes `id`), renames
+# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
+# (These comments are not preserved in the final <id>.md — that's expected.)
+
+# ---- agent-written (fill BEFORE running) ----
+model_name: AE3dAsymResSeparableV2
+summary: "Replicate the runner-up config (patience=45, originally 0.8089 vs the champion's 0.8148, a gap of only 0.006 — far inside the ~0.03-0.04 noise floor) to test whether patience=60's edge over 45 is genuine or noise"
+parent: bed745a0
+
+# ---- driver-written (leave null; the driver overwrites at lock/result) ----
+id: null
+status: draft
+verdict: null
+created_at: null
+metric:
+  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+---
+
+# Trial <id> — <model_name> — <verdict>
+
+<!-- ===== written BEFORE the run (agent) ===== -->
+
+## Hypothesis
+Trial 69832c74 (patience=45) scored 0.8089, and bed745a0 (patience=60) scored 0.8148
+— a gap of only 0.0059, an order of magnitude smaller than the ~0.03-0.04 single-run
+noise now established via 4 replicates of the patience=60 config. This means the
+patience=45 vs 60 ranking, taken at face value from single runs, is not statistically
+meaningful. I run patience=45 again (same config as 69832c74) to get a second data
+point for THAT config: if it lands anywhere in the broad 0.74-0.85 range already seen
+for patience=60's replicates, it confirms the two configs are indistinguishable at
+this noise level and the campaign cannot currently tell which schedule length is
+truly better in expectation — a materially important caveat for the final report,
+not a new HP change.
+
+## Implementation
+Single-field change in configs/autoencoder.yaml: patience 60 -> 45 (patience_scheduler
+auto-derived as patience//5 = 9), on top of lr=6e-4, noise_std=0.0001. weight_decay=0,
+dropout_rate=0 unchanged. No architecture change. (This reproduces 69832c74's exact
+config as a replicate, not a new point on the patience axis.)
+
+<!-- ===== written AFTER the run ===== -->
+
+## Results
+<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
+     per-run metric values (by repeat axis), the aggregated primary metric,
+     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
+     For a mechanically failed trial it writes the failure reason instead. -->
+
+## Training Dynamics
+<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+
+## Conclusion
+<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
+     worked or failed — not just the numbers. -->
