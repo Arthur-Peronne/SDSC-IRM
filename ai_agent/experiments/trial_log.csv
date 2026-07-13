@@ -1,3 +1,4 @@
 timestamp,id,parent,model_name,modification_description,metric_name,metric_value,metric_delta,status,verdict
 2026-07-13T13:10:29+00:00,0d2e0fa2,,AE3dAsymResSeparableV2,"Baseline at latent_dim=8: dim=60 champion HPs unchanged (lr=6e-4, weight_decay=0, dropout_rate=0, noise_std=0.0001, patience=50)",avg_validation_R2_mean,0.797717,+0.000000,completed,BASELINE
 2026-07-13T13:34:04+00:00,1a3bea48,0d2e0fa2,AE3dAsymResSeparableV2,"weight_decay 0 -> 1e-6, all else unchanged (dim=60 report flagged this exact combo as never tested)",avg_validation_R2_mean,0.795990,-0.001727,completed,FAILURE
+2026-07-13T13:59:51+00:00,da8aad93,0d2e0fa2,AE3dAsymResSeparableV2,"lr 6e-4 -> 3e-4, all else unchanged (checking whether the dim=60 lr-optimum shifts at dim=8)",avg_validation_R2_mean,0.772862,-0.024855,completed,FAILURE
