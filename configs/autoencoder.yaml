@@ -46,7 +46,7 @@ lr: 6e-4                        # Learning rate; AEoptuna: 1e-5, VAEoptuna: 5e-5
 weight_decay: 0.0            # L2 regularisation; AEoptuna: 6.47e-6, VAEoptuna: 1e-7
 dropout_rate: 0.0                # 0.0 for AE3dConv and AE3dLinear; AEoptuna: 0.221
 noise_std: 0.0001                   # 0.0 = no denoising; AEoptuna: 0.002
-patience: 75                     # early stopping patience (used only if n_val > 0), VAEoptuna: 27
+patience: 60                     # early stopping patience (used only if n_val > 0), VAEoptuna: 27
 
 
 # ── VAE parameters (AE3dFCDeep_VAE only) ──────────────────────────────────────
