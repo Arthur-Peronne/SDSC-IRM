@@ -30,14 +30,13 @@ series:
   - model_name: AE3dFCDeep
     experiment_tag: optuna
 
-  - model_name: AE3dAsymResidualV4
-    experiment_tag: baseline_aiarchi
-  
-  - model_name: AE3dAsymResSeparable
-    experiment_tag: baseline_aiarchi
-
   - model_name: AE3dAsymResSeparableV2
-    experiment_tag: baseline_aiarchi
+    experiment_tag: optuna_sepv2
+  
+  - model_name: PCA
+    experiment_tag: baseline
+    params_filter:
+      n_train: 120
 
   # Example with params_filter override:
   # - model_name: AE3dFCDeep

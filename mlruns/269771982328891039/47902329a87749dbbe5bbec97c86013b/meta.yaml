@@ -1,0 +1,14 @@
+artifact_uri: mlruns/269771982328891039/47902329a87749dbbe5bbec97c86013b/artifacts
+end_time: 1783929437275
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: 47902329a87749dbbe5bbec97c86013b
+run_name: AE_AE3dAsymResSeparableV2_200patients_splitdefault_60dims_optuna_sepv2
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1783927350861
+status: 3
+tags: []
+user_id: renku
