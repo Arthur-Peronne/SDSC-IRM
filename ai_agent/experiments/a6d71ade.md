@@ -1,25 +1,21 @@
 ---
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
 model_name: AE3dAsymResSeparableV2
-summary: "Interaction re-check — retest weight_decay=1e-6 (near-neutral under patience=30) now under the champion's patience=60, completing the regularizer-under-new-schedule sweep"
+summary: Interaction re-check — retest weight_decay=1e-6 (near-neutral under patience=30)
+  now under the champion's patience=60, completing the regularizer-under-new-schedule
+  sweep
 parent: bed745a0
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null
-status: draft
-verdict: null
-created_at: null
+id: a6d71ade
+status: completed
+verdict: FAILURE
+created_at: '2026-07-13T01:06:55+00:00'
 metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+  primary:
+    name: avg_validation_R2_mean
+    value: 0.810815
+    direction: maximize
 ---
 
-# Trial <id> — <model_name> — <verdict>
+# Trial a6d71ade — AE3dAsymResSeparableV2 — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -41,10 +37,11 @@ architecture change.
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **validation_R2_mean per run:** 09db3811: 0.810815
+- **avg_validation_R2_mean:** 0.810815
+- **delta_vs_champion** (display only): -0.004017
+- **validation_MSE_mean** (mean, non-decisional): 142.384888
+- **MLflow Run IDs:** 09db381174c041afa925483db972ef29
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
