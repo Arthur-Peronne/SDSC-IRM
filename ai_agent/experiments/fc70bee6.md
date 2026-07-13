@@ -42,8 +42,12 @@ patience=50, latent_dimensions=8, seed=0.
 - **MLflow Run IDs:** 0c1b5365013544bd97315c799983675b
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Best epoch 43, early stopping at 93. Val loss (0.000640) mid-range, no
+instability (std 0.0706 normal). Unremarkable run.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Baseline now n=3: {0.797717, 0.744314, 0.781888}, mean=0.7746, std≈0.0274 — very
+close in both mean and spread to the champion's n=6 (0.7817, std≈0.0238). The two
+distributions are looking increasingly like the same distribution, reinforcing
+the earlier inconclusive verdict on noise_std. Continuing to n=6 for the baseline
+(3 more replicates) to finalize this comparison properly.
