@@ -1,25 +1,21 @@
 ---
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
 model_name: AE3dAsymResSeparableV2
-summary: "Control replicate #3 — exact champion config again, given the surprisingly wide spread (0.8148/0.8050/0.7396) seen in the first two replicates, to firm up the variance estimate with a 4-point sample"
+summary: 'Control replicate #3 — exact champion config again, given the surprisingly
+  wide spread (0.8148/0.8050/0.7396) seen in the first two replicates, to firm up
+  the variance estimate with a 4-point sample'
 parent: bed745a0
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null
-status: draft
-verdict: null
-created_at: null
+id: bc1bf3de
+status: completed
+verdict: FAILURE
+created_at: '2026-07-13T02:07:56+00:00'
 metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+  primary:
+    name: avg_validation_R2_mean
+    value: 0.778275
+    direction: maximize
 ---
 
-# Trial <id> — <model_name> — <verdict>
+# Trial bc1bf3de — AE3dAsymResSeparableV2 — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -42,10 +38,11 @@ change.
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **validation_R2_mean per run:** 3b275ecf: 0.778275
+- **avg_validation_R2_mean:** 0.778275
+- **delta_vs_champion** (display only): -0.036557
+- **validation_MSE_mean** (mean, non-decisional): 168.936478
+- **MLflow Run IDs:** 3b275ecfd16541489e33ee6a751da99a
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
