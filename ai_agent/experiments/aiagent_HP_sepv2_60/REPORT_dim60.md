@@ -213,6 +213,23 @@ budget than it received.
 
 ---
 
+## Optimal hyperparameters for latent_dim=60
+
+| Hyperparameter | Value |
+|---|---|
+| `lr` | `6e-4` |
+| `weight_decay` | `0` |
+| `dropout_rate` | `0` |
+| `noise_std` | `0.0001` |
+| `patience` | `50` |
+
+Champion trial `bc589070`, `avg_validation_R2_mean = 0.8148`. Gain vs baseline
+(+0.163) is large and robust, well above the ~0.03-0.04 R² noise floor
+characterized in §6 — the strongest-supported recommendation of the three
+latent-dim campaigns.
+
+---
+
 ## Traceability
 
 All trials are on branch `agent-ae-opti`, one commit per step (lock input → result
