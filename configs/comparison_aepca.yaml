@@ -33,8 +33,8 @@ series:
   - model_name: AE3dAsymResSeparableV2
     experiment_tag: optuna_sepv2
   
-  # - model_name: AE3dAsymResSeparableV2
-  #   experiment_tag: aiagentHP_sepv2
+  - model_name: AE3dAsymResSeparableV2
+    experiment_tag: aiagentHP_sepv2
   
   - model_name: PCA
     experiment_tag: baseline

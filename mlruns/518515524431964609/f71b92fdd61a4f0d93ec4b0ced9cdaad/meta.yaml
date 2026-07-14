@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-arthur-project-1/mlruns/518515524431964609/f71b92fdd61a4f0d93ec4b0ced9cdaad/artifacts
+end_time: 1784033494769
+entry_point_name: ''
+experiment_id: '518515524431964609'
+lifecycle_stage: active
+run_id: f71b92fdd61a4f0d93ec4b0ced9cdaad
+run_name: regression_pca_100patients_split2_group_random_forest_pca_split2_rfo
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1784033480488
+status: 3
+tags: []
+user_id: renku

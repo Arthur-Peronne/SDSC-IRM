@@ -290,6 +290,7 @@ def _run_pca_source(cfg, Y_full, client):
         Y_test  = (Y_test  == bin_val).astype(int)
 
     # ── Classifier kwargs (dispatch logistic / RF / XGB) ─────────────────────
+    classifier_type = cfg.get("classifier_type", "logistic")  
     clf_kwargs = _get_classifier_kwargs(cfg, use_both_frames=use_both_frames)
 
     # ── Sweep over latent dims ────────────────────────────────────────────────
@@ -312,6 +313,8 @@ def _run_pca_source(cfg, Y_full, client):
             cumvar = float(np.sum(pca.explained_variance_ratio_[:n_pc]))
             Xtr    = X_train_pca[:, :n_pc]
             Xte    = X_test_pca[:,  :n_pc]
+
+            print(f"  → fitting n_pc={n_pc} with {classifier_type}...") 
 
             _, _, r_train, r_test = _run_one_step(
                 Xtr, Xte, Y_train, Y_test,

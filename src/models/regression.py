@@ -87,12 +87,43 @@ def fit_random_forest(X_train: np.ndarray, Y_train: np.ndarray,
     return clf
 
 
+class _XGBClassifierWithStringLabels:
+    """
+    Thin wrapper around XGBClassifier that handles string labels transparently.
+
+    XGBoost requires integer targets; this wrapper encodes labels to integers
+    before fitting and exposes .classes_, .predict(), .predict_proba() in the
+    same way as RandomForestClassifier and LogisticRegression, so that
+    eval_classifier_* works without any changes in calling code.
+    """
+
+    def __init__(self, **xgb_kwargs):
+        from sklearn.preprocessing import LabelEncoder
+        self._clf = XGBClassifier(**xgb_kwargs)
+        self._le  = LabelEncoder()
+
+    def fit(self, X, Y):
+        Y_encoded = self._le.fit_transform(Y)
+        self._clf.fit(X, Y_encoded)
+        return self
+
+    @property
+    def classes_(self):
+        return self._le.classes_       # e.g. array(['DCM', 'HCM', 'MINF', 'NOR', 'RV'])
+
+    def predict(self, X):
+        return self._le.inverse_transform(self._clf.predict(X))
+
+    def predict_proba(self, X):
+        return self._clf.predict_proba(X)
+
+
 def fit_xgboost(X_train: np.ndarray, Y_train: np.ndarray,
                 n_estimators: int = 300,
                 max_depth: int = 4,
                 learning_rate: float = 0.05,
                 subsample: float = 0.8,
-                colsample_bytree: float = 0.8) -> XGBClassifier:
+                colsample_bytree: float = 0.8) -> _XGBClassifierWithStringLabels:
     """
     Train an XGBoost classifier (multiclass or binary).
 
@@ -113,13 +144,13 @@ def fit_xgboost(X_train: np.ndarray, Y_train: np.ndarray,
         Fraction of features used per boosting round (column subsampling).
         Similar to the random feature selection in Random Forests.
 
-    Notes
-    -----
-    XGBoost uses label-encoded integer targets internally. String labels (e.g. "DCM")
-    are handled transparently via the label encoder embedded in XGBClassifier when
-    use_label_encoder is not set. The .classes_ attribute mirrors sklearn convention.
+    Returns
+    -------
+    _XGBClassifierWithStringLabels
+        Wrapper exposing .classes_, .predict(), .predict_proba() with string labels,
+        compatible with eval_classifier_binary and eval_classifier_multiclass.
     """
-    clf = XGBClassifier(
+    clf = _XGBClassifierWithStringLabels(
         n_estimators=n_estimators,
         max_depth=max_depth,
         learning_rate=learning_rate,
@@ -127,8 +158,8 @@ def fit_xgboost(X_train: np.ndarray, Y_train: np.ndarray,
         colsample_bytree=colsample_bytree,
         random_state=42,
         n_jobs=-1,
-        eval_metric="mlogloss",     # suppresses the default warning
-        verbosity=0,                # silent
+        eval_metric="mlogloss",
+        verbosity=0,
     )
     clf.fit(X_train, Y_train)
     return clf

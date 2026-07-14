@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-arthur-project-1/mlruns/518515524431964609/a2a29bc2c554405db271c5328016fe91/artifacts
+end_time: 1784032299578
+entry_point_name: ''
+experiment_id: '518515524431964609'
+lifecycle_stage: active
+run_id: a2a29bc2c554405db271c5328016fe91
+run_name: regression_pca_100patients_splitdefault_group_xgboost_pca_splitnull_xgb
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1784030951717
+status: 3
+tags: []
+user_id: renku

@@ -1,0 +1,78 @@
+# configs/regression.yaml
+# Parameters for run_regression.py
+# Modify this file, then run: python scripts/run_regression.py
+# MLflow archives this file as artifact at each run.
+
+# ── Tracking ──────────────────────────────────────────────────────────────────
+experiment_tag: "pca_split1_fo" 
+
+# ── Target variable ───────────────────────────────────────────────────────────
+y_name: "group"                  # "group", "height", "weight"
+group_binary: false              # true = binary (one class vs rest); only if y_name = "group"
+group_bin_value: "NOR"           # used only if group_binary = true; "DCM", "HCM", "MINF", "NOR", "RV"
+
+# ── Data split ────────────────────────────────────────────────────────────────
+n_train: 100                     # number of training patients (n_test = 150 - n_train)
+special_split: "split1"              # null = sequential "splitdefault"; "split42" = seeded random
+
+# ── Classifier ────────────────────────────────────────────────────────────────
+classifier_type: "random_forest" # "logistic" | "random_forest" | "xgboost"
+
+# Logistic regression hyperparameters (used only if classifier_type = "logistic")
+logistic_C: null                 # null = auto (1.0, or 0.5 if use_both_frames)
+
+# Random Forest hyperparameters (used only if classifier_type = "random_forest")
+random_forest:
+  n_estimators: 300              # number of trees; more = more robust, diminishing returns above ~300
+  max_depth: null                # null = unlimited; try 5-15 if overfitting observed on small n_train
+  min_samples_leaf: 1            # increase to 2-5 to regularise on small datasets
+ 
+# XGBoost hyperparameters (used only if classifier_type = "xgboost")
+xgboost:
+  n_estimators: 50              # number of boosting rounds
+  max_depth: 4                   # keep low (3-6) on small datasets
+  learning_rate: 0.05            # lower = more robust; pair with high n_estimators
+  subsample: 0.8                 # row subsampling per round (< 1 reduces overfitting)
+  colsample_bytree: 0.8          # feature subsampling per round (< 1 reduces overfitting)
+
+# ── Source (pca or ae) ────────────────────────────────────────────────────────
+source_type: "pca"               # "pca" or "ae"
+
+# ── PCA source (used only if source_type = "pca") ─────────────────────────────
+pca_run_id: "4a6bf38bfaf14eddb04cfbbb61f25d94" # MLflow run_id "" of the pca_spatial run to load 
+latent_dims_list:                # one regression per n_pc
+  - 1
+  - 2
+  - 4
+  - 6
+  - 8
+  - 12
+  - 16
+  - 20
+  - 28
+  - 40
+  - 60 
+  - 80
+  - 100
+  - 120
+  - 160
+  - 200
+
+# ── AE source (used only if source_type = "ae") ───────────────────────────────
+# search_runs() selects all AE runs matching these criteria, grouped by latent_dimensions
+ae_source:
+  model_name: "AE3dFCDeep_VAE"       # model architecture name logged in MLflow
+  experiment_tag: "vae_optuna2"     # experiment_tag param logged in MLflow
+  split_name: "splitdefault"     # split_name param logged in MLflow
+  params_filter: {}              # optional extra MLflow param filters (e.g. frame_tag: "ED")
+
+# ── LOAD / plot-only mode ──────────────────────────────────────────────────────
+plot_only: false                 # true = skip regression, reload metrics from load_run_id and replot
+load_run_id: "65c6312b3ff14a9f87952109452fd7d0" # MLflow run_id of a previous regression run (used if plot_only = true)
+
+# ── Plots ──────────────────────────────────────────────────────────────────────
+n_pc_confusion: 20               # n_pc (or latent_dim) for which to plot the confusion matrix
+
+# ── Compare mode (averaged confusion matrix across splits) ────────────────────
+compare_mode: false
+load_run_ids: ["a727f062adc149e4a65f7299db8528dd","f6673a190ff44f37b0e240ef93f1b38d","65c6312b3ff14a9f87952109452fd7d0"]                 # list of regression run_ids to average (must have y_name="group", non-binary)
