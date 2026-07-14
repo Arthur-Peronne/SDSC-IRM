@@ -18,24 +18,42 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 AE3dAsymResSeparableV2:
-  dim_8: # From 318366704909602552/3ae2a62d049141ffb2e8504972325de2
-    lr: 3.854772886344723e-05
-    weight_decay: 6.71580872374353e-08
-    dropout_rate: 0.26774249628288005
-    noise_std: 0.0014927173142226585
-    patience: 29
-  dim_60: # From 318366704909602552/82e470fb529249e0b0f7d9d465ffe661
-    lr: 1.646103945130924e-05
-    weight_decay: 5.302221339138936e-06
-    dropout_rate: 0.1360014680817604
-    noise_std: 0.0028108512715691865
-    patience: 42
-  dim_240: # From 318366704909602552/e6b5f08074924236bb76d9006d5ba94b
-    lr: 5.8482319517158025e-05
-    weight_decay: 3.443487676670848e-06
-    dropout_rate: 0.07234677265330755
-    noise_std: 0.00017707924362405834
-    patience: 20
+  # dim_8: # From 318366704909602552/3ae2a62d049141ffb2e8504972325de2
+  #   lr: 3.854772886344723e-05
+  #   weight_decay: 6.71580872374353e-08
+  #   dropout_rate: 0.26774249628288005
+  #   noise_std: 0.0014927173142226585
+  #   patience: 29
+  dim_8: # From AI agent: ai_agent/experiments/aiagent_HP_sepv2_8
+    lr: 7e-04
+    weight_decay: 0
+    dropout_rate: 0
+    noise_std: 0
+    patience: 50
+  # dim_60: # From 318366704909602552/82e470fb529249e0b0f7d9d465ffe661
+  #   lr: 1.646103945130924e-05
+  #   weight_decay: 5.302221339138936e-06
+  #   dropout_rate: 0.1360014680817604
+  #   noise_std: 0.0028108512715691865
+  #   patience: 42
+  dim_60: # From AI agent: ai_agent/experiments/aiagent_HP_sepv2_60
+    lr: 6e-04
+    weight_decay: 0
+    dropout_rate: 0
+    noise_std: 0.0001
+    patience: 50
+  # dim_240: # From 318366704909602552/e6b5f08074924236bb76d9006d5ba94b
+  #   lr: 5.8482319517158025e-05
+  #   weight_decay: 3.443487676670848e-06
+  #   dropout_rate: 0.07234677265330755
+  #   noise_std: 0.00017707924362405834
+  #   patience: 20
+  dim_240: # From AI agent: ai_agent/experiments/aiagent_HP_sepv2_60
+    lr: 8e-04
+    weight_decay: 0
+    dropout_rate: 0.05
+    noise_std: 0
+    patience: 30
 
 AE3dFCDeep: # From 318366704909602552/e29079b82775483eb83fd21a567b429e
   dim_120:
