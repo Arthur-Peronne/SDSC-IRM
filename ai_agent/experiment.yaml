@@ -13,7 +13,7 @@
 #     Never change the metric mid-campaign.
 # =============================================================================
 
-experiment_name: "ai_hpopti_sepv2_dim60"
+experiment_name: "ai_hpopti_sepv2_dim8"
 
 # -- 1. Scope: what the agent may modify (ALLOWLIST) --------------------------
 # Any change to a file outside this list (and outside the trial record dir) => the

@@ -1,0 +1,66 @@
+# configs/autoencoder.yaml
+# Parameters for run_autoencoder.py
+# Modify this file, then run: python scripts/run_autoencoder.py
+# MLflow archives this file as artifact at each run.
+
+# ── Tracking ──────────────────────────────────────────────────────────────────
+experiment_tag: "ai_hpopti" # "baseline_aiarchi"
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+source_folder: "registered_frames"
+use_both_frames: true            # true = ED+ES, false = use frame_type below
+frame_type: "ED"                 # "ED" or "ES" — used only if use_both_frames = false
+image_roi_only: true
+mask_ys: false                   # apply ground-truth mask
+mask_bin: false                  # use binary mask
+recalculate_x: false
+cache_folder: "X_vectors"        # subfolder in processed_images/ for cached .npy arrays
+
+# ── Split ────────────────────────────────────────────────────────────────
+n_train: 100
+n_val: 20
+n_test: 30
+special_split: null              # null = sequential "splitdefault"; e.g. "split42" for seeded
+stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
+
+# ── Reproducibility ─────────────────────────────────────────────────────────
+seed: 0  # global RNG seed (torch/numpy/random), logged to MLflow. Set to null for a non-reproducible (random) run.
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+model_name: "AE3dAsymResSeparableV2"
+latent_dimensions: 8
+multiple_models_and_dims: false  # true = loop over models_list × latdim_list
+models_list: ["AE3dAsymResidualV4", "AE3dAsymResSeparable", "AE3dAsymResSeparableV2"]
+latdim_list: [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
+
+# ── Training ──────────────────────────────────────────────────────────────────
+recalculate_ae: true             # false = load existing model (requires load_run_id)
+load_run_id: null                # MLflow run ID — required when recalculate_ae: false
+# (non-optimized hyperparameters)
+n_epochs: 200                    # max epochs (early stopping triggers earlier if n_val > 0)
+batch_size: 1
+patience_scheduler: null         # null = patience // 5
+# (optimized hyperparameters)
+hyper_automatic_values: false # if True, goes to ae_HPforarchis.yaml. If False, takes values below:
+lr: 7e-4                        # Learning rate; AEoptuna: 1e-5, VAEoptuna: 5e-5
+weight_decay: 0.0            # L2 regularisation; AEoptuna: 6.47e-6, VAEoptuna: 1e-7
+dropout_rate: 0.0                # 0.0 for AE3dConv and AE3dLinear; AEoptuna: 0.221
+noise_std: 0.0                   # 0.0 = no denoising; AEoptuna: 0.002
+patience: 50                     # early stopping patience (used only if n_val > 0), VAEoptuna: 27
+
+# ── VAE parameters (AE3dFCDeep_VAE only) ──────────────────────────────────────
+beta: 0.00022                    # KL weight in VAE loss, VAEoptuna: 0.00022
+beta_warmup_epochs: 41           # epochs to linearly ramp beta from 0 to target value, VAEoptuna: 41
+
+# ── Reconstruction metrics ────────────────────────────────────────────────────
+compute_metrics: true
+
+# ── Plots : reconstruction ────────────────────────────────────────────────────
+plot_reconstruction: false
+recons_auto: false               # true = auto-select good/medium/bad patients (from val/test only)
+patients_torecons_manual:
+  - [1, "ED"]
+  - [30, "ES"]
+  - [110, "ED"]
+  - [130, "ES"]
+  - [145, "ED"]
