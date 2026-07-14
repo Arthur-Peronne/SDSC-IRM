@@ -36,8 +36,9 @@ dropout_rate=0.0, noise_std=0.0, patience=50, latent_dimensions=8, seed=0.
 - **MLflow Run IDs:** e24c72a7562b429eb1491591cf8a0056
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Best epoch 52, early stopping at 102. Val loss (0.000611) normal, no instability.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+lr=7e-4 now n=9: mean≈0.7976, spread still tight and consistent with the running
+estimate. 4 trials of budget remain; continuing replication to the campaign's
+budget limit.
