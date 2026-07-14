@@ -307,10 +307,22 @@ def _interpolate(model_name: str, latent_dim: int, dim_map: dict[int, dict]) -> 
 
         v_lower = lower_hp[key]
         v_upper = upper_hp[key]
+        v_lower = float(v_lower)
+        v_upper = float(v_upper)
 
         if key in _HP_LOG_SCALE:
             # log-log: interpolate log(hp) linearly in log(dim)
-            interp = math.exp(math.log(v_lower) + t * (math.log(v_upper) - math.log(v_lower)))
+            # Handle zero values: log(0) is undefined
+            if v_lower == 0.0 and v_upper == 0.0:
+                interp = 0.0
+            elif v_lower == 0.0:
+                interp = v_upper * t  # ramp from 0 to v_upper
+            elif v_upper == 0.0:
+                interp = v_lower * (1.0 - t)  # ramp from v_lower to 0
+            else:
+                interp = math.exp(
+                    math.log(v_lower) + t * (math.log(v_upper) - math.log(v_lower))
+                )
         else:
             # log-linear: interpolate hp linearly in log(dim)
             interp = v_lower + t * (v_upper - v_lower)
