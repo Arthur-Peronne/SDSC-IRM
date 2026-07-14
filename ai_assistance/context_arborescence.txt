@@ -1,9 +1,9 @@
 ======================================================================
 PROJECT ARBORESCENCE WITH MODULE DESCRIPTIONS
-Root : /home/renku/work/SDSC-IRM
+Root : /home/renku/work/SDSC-arthur-project-1
 ======================================================================
 
-SDSC-IRM/
+SDSC-arthur-project-1/
 ├── ai_agent/
 │   ├── ai_agent_structure_obsolete/
 │   │   ├── old_compaigns/
@@ -73,8 +73,248 @@ SDSC-IRM/
 │   │   ├── EXPERIMENT_EXISTING.md
 │   │   └── SUMMARY.md
 │   ├── experiments/
+│   │   ├── aiagent_HP_sepv2_240/
+│   │   │   ├── 04d1d849.console.log
+│   │   │   ├── 04d1d849.md
+│   │   │   ├── 0afa2bc6.console.log
+│   │   │   ├── 0afa2bc6.md
+│   │   │   ├── 0d8678eb.console.log
+│   │   │   ├── 0d8678eb.md
+│   │   │   ├── 11530c52.console.log
+│   │   │   ├── 11530c52.md
+│   │   │   ├── 185cf97f.console.log
+│   │   │   ├── 185cf97f.md
+│   │   │   ├── 1a7b6adf.console.log
+│   │   │   ├── 1a7b6adf.md
+│   │   │   ├── 1f00c6a2.console.log
+│   │   │   ├── 1f00c6a2.md
+│   │   │   ├── 274ff200.console.log
+│   │   │   ├── 274ff200.md
+│   │   │   ├── 3087e561.console.log
+│   │   │   ├── 3087e561.md
+│   │   │   ├── 3819dd6a.console.log
+│   │   │   ├── 3819dd6a.md
+│   │   │   ├── 3e07b08d.console.log
+│   │   │   ├── 3e07b08d.md
+│   │   │   ├── 3faa0f66.console.log
+│   │   │   ├── 3faa0f66.md
+│   │   │   ├── 4bd7e912.console.log
+│   │   │   ├── 4bd7e912.md
+│   │   │   ├── 4c7c2c19.console.log
+│   │   │   ├── 4c7c2c19.md
+│   │   │   ├── 5033c15b.console.log
+│   │   │   ├── 5033c15b.md
+│   │   │   ├── 571f33ab.console.log
+│   │   │   ├── 571f33ab.md
+│   │   │   ├── 57e78778.console.log
+│   │   │   ├── 57e78778.md
+│   │   │   ├── 59ff727f.console.log
+│   │   │   ├── 59ff727f.md
+│   │   │   ├── 5fb49bb5.console.log
+│   │   │   ├── 5fb49bb5.md
+│   │   │   ├── 605558af.console.log
+│   │   │   ├── 605558af.md
+│   │   │   ├── 6a8a38d6.console.log
+│   │   │   ├── 6a8a38d6.md
+│   │   │   ├── 7c0f5295.console.log
+│   │   │   ├── 7c0f5295.md
+│   │   │   ├── 8698c6f3.console.log
+│   │   │   ├── 8698c6f3.md
+│   │   │   ├── 89f60691.console.log
+│   │   │   ├── 89f60691.md
+│   │   │   ├── 93b15034.console.log
+│   │   │   ├── 93b15034.md
+│   │   │   ├── 94b2bb2c.console.log
+│   │   │   ├── 94b2bb2c.md
+│   │   │   ├── 98ac26c2.console.log
+│   │   │   ├── 98ac26c2.md
+│   │   │   ├── 9a54d15d.console.log
+│   │   │   ├── 9a54d15d.md
+│   │   │   ├── REPORT_dim240.md
+│   │   │   ├── bb2f2c0f.console.log
+│   │   │   ├── bb2f2c0f.md
+│   │   │   ├── d132fbfc.console.log
+│   │   │   ├── d132fbfc.md
+│   │   │   ├── d78769c1.console.log
+│   │   │   ├── d78769c1.md
+│   │   │   ├── de0f5947.console.log
+│   │   │   ├── de0f5947.md
+│   │   │   ├── e44c7fa6.console.log
+│   │   │   ├── e44c7fa6.md
+│   │   │   ├── e8857e8d.console.log
+│   │   │   ├── e8857e8d.md
+│   │   │   ├── f23a08a7.console.log
+│   │   │   ├── f23a08a7.md
+│   │   │   ├── f5873a7c.console.log
+│   │   │   ├── f5873a7c.md
+│   │   │   └── trial_log.csv
+│   │   ├── aiagent_HP_sepv2_60/
+│   │   │   ├── 03af338b.console.log
+│   │   │   ├── 03af338b.md
+│   │   │   ├── 09f19765.console.log
+│   │   │   ├── 09f19765.md
+│   │   │   ├── 0d7092de.console.log
+│   │   │   ├── 0d7092de.md
+│   │   │   ├── 10c18786.console.log
+│   │   │   ├── 10c18786.md
+│   │   │   ├── 12d43919.console.log
+│   │   │   ├── 12d43919.md
+│   │   │   ├── 1f74ef7a.console.log
+│   │   │   ├── 1f74ef7a.md
+│   │   │   ├── 20fa5d8e.console.log
+│   │   │   ├── 20fa5d8e.md
+│   │   │   ├── 2656977c.console.log
+│   │   │   ├── 2656977c.md
+│   │   │   ├── 2b46a997.console.log
+│   │   │   ├── 2b46a997.md
+│   │   │   ├── 319dacea.console.log
+│   │   │   ├── 319dacea.md
+│   │   │   ├── 3fbb7661.console.log
+│   │   │   ├── 3fbb7661.md
+│   │   │   ├── 3fd5be93.console.log
+│   │   │   ├── 3fd5be93.md
+│   │   │   ├── 47e474ef.console.log
+│   │   │   ├── 47e474ef.md
+│   │   │   ├── 5722444c.console.log
+│   │   │   ├── 5722444c.md
+│   │   │   ├── 59547f27.console.log
+│   │   │   ├── 59547f27.md
+│   │   │   ├── 69832c74.console.log
+│   │   │   ├── 69832c74.md
+│   │   │   ├── 72680553.console.log
+│   │   │   ├── 72680553.md
+│   │   │   ├── 75165602.console.log
+│   │   │   ├── 75165602.md
+│   │   │   ├── 756da5dc.console.log
+│   │   │   ├── 756da5dc.md
+│   │   │   ├── 7ecd5a5d.console.log
+│   │   │   ├── 7ecd5a5d.md
+│   │   │   ├── 8176a35d.console.log
+│   │   │   ├── 8176a35d.md
+│   │   │   ├── 8663368c.console.log
+│   │   │   ├── 8663368c.md
+│   │   │   ├── 889f2cd0.console.log
+│   │   │   ├── 889f2cd0.md
+│   │   │   ├── 8c0e43cd.console.log
+│   │   │   ├── 8c0e43cd.md
+│   │   │   ├── 8f83ab81.console.log
+│   │   │   ├── 8f83ab81.md
+│   │   │   ├── 97529fed.console.log
+│   │   │   ├── 97529fed.md
+│   │   │   ├── 97d513a3.console.log
+│   │   │   ├── 97d513a3.md
+│   │   │   ├── REPORT_dim60.md
+│   │   │   ├── a1cf856e.console.log
+│   │   │   ├── a1cf856e.md
+│   │   │   ├── a238f026.console.log
+│   │   │   ├── a238f026.md
+│   │   │   ├── a6d71ade.console.log
+│   │   │   ├── a6d71ade.md
+│   │   │   ├── af378e29.console.log
+│   │   │   ├── af378e29.md
+│   │   │   ├── b93971e6.console.log
+│   │   │   ├── b93971e6.md
+│   │   │   ├── bc1bf3de.console.log
+│   │   │   ├── bc1bf3de.md
+│   │   │   ├── bc589070.console.log
+│   │   │   ├── bc589070.md
+│   │   │   ├── bed745a0.console.log
+│   │   │   ├── bed745a0.md
+│   │   │   ├── c0f04e94.console.log
+│   │   │   ├── c0f04e94.md
+│   │   │   ├── d9254935.console.log
+│   │   │   ├── d9254935.md
+│   │   │   ├── dee94644.console.log
+│   │   │   ├── dee94644.md
+│   │   │   ├── e9ba92a6.console.log
+│   │   │   ├── e9ba92a6.md
+│   │   │   ├── f0c8feaf.console.log
+│   │   │   ├── f0c8feaf.md
+│   │   │   └── trial_log.csv
+│   │   ├── aiagent_HP_sepv2_8/
+│   │   │   ├── 00b6f07e.console.log
+│   │   │   ├── 00b6f07e.md
+│   │   │   ├── 02343abb.console.log
+│   │   │   ├── 02343abb.md
+│   │   │   ├── 05a60fdb.console.log
+│   │   │   ├── 05a60fdb.md
+│   │   │   ├── 0d2e0fa2.console.log
+│   │   │   ├── 0d2e0fa2.md
+│   │   │   ├── 0f0e4aef.console.log
+│   │   │   ├── 0f0e4aef.md
+│   │   │   ├── 1181ebc7.console.log
+│   │   │   ├── 1181ebc7.md
+│   │   │   ├── 11ca0936.console.log
+│   │   │   ├── 11ca0936.md
+│   │   │   ├── 181a7348.console.log
+│   │   │   ├── 181a7348.md
+│   │   │   ├── 1a3bea48.console.log
+│   │   │   ├── 1a3bea48.md
+│   │   │   ├── 1d1ae9f0.console.log
+│   │   │   ├── 1d1ae9f0.md
+│   │   │   ├── 360b6f1c.console.log
+│   │   │   ├── 360b6f1c.md
+│   │   │   ├── 382fd68d.console.log
+│   │   │   ├── 382fd68d.md
+│   │   │   ├── 467c6c4e.console.log
+│   │   │   ├── 467c6c4e.md
+│   │   │   ├── 4c5f6a7c.console.log
+│   │   │   ├── 4c5f6a7c.md
+│   │   │   ├── 4e041853.console.log
+│   │   │   ├── 4e041853.md
+│   │   │   ├── 4fb3dbd8.console.log
+│   │   │   ├── 4fb3dbd8.md
+│   │   │   ├── 52b3d623.console.log
+│   │   │   ├── 52b3d623.md
+│   │   │   ├── 52ed6450.console.log
+│   │   │   ├── 52ed6450.md
+│   │   │   ├── 598feff8.console.log
+│   │   │   ├── 598feff8.md
+│   │   │   ├── 5caada68.console.log
+│   │   │   ├── 5caada68.md
+│   │   │   ├── 5eb7c63b.console.log
+│   │   │   ├── 5eb7c63b.md
+│   │   │   ├── 708b081f.console.log
+│   │   │   ├── 708b081f.md
+│   │   │   ├── 71508734.console.log
+│   │   │   ├── 71508734.md
+│   │   │   ├── 925e559d.console.log
+│   │   │   ├── 925e559d.md
+│   │   │   ├── 95ede5a9.console.log
+│   │   │   ├── 95ede5a9.md
+│   │   │   ├── REPORT_dim8.md
+│   │   │   ├── a3f4a280.console.log
+│   │   │   ├── a3f4a280.md
+│   │   │   ├── a4292c17.console.log
+│   │   │   ├── a4292c17.md
+│   │   │   ├── ae6dc008.console.log
+│   │   │   ├── ae6dc008.md
+│   │   │   ├── aed12c65.console.log
+│   │   │   ├── aed12c65.md
+│   │   │   ├── ceba496b.console.log
+│   │   │   ├── ceba496b.md
+│   │   │   ├── d0dda657.console.log
+│   │   │   ├── d0dda657.md
+│   │   │   ├── d236b491.console.log
+│   │   │   ├── d236b491.md
+│   │   │   ├── d84743ed.console.log
+│   │   │   ├── d84743ed.md
+│   │   │   ├── da8aad93.console.log
+│   │   │   ├── da8aad93.md
+│   │   │   ├── ddb7b5b3.console.log
+│   │   │   ├── ddb7b5b3.md
+│   │   │   ├── de6fd0e4.console.log
+│   │   │   ├── de6fd0e4.md
+│   │   │   ├── e5a91532.console.log
+│   │   │   ├── e5a91532.md
+│   │   │   ├── e70ad5c2.console.log
+│   │   │   ├── e70ad5c2.md
+│   │   │   ├── efccddf2.console.log
+│   │   │   ├── efccddf2.md
+│   │   │   ├── fc70bee6.console.log
+│   │   │   ├── fc70bee6.md
+│   │   │   └── trial_log.csv
 │   │   └── TEMPLATE.md
-│   ├── AGENT.md
 │   ├── SETUP.md
 │   ├── driver.py  # driver.py -- the deterministic engine of the autonomous research loop.
 │   ├── experiment.yaml
@@ -85,6 +325,7 @@ SDSC-IRM/
 │   ├── context_code.txt
 │   ├── context_yaml.txt
 │   └── dump_context.py
+├── archive_todelete/
 ├── configs/
 │   ├── ae_HPforarchis.yaml
 │   ├── ae_optuna.yaml
@@ -121,11 +362,6 @@ SDSC-IRM/
 │   ├── run_regression.py  # Regression pipeline on PCA or AE latent representations.
 │   ├── run_visualize.py  # Visualize MRI NIfTI images (raw ACDC or processed).
 │   └── run_visualize_latent.py  # Visualize the latent space of a trained AE or VAE model.
-├── sdsc_arthur_project.egg-info/
-│   ├── PKG-INFO
-│   ├── SOURCES.txt
-│   ├── dependency_links.txt
-│   └── top_level.txt
 ├── src/
 │   ├── data/
 │   │   ├── __init__.py
@@ -164,8 +400,11 @@ SDSC-IRM/
 │   └── tracking.py  # MLflow utilities. All tracking interactions must go through this module.
 ├── CLAUDE.md
 ├── README.md
+├── alldims_sepv2_HPaiagentA.txt
+├── alldims_sepv2_HPaiagentAbis.txt
 ├── pyproject.toml
-└── requirements_locked.txt
+├── requirements_locked.txt
+└── shortcut_AP.txt
 
 ======================================================================
 DETAILED DOCSTRINGS PER FILE
@@ -176,28 +415,41 @@ DETAILED DOCSTRINGS PER FILE
 driver.py -- the deterministic engine of the autonomous research loop.
 
 The AGENT edits code and writes prose; the DRIVER does the mechanical,
-incorruptible part: lock the input, train, read the metric, decide keep/revert
-by a fixed numeric rule, and commit. The agent and the driver NEVER run at the
-same time -- they take turns. The driver takes NO "intelligent" decision.
+incorruptible part: lock the input, train, read the metric, decide the verdict
+by a fixed numeric rule, and commit. Agent and driver take turns; the driver
+takes NO "intelligent" decision.
 
 Turn structure (one trial):
   [agent]  copies experiments/TEMPLATE.md -> experiments/draft.md, edits a file
-           in `mutable`, writes Hypothesis + Implementation + model_name.
-  [driver] python driver.py run [parent_id]   <-- everything below happens here
-             1. scope check (only `mutable` files changed?)
-             2. commit 1 -> freezes input (code + all configs + experiment.yaml),
-                yields commit sha -> computes id -> renames draft.md to <id>.md
-             3. run eval: N trainings over repeat_over (N=1 if null), fixed epochs
-             4. read per-run metrics from MLflow -> aggregate into trial scalar
-             5. compare to champion -> keep or git revert  (deterministic)
-             6. write ## Results into <id>.md + append CSV row
+           in `mutable`, fills Hypothesis / Implementation / model_name / parent.
+  [driver] python ai_agent/driver.py run       <-- everything below happens here
+             0. campaign cap (refuse if ledger already has max_trials rows)
+             1. scope check: only `mutable` files + the trial record changed?
+             2. commit 1 -> freezes input (code + all configs + experiment.yaml);
+                the commit's short sha IS the trial id; draft.md -> <id>.md
+             3. run eval: N trainings over repeat_over (N=1 if null), each run
+                tagged in MLflow with trial_id. ALL-OR-NOTHING: any failing run
+                fails the whole trial.
+             4. read the N runs back BY TAG, aggregate -> one decisional scalar
+             5. compare to champion -> BASELINE / CHAMPION / CANDIDATE / FAILURE
+             6. write ## Results + frontmatter into <id>.md, append CSV row
              7. commit 2 -> freezes output
   [agent]  reads result, writes Training Dynamics + Conclusion.
 
-SKELETON: functions that touch project specifics (MLflow field names, git
-plumbing, how the training script receives repeat overrides) are marked TODO.
-Everything else is driven by experiment.yaml, so the same driver works on any
-project -- a user edits only the YAML + program.md.
+Two axes, kept separate (never conflated):
+  status  (lifecycle, lowercase) : draft -> completed | failed
+  verdict (judgement, UPPERCASE) : BASELINE | CHAMPION | CANDIDATE | FAILURE
+"failed" = a MECHANICAL failure (crash, NaN, wrong run count); the run never
+produced a comparable metric. "FAILURE" = the run completed fine but lost to the
+champion. Both revert the mutable code; only the reason and the status differ.
+
+A FAILURE / failed trial also has its MLflow runs purged (identified by the
+trial_id tag) before the output commit, so its models never enter git. Its
+<id>.md record, CSV row and <id>.console.log are kept as the scientific trace.
+
+The training script must expose two hooks (see the two `HOOK` comments below):
+  --trial-id <id>     set an MLflow tag  trial_id=<id>  on the run
+  --set key=value     override cfg[key] in memory (the on-disk YAML is untouched)
 """
 
 # experiments/pca_testiris.py
@@ -236,9 +488,22 @@ Results (model + metrics + plots) are tracked in MLflow under experiment "autoen
 
 Usage:
     python scripts/run_autoencoder.py
+    python scripts/run_autoencoder.py --set latent_dimensions=60 --set seed=1
+    python scripts/run_autoencoder.py --trial-id a3f9c1e --set latent_dimensions=8
 
 LOAD mode: set recalculate_ae: false and load_run_id: <mlflow_run_id> in the YAML.
 CALC mode: set recalculate_ae: true.
+
+CLI overrides (used by ai_agent/driver.py; harmless when run by hand):
+  --set KEY=VALUE   override one existing key of autoencoder.yaml IN MEMORY
+                    (repeatable). The on-disk YAML is never modified; the MLflow
+                    param logged is the overridden value, so it stays faithful.
+  --trial-id ID     tag every MLflow run of this invocation with trial_id=ID, so
+                    the driver can read back exactly its own runs (never by recency).
+
+Reproducibility:
+  `seed` in autoencoder.yaml seeds torch/numpy/random before training. Override
+  per run with --set seed=N (the driver uses this for repeat_over: {seed: [...]}).
 
 Hyperparameter resolution (hyper_automatic_values in autoencoder.yaml):
   false → values taken directly from autoencoder.yaml
