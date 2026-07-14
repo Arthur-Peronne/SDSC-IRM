@@ -36,8 +36,9 @@ dropout_rate=0.0, noise_std=0.0, patience=50, latent_dimensions=8, seed=0.
 - **MLflow Run IDs:** adde968d676b464ca0b024aa4778ccd3
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Best epoch 57, early stopping at 107. Val loss (0.000639) on the lower-quality
+end of the range but std (0.0818) normal, no instability.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+lr=7e-4 now n=11: mean=0.7947 — still comfortably within the well-characterized
+range, no new outliers. 2 trials of budget remain.
