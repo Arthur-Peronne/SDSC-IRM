@@ -6,6 +6,7 @@ and metadata prediction. No file I/O — all results returned as dicts.
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import (
     accuracy_score,
@@ -17,16 +18,7 @@ from sklearn.metrics import (
     mean_squared_error,
     mean_absolute_error,
 )
-
-
-# def n_pc_for_variance(pca, threshold: float) -> int:
-#     """
-#     Return the number of PCs needed to reach a given cumulative explained
-#     variance threshold.  threshold >= 1.0 (e.g. 2.0) returns all components.
-#     """
-#     cumulative = np.cumsum(pca.explained_variance_ratio_)
-#     idx = np.where(cumulative >= threshold)[0]
-#     return int(len(cumulative)) if len(idx) == 0 else int(idx[0] + 1)
+from xgboost import XGBClassifier
 
 
 def fit_scaler(X_train: np.ndarray) -> StandardScaler:
@@ -58,6 +50,90 @@ def fit_logistic(X_train: np.ndarray, Y_train: np.ndarray,
     return clf
 
 
+def fit_random_forest(X_train: np.ndarray, Y_train: np.ndarray,
+                      n_estimators: int = 300,
+                      max_depth: int | None = None,
+                      min_samples_leaf: int = 1) -> RandomForestClassifier:
+    """
+    Train a Random Forest classifier (multiclass or binary).
+
+    Parameters
+    ----------
+    X_train : np.ndarray, shape (n, n_features)
+    Y_train : np.ndarray, shape (n,)
+    n_estimators : int
+        Number of trees. 300 is a safe default; more rarely hurts but slows training.
+    max_depth : int or None
+        Maximum tree depth. None = trees grow until leaves are pure (may overfit
+        on small datasets; try 5–15 if overfitting is observed).
+    min_samples_leaf : int
+        Minimum samples per leaf. Increasing this (e.g. 2–5) regularises the forest
+        on small datasets like ACDC (n=100 train).
+
+    Notes
+    -----
+    StandardScaler is NOT required for Random Forest (invariant to feature scaling),
+    but the scaler is still applied upstream in _run_one_step for consistency.
+    Feature importances are available on the returned object via .feature_importances_.
+    """
+    clf = RandomForestClassifier(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        min_samples_leaf=min_samples_leaf,
+        random_state=42,
+        n_jobs=-1,          # use all available CPU cores
+    )
+    clf.fit(X_train, Y_train)
+    return clf
+
+
+def fit_xgboost(X_train: np.ndarray, Y_train: np.ndarray,
+                n_estimators: int = 300,
+                max_depth: int = 4,
+                learning_rate: float = 0.05,
+                subsample: float = 0.8,
+                colsample_bytree: float = 0.8) -> XGBClassifier:
+    """
+    Train an XGBoost classifier (multiclass or binary).
+
+    Parameters
+    ----------
+    X_train : np.ndarray, shape (n, n_features)
+    Y_train : np.ndarray, shape (n,)
+    n_estimators : int
+        Number of boosting rounds. More rounds = more expressive but risks overfitting.
+    max_depth : int
+        Max tree depth per round. Keep low (3–6) on small datasets to avoid overfitting.
+    learning_rate : float
+        Step size shrinkage. Lower = slower but more robust; pair with high n_estimators.
+    subsample : float
+        Fraction of training samples used per boosting round (row subsampling).
+        Values < 1 add stochasticity and reduce overfitting.
+    colsample_bytree : float
+        Fraction of features used per boosting round (column subsampling).
+        Similar to the random feature selection in Random Forests.
+
+    Notes
+    -----
+    XGBoost uses label-encoded integer targets internally. String labels (e.g. "DCM")
+    are handled transparently via the label encoder embedded in XGBClassifier when
+    use_label_encoder is not set. The .classes_ attribute mirrors sklearn convention.
+    """
+    clf = XGBClassifier(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        learning_rate=learning_rate,
+        subsample=subsample,
+        colsample_bytree=colsample_bytree,
+        random_state=42,
+        n_jobs=-1,
+        eval_metric="mlogloss",     # suppresses the default warning
+        verbosity=0,                # silent
+    )
+    clf.fit(X_train, Y_train)
+    return clf
+
+
 def fit_linear(X_train: np.ndarray, Y_train: np.ndarray) -> LinearRegression:
     """Train a linear regression model."""
     reg = LinearRegression()
@@ -65,20 +141,13 @@ def fit_linear(X_train: np.ndarray, Y_train: np.ndarray) -> LinearRegression:
     return reg
 
 
-def eval_logistic_binary(clf, X_test: np.ndarray, Y_test: np.ndarray,
-                         n_dims: int, explained_variance: float | None) -> dict:
+def eval_classifier_binary(clf, X_test: np.ndarray, Y_test: np.ndarray,
+                            n_dims: int, explained_variance: float | None) -> dict:
     """
-    Evaluate a binary logistic classifier and return metrics as a dict.
+    Evaluate any binary sklearn-compatible classifier and return metrics as a dict.
 
-    Parameters
-    ----------
-    clf : fitted LogisticRegression
-    X_test : np.ndarray
-    Y_test : np.ndarray
-    n_dims : int
-        Number of latent dimensions used (for logging).
-    explained_variance : float | None
-        Cumulative explained variance kept (PCA); None for AE.
+    Works for LogisticRegression, RandomForestClassifier, XGBClassifier, etc.
+    All three expose .predict() and .predict_proba() with the same signatures.
     """
     Y_pred = clf.predict(X_test)
     Y_prob = clf.predict_proba(X_test)[:, 1]
@@ -95,10 +164,12 @@ def eval_logistic_binary(clf, X_test: np.ndarray, Y_test: np.ndarray,
     }
 
 
-def eval_logistic_multiclass(clf, X_test: np.ndarray, Y_test: np.ndarray,
-                              n_dims: int, explained_variance: float | None) -> dict:
+def eval_classifier_multiclass(clf, X_test: np.ndarray, Y_test: np.ndarray,
+                                n_dims: int, explained_variance: float | None) -> dict:
     """
-    Evaluate a multiclass logistic classifier and return metrics as a dict.
+    Evaluate any multiclass sklearn-compatible classifier and return metrics as a dict.
+
+    Works for LogisticRegression, RandomForestClassifier, XGBClassifier, etc.
     """
     Y_pred = clf.predict(X_test)
 
@@ -120,6 +191,11 @@ def eval_logistic_multiclass(clf, X_test: np.ndarray, Y_test: np.ndarray,
         "confusion_matrix": confusion_matrix(Y_test, Y_pred, labels=clf.classes_),
         "classes": [str(c) for c in clf.classes_],
     }
+
+
+# ── Backward-compatible aliases (kept so existing plot_only runs still work) ──
+eval_logistic_binary     = eval_classifier_binary
+eval_logistic_multiclass = eval_classifier_multiclass
 
 
 def eval_linear(reg, X_test: np.ndarray, Y_test: np.ndarray,

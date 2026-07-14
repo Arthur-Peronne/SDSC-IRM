@@ -12,6 +12,11 @@ One MLflow run is created in the "regression" experiment per script execution.
 Metrics are logged with step = n_dims (n_pc for PCA, latent_dim for AE).
 Classifiers / regressors are saved as joblib artifacts inside that run.
 
+classifier_type (set in configs/regression.yaml):
+    "logistic"      → LogisticRegression (default, existing behaviour)
+    "random_forest" → RandomForestClassifier
+    "xgboost"       → XGBClassifier
+
 Usage:
     python scripts/run_regression.py
 """
@@ -99,21 +104,99 @@ def _encode_dataset(model, dataset, device):
     return collect_latent_vectors(model, dataset, device).astype(np.float64)
 
 
+def _get_classifier_kwargs(cfg, use_both_frames: bool = False) -> dict:
+    """
+    Build the classifier-specific kwargs dict to unpack into _run_one_step().
+
+    Parameters
+    ----------
+    cfg : dict
+        Full YAML config.
+    use_both_frames : bool
+        If True and classifier is logistic and logistic_C is not set explicitly,
+        C is halved (0.5) to compensate for correlated ED+ES pairs.
+    """
+    classifier_type = cfg.get("classifier_type", "logistic")
+    kwargs = {"classifier_type": classifier_type}
+
+    if classifier_type == "logistic":
+        # Explicit logistic_C in YAML takes priority; otherwise auto based on frames
+        kwargs["logistic_C"] = cfg.get("logistic_C") or (0.5 if use_both_frames else 1.0)
+
+    elif classifier_type == "random_forest":
+        rf = cfg.get("random_forest") or {}
+        kwargs["rf_n_estimators"]     = rf.get("n_estimators", 300)
+        kwargs["rf_max_depth"]        = rf.get("max_depth", None)
+        kwargs["rf_min_samples_leaf"] = rf.get("min_samples_leaf", 1)
+
+    elif classifier_type == "xgboost":
+        xgb = cfg.get("xgboost") or {}
+        kwargs["xgb_n_estimators"]     = xgb.get("n_estimators", 300)
+        kwargs["xgb_max_depth"]        = xgb.get("max_depth", 4)
+        kwargs["xgb_learning_rate"]    = xgb.get("learning_rate", 0.05)
+        kwargs["xgb_subsample"]        = xgb.get("subsample", 0.8)
+        kwargs["xgb_colsample_bytree"] = xgb.get("colsample_bytree", 0.8)
+
+    else:
+        raise ValueError(
+            f"Unknown classifier_type={classifier_type!r}. "
+            "Expected 'logistic', 'random_forest', or 'xgboost'."
+        )
+
+    return kwargs
+
+
 def _run_one_step(X_train, X_test, Y_train, Y_test,
-                  n_dims, explained_variance, is_logistic, binary, logistic_C=1.0):
-    """Standardize, fit, evaluate. Return (clf_or_reg, scaler, results_train, results_test)."""
+                  n_dims, explained_variance, is_logistic, binary,
+                  classifier_type="logistic", logistic_C=1.0,
+                  rf_n_estimators=300, rf_max_depth=None, rf_min_samples_leaf=1,
+                  xgb_n_estimators=300, xgb_max_depth=4, xgb_learning_rate=0.05,
+                  xgb_subsample=0.8, xgb_colsample_bytree=0.8):
+    """
+    Standardize, fit, evaluate.
+    Return (clf_or_reg, scaler, results_train, results_test).
+
+    classifier_type : "logistic" | "random_forest" | "xgboost"
+        Ignored when is_logistic=False (linear regression is always used then).
+    """
     scaler = reg.fit_scaler(X_train)
     Xtr = scaler.transform(X_train).astype(np.float64)
     Xte = scaler.transform(X_test).astype(np.float64)
 
     if is_logistic:
         multi_class = not binary
-        clf = reg.fit_logistic(Xtr, Y_train, multi_class=multi_class, C=logistic_C)
-        eval_fn = reg.eval_logistic_binary if binary else reg.eval_logistic_multiclass
+
+        if classifier_type == "logistic":
+            clf = reg.fit_logistic(Xtr, Y_train, multi_class=multi_class, C=logistic_C)
+        elif classifier_type == "random_forest":
+            clf = reg.fit_random_forest(
+                Xtr, Y_train,
+                n_estimators=rf_n_estimators,
+                max_depth=rf_max_depth,
+                min_samples_leaf=rf_min_samples_leaf,
+            )
+        elif classifier_type == "xgboost":
+            clf = reg.fit_xgboost(
+                Xtr, Y_train,
+                n_estimators=xgb_n_estimators,
+                max_depth=xgb_max_depth,
+                learning_rate=xgb_learning_rate,
+                subsample=xgb_subsample,
+                colsample_bytree=xgb_colsample_bytree,
+            )
+        else:
+            raise ValueError(
+                f"Unknown classifier_type={classifier_type!r}. "
+                "Expected 'logistic', 'random_forest', or 'xgboost'."
+            )
+
+        eval_fn = reg.eval_classifier_binary if binary else reg.eval_classifier_multiclass
         r_train = eval_fn(clf, Xtr, Y_train, n_dims, explained_variance)
         r_test  = eval_fn(clf, Xte, Y_test,  n_dims, explained_variance)
         return clf, scaler, r_train, r_test
+
     else:
+        # Linear regression — classifier_type is ignored
         model = reg.fit_linear(Xtr, Y_train)
         r_train = reg.eval_linear(model, Xtr, Y_train, n_dims, explained_variance)
         r_test  = reg.eval_linear(model, Xte, Y_test,  n_dims, explained_variance)
@@ -150,19 +233,19 @@ def _log_step_metrics(r_train, r_test, step, is_logistic, binary):
 # ── PCA source ────────────────────────────────────────────────────────────────
 
 def _run_pca_source(cfg, Y_full, client):
-    n_train    = cfg["n_train"]
-    n_test     = N_PATIENTS - n_train
+    n_train       = cfg["n_train"]
+    n_test        = N_PATIENTS - n_train
     special_split = cfg.get("special_split")
-    pca_run_id = cfg["pca_run_id"]
-    y_name     = cfg["y_name"]
-    binary     = cfg.get("group_binary", False) and y_name == "group"
-    is_logistic = y_name == "group"
+    pca_run_id    = cfg["pca_run_id"]
+    y_name        = cfg["y_name"]
+    binary        = cfg.get("group_binary", False) and y_name == "group"
+    is_logistic   = y_name == "group"
 
     # ── Read params from PCA run once (avoid redundant API calls) ────────────
-    pca_params      = client.get_run(pca_run_id).data.params
-    frame_tag       = pca_params.get("frame_tag", "ED")
-    use_both_frames = frame_tag == "ED+ES"
-    frame_type      = "ED" if use_both_frames else frame_tag
+    pca_params       = client.get_run(pca_run_id).data.params
+    frame_tag        = pca_params.get("frame_tag", "ED")
+    use_both_frames  = frame_tag == "ED+ES"
+    frame_type       = "ED" if use_both_frames else frame_tag
     stratify_ongroup = pca_params.get("stratify_ongroup", "False") == "True"
 
     # ── Load X ───────────────────────────────────────────────────────────────
@@ -206,21 +289,13 @@ def _run_pca_source(cfg, Y_full, client):
         Y_train = (Y_train == bin_val).astype(int)
         Y_test  = (Y_test  == bin_val).astype(int)
 
-    logistic_C = cfg.get("logistic_C") or (0.5 if use_both_frames else 1.0)
+    # ── Classifier kwargs (dispatch logistic / RF / XGB) ─────────────────────
+    clf_kwargs = _get_classifier_kwargs(cfg, use_both_frames=use_both_frames)
 
-    # ── Sweep over cumvar thresholds (deduplicate n_pc) ──────────────────────
+    # ── Sweep over latent dims ────────────────────────────────────────────────
     latent_dims_list = sorted(set(cfg["latent_dims_list"]))
-    n_pc_confusion = cfg.get("n_pc_confusion", 12)
-    run_label      = cfg.get("experiment_tag", "baseline")
-
-    # # Map each threshold to its n_pc; skip duplicates (keep first occurrence)
-    # seen_n_pc: set[int] = set()
-    # threshold_n_pc_pairs: list[tuple[float, int]] = []
-    # for threshold in thresholds:
-    #     n_pc = reg.n_pc_for_variance(pca, threshold)
-    #     if n_pc not in seen_n_pc:
-    #         seen_n_pc.add(n_pc)
-    #         threshold_n_pc_pairs.append((threshold, n_pc))
+    n_pc_confusion   = cfg.get("n_pc_confusion", 12)
+    run_label        = cfg.get("experiment_tag", "baseline")
 
     results_test_all  = []
     results_train_all = []
@@ -235,13 +310,13 @@ def _run_pca_source(cfg, Y_full, client):
                 continue
 
             cumvar = float(np.sum(pca.explained_variance_ratio_[:n_pc]))
-
-            Xtr = X_train_pca[:, :n_pc]
-            Xte = X_test_pca[:,  :n_pc]
+            Xtr    = X_train_pca[:, :n_pc]
+            Xte    = X_test_pca[:,  :n_pc]
 
             _, _, r_train, r_test = _run_one_step(
                 Xtr, Xte, Y_train, Y_test,
-                n_pc, cumvar, is_logistic, binary, logistic_C,
+                n_pc, cumvar, is_logistic, binary,
+                **clf_kwargs,
             )
             _log_step_metrics(r_train, r_test, step=n_pc, is_logistic=is_logistic, binary=binary)
             _save_result_json(r_train, r_test, n_pc, label="pc")
@@ -254,7 +329,6 @@ def _run_pca_source(cfg, Y_full, client):
         results_train_all.sort(key=lambda r: r["n_dims"])
         results_test_all.sort(key=lambda r: r["n_dims"])
 
-        # ── Plots ─────────────────────────────────────────────────────────────
         _save_plots(results_train_all, results_test_all,
                     n_pc_confusion, y_name, run_label, is_logistic, binary)
 
@@ -296,18 +370,19 @@ def _run_ae_source(cfg, Y_full, client):
     print(f"Found {len(sorted_latdims)} latent_dim(s): {sorted_latdims}")
 
     # ── Read data loading params from the first AE run ───────────────────────
-    ref_params     = runs_by_latdim[sorted_latdims[0]][0]
-    frame_tag      = ref_params.get("params.frame_tag", "ED")
-    use_both       = frame_tag == "ED+ES"
-    frame_type     = "ED" if use_both else frame_tag
-    image_roi_only = ref_params.get("params.image_roi_only", "True") == "True"
-    source_folder  = ref_params.get("params.source_folder", "registered_frames")
+    ref_params       = runs_by_latdim[sorted_latdims[0]][0]
+    frame_tag        = ref_params.get("params.frame_tag", "ED")
+    use_both         = frame_tag == "ED+ES"
+    frame_type       = "ED" if use_both else frame_tag
+    image_roi_only   = ref_params.get("params.image_roi_only", "True") == "True"
+    source_folder    = ref_params.get("params.source_folder", "registered_frames")
     stratify_ongroup = ref_params.get("params.stratify_ongroup", "False") == "True"
 
     # Verify all AE runs share the same split
     for latdim in sorted_latdims:
         ae_run_id = runs_by_latdim[latdim][0]["run_id"]
-        _verify_split(ae_run_id, {"split_name": split_name, "n_train": n_train, "stratify_ongroup": stratify_ongroup}, client)
+        _verify_split(ae_run_id, {"split_name": split_name, "n_train": n_train,
+                                  "stratify_ongroup": stratify_ongroup}, client)
     print(f"Split verified against all {len(sorted_latdims)} AE runs ✓")
 
     # ── Load tensor datasets (same split as AE training) ─────────────────────
@@ -335,10 +410,12 @@ def _run_ae_source(cfg, Y_full, client):
         Y_train_base = (Y_train_base == bin_val).astype(int)
         Y_test_base  = (Y_test_base  == bin_val).astype(int)
 
-    logistic_C = cfg.get("logistic_C") or (0.5 if use_both else 1.0)
-    device = aet.get_device()
+    # ── Classifier kwargs (dispatch logistic / RF / XGB) ─────────────────────
+    clf_kwargs = _get_classifier_kwargs(cfg, use_both_frames=use_both)
+
+    device         = aet.get_device()
     n_pc_confusion = cfg.get("n_pc_confusion", sorted_latdims[len(sorted_latdims) // 2])
-    run_label = cfg.get("experiment_tag", "baseline")
+    run_label      = cfg.get("experiment_tag", "baseline")
 
     results_train_all = []
     results_test_all  = []
@@ -356,14 +433,15 @@ def _run_ae_source(cfg, Y_full, client):
                 ae_row.get("params.best_epoch") or ae_row.get("params.n_epochs", 100)
             )
 
-            model = _load_ae_model(ae_run_id, model_name, latdim, dropout, best_epoch, device, client)
+            model   = _load_ae_model(ae_run_id, model_name, latdim, dropout, best_epoch, device, client)
             Z_train = _encode_dataset(model, train_ds, device)
             Z_test  = _encode_dataset(model, test_ds,  device)
             print(f"  latent_dim={latdim} | encoded train={Z_train.shape} test={Z_test.shape}")
 
             _, _, r_train, r_test = _run_one_step(
                 Z_train, Z_test, Y_train_base, Y_test_base,
-                latdim, None, is_logistic, binary, logistic_C,
+                latdim, None, is_logistic, binary,
+                **clf_kwargs,
             )
             _log_step_metrics(r_train, r_test, step=latdim, is_logistic=is_logistic, binary=binary)
             _save_result_json(r_train, r_test, latdim, label="latdim")
@@ -372,12 +450,11 @@ def _run_ae_source(cfg, Y_full, client):
             results_test_all.append(r_test)
             print(f"  latent_dim={latdim:3d} | " + _result_summary(r_test, is_logistic, binary))
 
-        # ── Plots ─────────────────────────────────────────────────────────────
         _save_plots(results_train_all, results_test_all,
                     n_pc_confusion, y_name, run_label, is_logistic, binary)
 
 
-# ── Result JSON helpers (committed to git via mlruns/) ────────────────────────
+# ── Result JSON helpers ───────────────────────────────────────────────────────
 
 def _result_to_serializable(r: dict) -> dict:
     """Convert numpy arrays in a result dict to JSON-serializable types."""
@@ -466,31 +543,52 @@ def _result_summary(r, is_logistic, binary):
 
 
 def _run_name(cfg, split_name):
-    src = cfg["source_type"]
-    tag = cfg.get("experiment_tag", "baseline")
-    y   = cfg["y_name"]
-    return f"regression_{src}_{cfg['n_train']}patients_{split_name}_{y}_{tag}"
+    src             = cfg["source_type"]
+    tag             = cfg.get("experiment_tag", "baseline")
+    y               = cfg["y_name"]
+    classifier_type = cfg.get("classifier_type", "logistic")
+    return f"regression_{src}_{cfg['n_train']}patients_{split_name}_{y}_{classifier_type}_{tag}"
 
 
 def _build_params(cfg, split_name):
+    classifier_type = cfg.get("classifier_type", "logistic")
     params = {
-        "source_type":    cfg["source_type"],
-        "y_name":         cfg["y_name"],
-        "group_binary":   str(cfg.get("group_binary", False)),
+        "source_type":     cfg["source_type"],
+        "y_name":          cfg["y_name"],
+        "group_binary":    str(cfg.get("group_binary", False)),
         "group_bin_value": cfg.get("group_bin_value", ""),
-        "n_train":        cfg["n_train"],
-        "n_test":         N_PATIENTS - cfg["n_train"],
-        "split_name":     split_name,
-        "experiment_tag": cfg.get("experiment_tag", "baseline"),
-        "n_pc_confusion": cfg.get("n_pc_confusion", 12),
+        "n_train":         cfg["n_train"],
+        "n_test":          N_PATIENTS - cfg["n_train"],
+        "split_name":      split_name,
+        "experiment_tag":  cfg.get("experiment_tag", "baseline"),
+        "n_pc_confusion":  cfg.get("n_pc_confusion", 12),
+        "classifier_type": classifier_type,
     }
+
+    # Hyperparamètres spécifiques au classifieur
+    if classifier_type == "logistic":
+        params["logistic_C"] = cfg.get("logistic_C", 1.0)
+    elif classifier_type == "random_forest":
+        rf = cfg.get("random_forest") or {}
+        params["rf_n_estimators"]     = rf.get("n_estimators", 300)
+        params["rf_max_depth"]        = str(rf.get("max_depth", None))
+        params["rf_min_samples_leaf"] = rf.get("min_samples_leaf", 1)
+    elif classifier_type == "xgboost":
+        xgb = cfg.get("xgboost") or {}
+        params["xgb_n_estimators"]     = xgb.get("n_estimators", 300)
+        params["xgb_max_depth"]        = xgb.get("max_depth", 4)
+        params["xgb_learning_rate"]    = xgb.get("learning_rate", 0.05)
+        params["xgb_subsample"]        = xgb.get("subsample", 0.8)
+        params["xgb_colsample_bytree"] = xgb.get("colsample_bytree", 0.8)
+
     if cfg["source_type"] == "pca":
         params["pca_run_id"] = cfg["pca_run_id"]
     else:
         ae = cfg["ae_source"]
-        params["ae_model_name"]      = ae["model_name"]
-        params["ae_experiment_tag"]  = ae["experiment_tag"]
-        params["ae_split_name"]      = ae.get("split_name", split_name)
+        params["ae_model_name"]     = ae["model_name"]
+        params["ae_experiment_tag"] = ae["experiment_tag"]
+        params["ae_split_name"]     = ae.get("split_name", split_name)
+
     return params
 
 
@@ -498,16 +596,16 @@ def _build_params(cfg, split_name):
 
 def _plot_only(cfg, client):
     """Reload result JSON artifacts from a previous run and regenerate plots."""
-    load_run_id  = cfg["load_run_id"]
-    run_params   = client.get_run(load_run_id).data.params
+    load_run_id    = cfg["load_run_id"]
+    run_params     = client.get_run(load_run_id).data.params
 
-    source_type  = run_params["source_type"]
-    y_name       = run_params["y_name"]
-    binary       = run_params["group_binary"] == "True"
-    is_logistic  = y_name == "group"
-    run_label    = run_params.get("experiment_tag", "baseline")
+    source_type    = run_params["source_type"]
+    y_name         = run_params["y_name"]
+    binary         = run_params["group_binary"] == "True"
+    is_logistic    = y_name == "group"
+    run_label      = run_params.get("experiment_tag", "baseline")
     n_pc_confusion = cfg.get("n_pc_confusion") or int(run_params.get("n_pc_confusion", 12))
-    
+
     label = "pc" if source_type == "pca" else "latdim"
     dims  = _list_result_dims(load_run_id, label, client)
     if not dims:
@@ -529,6 +627,7 @@ def _plot_only(cfg, client):
         _save_plots(results_train_all, results_test_all,
                     n_pc_confusion, y_name, run_label, is_logistic, binary)
 
+
 def _nearest_n_pc(available: list[int], target: int) -> int:
     """Return the value in `available` closest to `target` on a log scale."""
     return min(available, key=lambda n: abs(np.log(n) - np.log(target)))
@@ -544,6 +643,7 @@ def _check_consistent_runs(runs_params: list[dict]):
         values = {p.get(k) for p in runs_params}
         if len(values) > 1:
             print(f"WARNING: param '{k}' differs across selected runs: {values}")
+
 
 def _plot_compare(cfg, client):
     """Average confusion matrices from several regression runs (different splits)."""
@@ -592,19 +692,23 @@ def _plot_compare(cfg, client):
 
     _check_consistent_runs(runs_params)
 
-    y_name      = runs_params[0]["y_name"]
-    source_type = runs_params[0]["source_type"]
-    n_splits    = len(cms)
+    y_name        = runs_params[0]["y_name"]
+    source_type   = runs_params[0]["source_type"]
+    n_splits      = len(cms)
     run_label_tag = cfg.get("experiment_tag", "compare")
 
     print(f"compare_mode | {n_splits}/{len(run_ids)} runs used | "
           f"source={source_type} | n_pc≈{n_pc_target} | y={y_name} | runs={used_run_ids}")
 
-    title   = f"Averaged confusion matrix — {y_name} — {source_type} — n_pc≈{n_pc_target} — {n_splits} splits"
-    outpath = RESULTS_FOLDER / f"confusionmatrix_average_{source_type}_{n_splits}splits_{n_pc_target}{label}_{run_label_tag}.png"
+    title   = (f"Averaged confusion matrix — {y_name} — {source_type} "
+               f"— n_pc≈{n_pc_target} — {n_splits} splits")
+    outpath = (RESULTS_FOLDER /
+               f"confusionmatrix_average_{source_type}_{n_splits}splits_"
+               f"{n_pc_target}{label}_{run_label_tag}.png")
 
     rgp.plot_average_confusion_matrix(cms, classes, title, outpath)
     print(f"Saved: {outpath}")
+
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -615,11 +719,10 @@ def main():
     tracking._setup()
     client = mlflow.MlflowClient()
 
-    y_name = cfg["y_name"]
-    n_train = cfg["n_train"]
-    n_test  = N_PATIENTS - n_train
+    y_name        = cfg["y_name"]
+    n_train       = cfg["n_train"]
     special_split = cfg.get("special_split")
-    split_name = _derive_split_name(special_split)
+    split_name    = _derive_split_name(special_split)
 
     if cfg.get("compare_mode"):
         if not cfg.get("load_run_ids"):
@@ -633,8 +736,9 @@ def main():
         _plot_only(cfg, client)
         return
 
+    classifier_type = cfg.get("classifier_type", "logistic")
     print(f"Regression | source={cfg['source_type']} | y={y_name} | "
-          f"n_train={n_train} | split={split_name}")
+          f"classifier={classifier_type} | n_train={n_train} | split={split_name}")
 
     # ── Load Y (all patients, split applied inside each source function) ──────
     Y_full = load_patient_metadata(y_name, N_PATIENTS)

@@ -31,7 +31,7 @@ model_name: "AE3dAsymResSeparableV2"
 latent_dimensions: 120
 multiple_models_and_dims: true  # true = loop over models_list × latdim_list
 models_list: ["AE3dAsymResSeparableV2"]
-latdim_list: [1, 3,  8, 16, 20, 40, 88, 160, 240] # [2, 4, 12, 28, 60, 120, 200][1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
+latdim_list: [2, 4, 12, 28, 60, 120, 200] # [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
 
 # ── Training ──────────────────────────────────────────────────────────────────
 recalculate_ae: true             # false = load existing model (requires load_run_id)
