@@ -31,6 +31,9 @@ Hyperparameter resolution (hyper_automatic_values in autoencoder.yaml):
   The resolved values are always what is logged to MLflow — never the yaml placeholders.
 """
 
+import os
+os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+
 import argparse
 import random
 
@@ -90,9 +93,19 @@ def _apply_overrides(cfg, set_args):
                     pass
         cfg[key] = val
 
+def _set_seed(seed, deterministic=False):
+    """Seed torch/numpy/random and optionally force deterministic GPU algorithms.
 
-def _set_seed(seed):
-    """Seed torch/numpy/random for reproducibility. No-op if seed is None."""
+    Seeding is a no-op if seed is None (random run). The deterministic flags are
+    applied independently of the seed: they constrain algorithm choice, not the RNG.
+    """
+    if deterministic:
+        torch.backends.cudnn.benchmark = False       # stop autotuning conv algos per run
+        torch.backends.cudnn.deterministic = True    # force deterministic conv kernels
+        # warn_only=True: ops with no deterministic CUDA kernel (e.g. some
+        # ConvTranspose3d / upsampling backward) fall back + warn instead of raising.
+        torch.use_deterministic_algorithms(True, warn_only=True)
+
     if seed is None:
         return
     random.seed(seed)
@@ -100,7 +113,6 @@ def _set_seed(seed):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-
 
 def _run_one(cfg, model_name, latent_dimensions, split_name,
              n_train_images, n_val_images,
@@ -111,7 +123,7 @@ def _run_one(cfg, model_name, latent_dimensions, split_name,
     # Reproducibility: seed HERE (not in main) so that in multiple_models_and_dims
     # mode every sub-run starts from the same RNG state, independent of the others.
     # Runs after overrides are applied, so `--set seed=N` still wins.
-    _set_seed(cfg.get("seed"))
+    _set_seed(cfg.get("seed"), deterministic=cfg.get("deterministic", False))
 
     recalculate    = cfg["recalculate_ae"]
     load_run_id    = cfg.get("load_run_id") if not recalculate else None
