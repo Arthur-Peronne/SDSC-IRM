@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-arthur-project-1/mlruns/518515524431964609/54a2a85847964d31bfb90b7f6d6adfea/artifacts
+end_time: 1784124620115
+entry_point_name: ''
+experiment_id: '518515524431964609'
+lifecycle_stage: active
+run_id: 54a2a85847964d31bfb90b7f6d6adfea
+run_name: regression_ae_100patients_splitdefault_group_logistic_ae_seeds_variance
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1784124616270
+status: 3
+tags: []
+user_id: renku

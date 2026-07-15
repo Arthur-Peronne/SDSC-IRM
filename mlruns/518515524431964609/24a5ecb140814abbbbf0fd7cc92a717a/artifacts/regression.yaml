@@ -65,7 +65,7 @@ ae_source:
   experiment_tag: "sepv2_dim20_variousseeds"     # experiment_tag param logged in MLflow
   split_name: "splitdefault"     # split_name param logged in MLflow
   params_filter: {
-                  seed: 5
+                  seed: 0
                   }              # optional extra MLflow param filters (e.g. frame_tag: "ED")
 
 # ── LOAD / plot-only mode ──────────────────────────────────────────────────────
