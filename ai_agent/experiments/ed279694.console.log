@@ -1,0 +1,23 @@
+
+=== python -u scripts/run_autoencoder.py --trial-id ed279694_ae ===
+special_split = split100
+Traceback (most recent call last):
+  File "/home/renku/work/SDSC-arthur-project-1/scripts/run_autoencoder.py", line 452, in <module>
+    main()
+    ~~~~^^
+  File "/home/renku/work/SDSC-arthur-project-1/scripts/run_autoencoder.py", line 406, in main
+    train_dataset, val_dataset, test_dataset, X_maxnorm, split_name = loader.load_tensor_datasets(
+                                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        source_folder=cfg["source_folder"],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<13 lines>...
+        y_cache_folder=cfg.get("y_cache_folder", "Y_vectors"),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/renku/work/SDSC-arthur-project-1/src/data/loader.py", line 254, in load_tensor_datasets
+    load_patient_metadata("group", len(X_ED,
+                                   ~~~^^^^^^
+                                                        recalculate=recalculate_y, cache_folder=y_cache_folder))
+                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: len() takes no keyword arguments
