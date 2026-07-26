@@ -13,7 +13,7 @@
 #     Never change the metric mid-campaign.
 # =============================================================================
 
-experiment_name: "ai_hpopti_sepv2_dim8"
+experiment_name: "SMOKE_TEST"
 
 # -- 1. Scope: what the agent may modify (ALLOWLIST) --------------------------
 # Any change to a file outside this list (and outside the trial record dir) => the
@@ -35,6 +35,7 @@ mutable:
 #     {seed: [0, 1, 2]}                   -> seed averaging  (N=3, same config)
 training:
   command: "python -u scripts/run_autoencoder.py"
+  command_clf: "python -u scripts/run_regression.py"
   repeat_over: null # {latent_dimensions: [8, 40, 200]}
 
 # -- 3. Eval: how the N runs collapse into ONE decisional number --------------

@@ -29,6 +29,7 @@ import numpy as np
 import mlflow
 import torch
 from pathlib import Path
+import argparse
 
 from src.config import RESULTS_FOLDER
 from src.data import loader, splits as splt
@@ -47,6 +48,21 @@ N_PATIENTS = 150
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def _parse_args():
+    p = argparse.ArgumentParser(
+        description="Encode AE/PCA latents and evaluate a downstream classifier/regressor."
+    )
+    p.add_argument("--trial-id", default=None,
+                   help="Tag the MLflow run of this invocation with trial_id=<id> "
+                        "(used by ai_agent/driver.py to read back exactly its runs).")
+    p.add_argument("--ae-trial-tag", default=None,
+                   help="[not yet used] Trouver le run AE par tags.trial_id=<tag> "
+                        "au lieu des filtres model_name/experiment_tag/split_name habituels.")
+    p.add_argument("--ae-filter", action="append", default=[], metavar="KEY=VALUE",
+                   help="[not yet used] Condition(s) params.KEY='VALUE' supplémentaire(s) "
+                        "pour désambiguïser plusieurs runs AE partageant le même --ae-trial-tag.")
+    return p.parse_args()
+    
 def _derive_split_name(special_split):
     return splt.DEFAULT_SPLIT_NAME if special_split is None else special_split
 
@@ -232,7 +248,7 @@ def _log_step_metrics(r_train, r_test, step, is_logistic, binary):
 
 # ── PCA source ────────────────────────────────────────────────────────────────
 
-def _run_pca_source(cfg, Y_full, client):
+def _run_pca_source(cfg, Y_full, client, args):
     n_train       = cfg["n_train"]
     n_test        = N_PATIENTS - n_train
     special_split = cfg.get("special_split")
@@ -302,7 +318,8 @@ def _run_pca_source(cfg, Y_full, client):
     results_test_all  = []
     results_train_all = []
 
-    with tracking.start_run("regression", _run_name(cfg, split_name)):
+    tags = {"trial_id": args.trial_id} if args.trial_id else None 
+    with tracking.start_run("regression", _run_name(cfg, split_name), tags=tags): 
         tracking.log_params(_build_params(cfg, split_name))
         tracking.log_artifact(CONFIG_PATH)
 
@@ -339,7 +356,7 @@ def _run_pca_source(cfg, Y_full, client):
 
 # ── AE source ─────────────────────────────────────────────────────────────────
 
-def _run_ae_source(cfg, Y_full, client):
+def _run_ae_source(cfg, Y_full, client, args):
 
     n_train       = cfg["n_train"]
     n_val         = cfg.get("n_val", 0)                    
@@ -350,19 +367,30 @@ def _run_ae_source(cfg, Y_full, client):
     y_name        = cfg["y_name"]
     binary        = cfg.get("group_binary", False) and y_name == "group"
     is_logistic   = y_name == "group"
-    ae_cfg        = cfg["ae_source"]
+    ae_cfg        = cfg["ae_source"] or {}
 
     if eval_on not in ("test", "val"):
         raise ValueError(f"eval_on must be 'test' or 'val', got {eval_on!r}")
     if eval_on == "val" and n_val == 0:
         raise ValueError("eval_on='val' requires n_val > 0 in regression.yaml")
-        
+
     # ── Search AE runs ────────────────────────────────────────────────────────
-    filter_str = _build_ae_filter(
-        ae_cfg["model_name"], ae_cfg["experiment_tag"],
-        ae_cfg.get("split_name", split_name),
-        ae_cfg.get("params_filter"),
-    )
+    if args.ae_trial_tag:
+        # Mode Agent : find AE run with tag
+        conditions = [f"tags.trial_id = '{args.ae_trial_tag}'"]
+        for kv in args.ae_filter:
+            if "=" not in kv:
+                raise SystemExit(f"--ae-filter expects KEY=VALUE, got: {kv!r}")
+            k, v = kv.split("=", 1)
+            conditions.append(f"params.{k} = '{v}'")
+        filter_str = " AND ".join(conditions)
+    else:
+        # Manual (default) mode
+        filter_str = _build_ae_filter(
+            ae_cfg["model_name"], ae_cfg["experiment_tag"],
+            ae_cfg.get("split_name", split_name),
+            ae_cfg.get("params_filter"),
+        )
     df = tracking.search_runs("autoencoder", filter_string=filter_str)
     if df.empty:
         raise ValueError(f"No autoencoder runs found matching: {filter_str}")
@@ -439,8 +467,9 @@ def _run_ae_source(cfg, Y_full, client):
     results_train_all = []
     results_test_all  = []
 
-    with tracking.start_run("regression", _run_name(cfg, split_name)):
-        tracking.log_params({**_build_params(cfg, split_name), "eval_on": eval_on})
+    tags = {"trial_id": args.trial_id} if args.trial_id else None   
+    with tracking.start_run("regression", _run_name(cfg, split_name), tags=tags):   
+        tracking.log_params({**_build_params(cfg, split_name, args), "eval_on": eval_on})
         tracking.log_artifact(CONFIG_PATH)
 
         for latdim in sorted_latdims:
@@ -569,7 +598,7 @@ def _run_name(cfg, split_name):
     return f"regression_{src}_{cfg['n_train']}patients_{split_name}_{y}_{classifier_type}_{tag}"
 
 
-def _build_params(cfg, split_name):
+def _build_params(cfg, split_name, args):
     classifier_type = cfg.get("classifier_type", "logistic")
     params = {
         "source_type":     cfg["source_type"],
@@ -602,7 +631,10 @@ def _build_params(cfg, split_name):
 
     if cfg["source_type"] == "pca":
         params["pca_run_id"] = cfg["pca_run_id"]
-    else:
+    elif args and args.ae_trial_tag:      # Agent mode         
+        params["ae_trial_tag"] = args.ae_trial_tag
+        params["ae_filter"]    = ";".join(args.ae_filter) if args.ae_filter else ""
+    else:                                           
         ae = cfg["ae_source"]
         params["ae_model_name"]     = ae["model_name"]
         params["ae_experiment_tag"] = ae["experiment_tag"]
@@ -732,8 +764,14 @@ def _plot_compare(cfg, client):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    args = _parse_args()
     with open(CONFIG_PATH) as f:
         cfg = yaml.safe_load(f)
+
+    if args.ae_trial_tag and cfg["source_type"] != "ae":  
+        raise SystemExit(
+            f"--ae-trial-tag only applies to source_type='ae' (got {cfg['source_type']!r}).  Regression cancelled because regression.yaml inconsistent with tag"
+        )
 
     tracking._setup()
     client = mlflow.MlflowClient()
@@ -770,12 +808,15 @@ def main():
     if cfg["source_type"] == "pca":
         if not cfg.get("pca_run_id"):
             raise ValueError("pca_run_id must be set in regression.yaml for source_type='pca'")
-        _run_pca_source(cfg, Y_full, client)
+        _run_pca_source(cfg, Y_full, client, args)
 
     elif cfg["source_type"] == "ae":
-        if not cfg.get("ae_source"):
-            raise ValueError("ae_source must be set in regression.yaml for source_type='ae'")
-        _run_ae_source(cfg, Y_full, client)
+        if not args.ae_trial_tag and not cfg.get("ae_source"):  
+            raise ValueError(
+                "ae_source must be set in regression.yaml for source_type='ae' "
+                "unless --ae-trial-tag is provided (agent mode)."
+            )
+        _run_ae_source(cfg, Y_full, client, args)
 
     else:
         raise ValueError(f"Unknown source_type: {cfg['source_type']!r}. Use 'pca' or 'ae'.")

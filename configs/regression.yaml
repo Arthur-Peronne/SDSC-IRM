@@ -14,8 +14,8 @@ group_binary: false              # true = binary (one class vs rest); only if y_
 group_bin_value: "NOR"           # used only if group_binary = true; "DCM", "HCM", "MINF", "NOR", "RV"
 
 # ── Data split ────────────────────────────────────────────────────────────────
-n_train: 120                     # number of training patients (n_test = 150 - n_train)
-n_val: 0                   
+n_train: 100                     # number of training patients (n_test = 150 - n_train)
+n_val: 20                 
 special_split: null # "split100"     # null = sequential "splitdefault"; "split42" = seeded random
 
 # ── Evaluation set (AE source only) ───────────────────────────────────────────
@@ -42,7 +42,7 @@ xgboost:
   colsample_bytree: 0.8          # feature subsampling per round (< 1 reduces overfitting)
 
 # ── Source (pca or ae) ────────────────────────────────────────────────────────
-source_type: "pca"               # "pca" or "ae"
+source_type: "ae"               # "pca" or "ae"
 
 # ── PCA source (used only if source_type = "pca") ─────────────────────────────
 pca_run_id: "8792f11ded794fc2ac8fa40e03357d71" # MLflow run_id "" of the pca_spatial run to load 
