@@ -59,8 +59,32 @@ config:
 - **Classification MLflow Run IDs:** d8fecaea93ee4e5286a5bd495530ad80 c30e21a4f34f4c2cbc341b7fad9dc348 f4bb1ef0f7014b29acbaba8491b8d6a6
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+All 3 seeds show the same pathological pattern: val loss reaches its minimum at
+**epoch 2** and then increases almost monotonically (with noisy fluctuations) through
+epoch 22, where the LR-scheduler-plus-patience combination (patience=20, halving LR
+every 5 stale epochs) triggers early stopping — versus 52 epochs / best-epoch=32 in the
+noise-free baseline (725420c7). Train loss keeps decreasing steadily the whole time
+(0.0037 → 0.0020 by epoch 22), so this is not an optimizer failure — the network keeps
+fitting *something* — but whatever it fits after epoch 2 stops generalizing to the
+validation volumes. Reconstruction quality collapsed accordingly: validation R2 mean
+0.41 (vs 0.71-0.75 baseline range), high std (0.43-0.48) indicating some patients
+reconstructed reasonably and others very poorly, not a uniform degradation.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Hypothesis **did not hold** — noise_std=0.05 hurt rather than helped generalization,
+both on the AE's own reconstruction (R2 0.41 vs 0.71-0.75) and on downstream
+classification accuracy (0.4167 vs 0.5917, -0.175, a FAILURE by a wide margin, well
+past the noise floor of ~0.03-0.04). Mechanistic read: at batch_size=1 with only 100
+training volumes, adding 5%-of-range Gaussian noise to every voxel of the input is a
+much larger perturbation relative to this model's effective capacity/data budget than
+anticipated — the val-loss-minimum-at-epoch-2 pattern (identical across all 3 seeds)
+suggests the noise pushed the optimization landscape such that the very first
+few gradient steps found the best generalizing point reachable, after which further
+training over-fits the noise pattern itself rather than the denoising task. This
+contradicts the (R2-only-campaign) intuition that noise_std is a "free" generalization
+knob — here it actively destroys the fine anatomical boundaries the classifier depends
+on, exactly the risk flagged in the Hypothesis. Actionable takeaway for later trials:
+if noise-based regularization is revisited, it must be far weaker (order 0.005-0.01) and
+probably paired with more patience/epochs, not applied at this magnitude; for the
+immediate next trial, abandon this direction and branch again from 725420c7's proven
+baseline rather than push noise further.
