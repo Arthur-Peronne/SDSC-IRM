@@ -382,7 +382,8 @@ def _update_title(body: str, trial_id: str, model_name: str, label: str) -> str:
 def write_record(md_path: Path, trial_id: str, status: str, verdict: str | None,
                  aggregate: float | None, runs: list[dict] | None,
                  cfg: dict, created_at: str, delta: float | None,
-                 error: str | None = None) -> None:
+                 error: str | None = None, 
+                 ae_runs: list[dict] | None = None) -> None:
     """Fill the frontmatter + ## Results. Numbers by the driver; the agent adds
     ## Training Dynamics and ## Conclusion afterwards."""
     text = md_path.read_text()
