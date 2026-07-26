@@ -1,0 +1,2 @@
+timestamp,id,parent,model_name,modification_description,metric_name,metric_value,metric_delta,status,verdict
+2026-07-26T17:18:25+00:00,fe91e3ae,,,,classification_accuracy_val,,,failed,
