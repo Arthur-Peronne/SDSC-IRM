@@ -9,7 +9,7 @@ decides and the driver applies. Rewrite this file at the start of each campaign.
 # program.md — Research Session Intention
 
 ## Objective
-The goal of this campaign is to optimize the hyperparameters of the autoencoder "AE3dAsymResSeparableV2" at latent_dimensions = 8, by running trials in order
+The goal of this campaign is to optimize the hyperparameters of the autoencoder "AE3dAsymResSeparableV2" at latent_dimensions = 20, by running trials in order
 to maximize the primary metric.
 
 ## What to explore this session
@@ -73,10 +73,10 @@ Stop early — and say so clearly — only if:
 ## Known noise floor (measured empirically, not a strategy hint)
 Prior campaigns on this architecture/pipeline (batch_size=1, seed fixed) showed
 substantial run-to-run variance even with identical config and seed — roughly
-0.03-0.04 standard deviation on avg_validation_R2_mean, likely from non-deterministic
+0.03-0.04 standard deviation on avg_validation_R2_mean (and unknown for classification 
+accuracy, possibly more), likely from non-deterministic
 GPU ops. A single-run delta smaller than this is not reliably distinguishable from
-noise. How to use this (replication strategy, tolerance margins, whether to trust a
-single run) is your call.
+noise.
 
 ## Budget discipline
 You have exactly `max_trials` trials for this campaign (see `decision.max_trials` in

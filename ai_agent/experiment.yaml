@@ -13,7 +13,7 @@
 #     Never change the metric mid-campaign.
 # =============================================================================
 
-experiment_name: "SMOKE_TEST"
+experiment_name: "AIagent_classification_test"
 
 # -- 1. Scope: what the agent may modify (ALLOWLIST) --------------------------
 # Any change to a file outside this list (and outside the trial record dir) => the
@@ -63,11 +63,11 @@ eval:
 # Delete the whole `candidate` block for plain binary keep/revert.
 decision:
   branch: "agent-ae-opti"        # isolated branch; the driver never commits to main
-  max_trials: 40                  # driver refuses a new trial once the ledger has this many
-  # candidate:
-  #   statistic: "max"             # over the per-run values (before aggregation)
-  #   margin: 0.03                 # maximize: CANDIDATE if max(values) > champion + margin
-  #                                # minimize: CANDIDATE if min(values) < champion - margin
+  max_trials: 3                  # driver refuses a new trial once the ledger has this many
+  candidate:
+    statistic: "max"             # over the per-run values (before aggregation)
+    margin: 0.10                 # maximize: CANDIDATE if max(values) > champion + margin
+                                 # minimize: CANDIDATE if min(values) < champion - margin
 
 # -- 5. Logging / storage -----------------------------------------------------
 # All configs are captured by the input commit (commit 1) and reachable via the

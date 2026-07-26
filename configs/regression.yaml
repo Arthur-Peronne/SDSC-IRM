@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "AIagent_classification_debug" 
+experiment_tag: "AIagent_classification_test" 
 
 # ── Target variable ───────────────────────────────────────────────────────────
 recalculate_y: false 

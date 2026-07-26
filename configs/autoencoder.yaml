@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "AIagent_classification_debug" # "baseline_aiarchi"
+experiment_tag: "AIagent_classification_test" # "baseline_aiarchi"
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
@@ -40,7 +40,7 @@ latdim_list: [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
 recalculate_ae: true             # false = load existing model (requires load_run_id)
 load_run_id: null                # MLflow run ID — required when recalculate_ae: false
 # (non-optimized hyperparameters)
-n_epochs: 2                    # max epochs (early stopping triggers earlier if n_val > 0)
+n_epochs: 200                    # max epochs (early stopping triggers earlier if n_val > 0)
 batch_size: 1
 patience_scheduler: null         # null = patience // 5
 # (optimized hyperparameters)
