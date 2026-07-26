@@ -422,7 +422,12 @@ def write_record(md_path: Path, trial_id: str, status: str, verdict: str | None,
         for name in also:
             vals = [r[name] for r in runs]
             lines.append(f"- **{name}** (mean, non-decisional): {sum(vals) / len(vals):.6f}")
-        lines.append("- **MLflow Run IDs:** " + " ".join(r["run_id"] for r in runs))
+
+        #  two separate lines instead of one combined "MLflow Run IDs"
+        ae_ids = " ".join(r["run_id"] for r in ae_runs) if ae_runs else "(unavailable)"
+        lines.append(f"- **AE MLflow Run IDs:** {ae_ids}")
+        lines.append(f"- **Classification MLflow Run IDs:** " + " ".join(r["run_id"] for r in runs))
+
         results = "\n".join(lines)
         label = verdict
 
@@ -481,16 +486,18 @@ def run_trial() -> tuple[str, str | None]:
     log_path = exp_dir / f"{trial_id}.console.log"
 
     try:
+        per = cfg["eval"]["per_run_metric"]    
+        also = cfg["eval"].get("also_log", []) or []         
+
         # 3a. train the AE(s) (N runs, all-or-nothing)
         overrides = _repeat_values(cfg)
         run_eval(cfg, trial_id + "_ae", overrides, log_path)
+        ae_runs = read_trial_runs(trial_id + "_ae", per, also, _repeat_axis(cfg))  
 
         # 3b. classify each AE run produced above (N runs, all-or-nothing)
         run_eval_clf(cfg, trial_id + "_clf", trial_id + "_ae", overrides, log_path)
 
         # 4. read the N classification runs by tag + aggregate
-        per = cfg["eval"]["per_run_metric"]
-        also = cfg["eval"].get("also_log", []) or []
         runs = read_trial_runs(trial_id + "_clf", per, also, _repeat_axis(cfg))
         if len(runs) != len(overrides):
             raise EvalFailed(f"Expected {len(overrides)} runs tagged {trial_id}, found {len(runs)}.")
@@ -510,7 +517,7 @@ def run_trial() -> tuple[str, str | None]:
 
         # 6. record + ledger
         write_record(md_path, trial_id, "completed", verdict, aggregate, runs,
-                     cfg, created_at, delta)
+                     cfg, created_at, delta, ae_runs=ae_runs)
         append_ledger_row(ledger, {
             "timestamp": created_at, "id": trial_id, "parent": parent,
             "model_name": model_name, "modification_description": summary,

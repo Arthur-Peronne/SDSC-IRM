@@ -36,7 +36,7 @@ mutable:
 training:
   command: "python -u scripts/run_autoencoder.py"
   command_clf: "python -u scripts/run_regression.py"
-  repeat_over: null # {latent_dimensions: [8, 40, 200]}
+  repeat_over: {seed: [0, 1, 2]}   # {latent_dimensions: [8, 40, 200]}
 
 # -- 3. Eval: how the N runs collapse into ONE decisional number --------------
 # At launch the driver tags each run with the trial id, then reads back exactly
@@ -47,7 +47,7 @@ training:
 # and compute_metrics: true in autoencoder.yaml — keep both for these campaigns.
 eval:
   per_run_metric:      "accuracy_test"      # final scalar logged per run: "validation_R2_mean" or "accuracy_test"
-  aggregation:         "identity"                     # "identity" (N=1) | "mean" (N>1)
+  aggregation:         "mean"                     # "identity" (N=1) | "mean" (N>1)
   primary_metric_name: "classification_accuracy_val"   # label for the aggregate
   direction:           "maximize"                 # "maximize" | "minimize"
   also_log:                                       # recorded for context, NON-decisional
