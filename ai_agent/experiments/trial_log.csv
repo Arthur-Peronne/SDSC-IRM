@@ -1,2 +1,3 @@
 timestamp,id,parent,model_name,modification_description,metric_name,metric_value,metric_delta,status,verdict
 2026-07-26T18:52:29+00:00,725420c7,,AE3dAsymResSeparableV2,"Light regularization (weight_decay=1e-5, dropout_rate=0.1) on default HPs, first trial of the classification-accuracy campaign",classification_accuracy_val,0.591667,+0.000000,completed,BASELINE
+2026-07-26T21:33:33+00:00,f826eedd,725420c7,AE3dAsymResSeparableV2,Add denoising (noise_std=0.05) on top of trial 725420c7's light regularization,classification_accuracy_val,0.416667,-0.175000,completed,FAILURE

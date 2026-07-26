@@ -1,25 +1,19 @@
 ---
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
-model_name: AE3dAsymResSeparableV2      # the AE architecture trained (e.g. AE3dDilatedAttention). Descriptive, NOT the id.
-summary: "Add denoising (noise_std=0.05) on top of trial 725420c7's light regularization"         # one-line description of the change (becomes the CSV modification_description)
-parent: 725420c7          # lineage: `id` of the trial whose CODE this one branched FROM. null for roots.
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null              # short sha of commit 1 == the frozen input == this trial's identity
-status: draft         # draft -> completed | failed          (lifecycle, lowercase)
-verdict: null         # BASELINE | CHAMPION | CANDIDATE | FAILURE   (judgement, UPPERCASE)
-created_at: null
+model_name: AE3dAsymResSeparableV2
+summary: Add denoising (noise_std=0.05) on top of trial 725420c7's light regularization
+parent: 725420c7
+id: f826eedd
+status: completed
+verdict: FAILURE
+created_at: '2026-07-26T21:33:33+00:00'
 metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+  primary:
+    name: classification_accuracy_val
+    value: 0.416667
+    direction: maximize
 ---
 
-# Trial <id> — <model_name> — <verdict>
+# Trial f826eedd — AE3dAsymResSeparableV2 — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -57,10 +51,12 @@ config:
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **accuracy_test per run:** 0: 0.425000 | 1: 0.400000 | 2: 0.425000
+- **classification_accuracy_val:** 0.416667
+- **delta_vs_champion** (display only): -0.175000
+- **validation_R2_mean** (mean, AE phase, non-decisional): 0.411139
+- **AE MLflow Run IDs:** 0cd95653920649fdb364144fb70f3e0a 48793b5be349430f98a7720317d4504a 9b3110f1948640a1991977ddf737f63c
+- **Classification MLflow Run IDs:** d8fecaea93ee4e5286a5bd495530ad80 c30e21a4f34f4c2cbc341b7fad9dc348 f4bb1ef0f7014b29acbaba8491b8d6a6
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
