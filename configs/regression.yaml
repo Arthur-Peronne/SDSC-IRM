@@ -16,7 +16,7 @@ group_bin_value: "NOR"           # used only if group_binary = true; "DCM", "HCM
 # ── Data split ────────────────────────────────────────────────────────────────
 n_train: 100                     # number of training patients (n_test = 150 - n_train)
 n_val: 20                 
-special_split: null # "split100"     # null = sequential "splitdefault"; "split42" = seeded random
+special_split: "split100" # "split100"     # null = sequential "splitdefault"; "split42" = seeded random
 
 # ── Evaluation set (AE source only) ───────────────────────────────────────────
 eval_on: "test"             # "test" (défaut) |  # "val" requires  n_val > 0 and  n_val == n_val from the AE model

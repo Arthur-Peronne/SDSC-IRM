@@ -1,2 +1,0 @@
-timestamp,id,parent,model_name,modification_description,metric_name,metric_value,metric_delta,status,verdict
-2026-07-26T16:07:32+00:00,3e974148,,,,avg_validation_R2_mean,,,failed,
