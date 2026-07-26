@@ -9,10 +9,10 @@ experiment_tag: "baseline"       # PCA has no hyperparameter regime — kept for
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
 cache_folder: "X_vectors"        # subfolder in processed_images/ for cached .npy arrays
-n_train: 100
+n_train: 120
 n_val: 0
-n_test: 50
-special_split: "split2"          # null = sequential "splitdefault" ; ex: "split42" for seeded random split
+n_test: 30
+special_split: "split100"          # null = sequential "splitdefault" ; ex: "split42" for seeded random split
 stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
 recalculate_x: false
 use_both_frames: true            # true = ED+ES, false = use frame_type below

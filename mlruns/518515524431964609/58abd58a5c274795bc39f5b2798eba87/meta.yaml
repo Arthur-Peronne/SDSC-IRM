@@ -1,0 +1,15 @@
+artifact_uri: /home/renku/work/SDSC-arthur-project-1/mlruns/518515524431964609/58abd58a5c274795bc39f5b2798eba87/artifacts
+end_time: 1785071166464
+entry_point_name: ''
+experiment_id: '518515524431964609'
+lifecycle_stage: active
+run_id: 58abd58a5c274795bc39f5b2798eba87
+run_name: regression_pca_120patients_splitdefault_group_logistic_valset_tests
+run_uuid: 58abd58a5c274795bc39f5b2798eba87
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785071163765
+status: 3
+tags: []
+user_id: renku

@@ -67,10 +67,11 @@ def _verify_split(run_id, expected: dict, client):
             f"Split / data mismatch with MLflow run {run_id}:\n" + "\n".join(mismatches)
         )
 
-def _apply_split_to_Y(Y_full, n_train, n_val, n_test, special_split, stratify_ongroup=False):
+def _apply_split_to_Y(Y_full, n_train, n_val, n_test, special_split, stratify_ongroup=False, 
+                                                 recalculate_y=False, y_cache_folder="Y_vectors"):
     """Return Y_train, Y_val, Y_test using the same split logic as get_split_indices.
     Y_val is an empty array when n_val=0 (unchanged behaviour for existing callers)."""
-    strat = load_patient_metadata("group", N_PATIENTS) if stratify_ongroup else None
+    strat = load_patient_metadata("group", N_PATIENTS, recalculate=recalculate_y, cache_folder=y_cache_folder) if stratify_ongroup else None
     train_idx, val_idx, test_idx, _ = splt.get_split_indices(
         n_train=n_train, n_val=n_val, n_test=n_test,
         special_split=special_split,
@@ -279,13 +280,14 @@ def _run_pca_source(cfg, Y_full, client):
     X_test_pca  = pca.transform(X_test  - row_means_test)
 
     # ── Y (duplicate if both frames) ─────────────────────────────────────────
-    Y_train, _, Y_test = _apply_split_to_Y(Y_full, n_train, 0, n_test, special_split, stratify_ongroup)
+    Y_train, _, Y_test = _apply_split_to_Y(Y_full, n_train, 0, n_test, special_split, stratify_ongroup,  
+                                                                                      recalculate_y=cfg.get("recalculate_y", True), y_cache_folder=cfg.get("y_cache_folder", "Y_vectors"))
     if use_both_frames:
         Y_train = np.concatenate([Y_train, Y_train])
         Y_test  = np.concatenate([Y_test,  Y_test])
     if binary:
         bin_val = cfg["group_bin_value"]
-        Y_train = (Y_train == bin_val).astype(int)
+        Y_train = (Y_train == bin_val).astype(int)    
         Y_test  = (Y_test  == bin_val).astype(int)
 
     # ── Classifier kwargs (dispatch logistic / RF / XGB) ─────────────────────
@@ -411,7 +413,8 @@ def _run_ae_source(cfg, Y_full, client):
     print(f"Split: {split_name} | train={len(train_ds)} | test={len(test_ds)}")
 
     # ── Y (duplicate if both frames) ─────────────────────────────────────────
-    Y_train_base, Y_val_base, Y_test_base = _apply_split_to_Y(Y_full, n_train, n_val, n_test, special_split, stratify_ongroup)
+    Y_train_base, Y_val_base, Y_test_base = _apply_split_to_Y(Y_full, n_train, n_val, n_test, special_split, stratify_ongroup,
+                                                                                          recalculate_y=cfg.get("recalculate_y", True), y_cache_folder=cfg.get("y_cache_folder", "Y_vectors"))
     if use_both:
         Y_train_base = np.concatenate([Y_train_base, Y_train_base])
         Y_val_base   = np.concatenate([Y_val_base,   Y_val_base]) if n_val > 0 else Y_val_base
@@ -452,10 +455,10 @@ def _run_ae_source(cfg, Y_full, client):
             model   = _load_ae_model(ae_run_id, model_name, latdim, dropout, best_epoch, device, client)
             Z_train = _encode_dataset(model, train_ds, device)
             Z_eval  = _encode_dataset(model, eval_ds,  device)         
-            print(f"  latent_dim={latdim} | encoded train={Z_train.shape} test={Z_test.shape}")
+            print(f"  latent_dim={latdim} | encoded train={Z_train.shape} eval({eval_on})={Z_eval.shape}")
 
             _, _, r_train, r_test = _run_one_step(
-                Z_train, Z_eval, Y_train_base, Y_test_base,
+                Z_train, Z_eval, Y_train_base, Y_eval_base,
                 latdim, None, is_logistic, binary,
                 **clf_kwargs,
             )
