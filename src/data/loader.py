@@ -251,8 +251,8 @@ def load_tensor_datasets(
 
     print(f"special_split = {special_split}")
     strat_array = (
-        load_patient_metadata("group", len(X_ED, 
-                                                            recalculate=recalculate_y, cache_folder=y_cache_folder)) 
+        load_patient_metadata("group", len(X_ED), 
+                                                            recalculate=recalculate_y, cache_folder=y_cache_folder) 
         if (stratify_ongroup and special_split is not None) else None
     )
 
