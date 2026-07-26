@@ -1,0 +1,72 @@
+
+=== python -u scripts/run_autoencoder.py --trial-id 757cfaac_ae --set seed=0 ===
+special_split = split100
+Data loaded | train: 200 | val: 40 | test: 60 | split: split100
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=20 | max_epochs=2
+Epoch 1/2 | train: 0.014037 | val: 0.006473 | lr: 5.00e-04 ✓ best
+Epoch 2/2 | train: 0.004374 | val: 0.005430 | lr: 5.00e-04 ✓ best
+/home/renku/work/SDSC-arthur-project-1/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+Loss plot saved: /home/renku/work/SDSC-arthur-project-1/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_split100_20dims_AIagent_classification_debug_train_val_loss.png
+[train] R2 mean=0.5985 std=0.2254 | MSE mean=670.679749
+[validation] R2 mean=0.5406 std=0.2497 | MSE mean=919.571106
+[test] R2 mean=0.5854 std=0.2648 | MSE mean=505.538757
+
+=== python -u scripts/run_autoencoder.py --trial-id 757cfaac_ae --set seed=1 ===
+special_split = split100
+Data loaded | train: 200 | val: 40 | test: 60 | split: split100
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=20 | max_epochs=2
+Epoch 1/2 | train: 0.014725 | val: 0.006009 | lr: 5.00e-04 ✓ best
+Epoch 2/2 | train: 0.004230 | val: 0.005599 | lr: 5.00e-04 ✓ best
+/home/renku/work/SDSC-arthur-project-1/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+Loss plot saved: /home/renku/work/SDSC-arthur-project-1/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_split100_20dims_AIagent_classification_debug_train_val_loss.png
+[train] R2 mean=0.6377 std=0.1349 | MSE mean=649.989075
+[validation] R2 mean=0.6006 std=0.1882 | MSE mean=948.127563
+[test] R2 mean=0.6413 std=0.1473 | MSE mean=486.492371
+
+=== python -u scripts/run_autoencoder.py --trial-id 757cfaac_ae --set seed=2 ===
+special_split = split100
+Data loaded | train: 200 | val: 40 | test: 60 | split: split100
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=20 | max_epochs=2
+Epoch 1/2 | train: 0.025321 | val: 0.005780 | lr: 5.00e-04 ✓ best
+Epoch 2/2 | train: 0.004347 | val: 0.005533 | lr: 5.00e-04 ✓ best
+/home/renku/work/SDSC-arthur-project-1/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+Loss plot saved: /home/renku/work/SDSC-arthur-project-1/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_split100_20dims_AIagent_classification_debug_train_val_loss.png
+[train] R2 mean=0.5439 std=0.3637 | MSE mean=685.071533
+[validation] R2 mean=0.4650 std=0.3964 | MSE mean=936.901733
+[test] R2 mean=0.5079 std=0.4393 | MSE mean=525.250366
+
+=== python -u scripts/run_regression.py --trial-id 757cfaac_clf --ae-trial-tag 757cfaac_ae --ae-filter seed=0 ===
+Regression | source=ae | y=group | classifier=logistic | n_train=100 | split=split100
+Y loaded: group, 150 patients
+Found 1 latent_dim(s): [20]
+Split verified against all 1 AE runs ✓
+Loading image data (tensor format for AE encoding)...
+special_split = split100
+Split: split100 | train=200 | test=60
+  latent_dim=20 | encoded train=(200, 20) eval(val)=(40, 20)
+  latent_dim= 20 | acc=0.400  prec_macro=0.339
+
+=== python -u scripts/run_regression.py --trial-id 757cfaac_clf --ae-trial-tag 757cfaac_ae --ae-filter seed=1 ===
+Regression | source=ae | y=group | classifier=logistic | n_train=100 | split=split100
+Y loaded: group, 150 patients
+Found 1 latent_dim(s): [20]
+Split verified against all 1 AE runs ✓
+Loading image data (tensor format for AE encoding)...
+special_split = split100
+Split: split100 | train=200 | test=60
+  latent_dim=20 | encoded train=(200, 20) eval(val)=(40, 20)
+  latent_dim= 20 | acc=0.550  prec_macro=0.525
+
+=== python -u scripts/run_regression.py --trial-id 757cfaac_clf --ae-trial-tag 757cfaac_ae --ae-filter seed=2 ===
+Regression | source=ae | y=group | classifier=logistic | n_train=100 | split=split100
+Y loaded: group, 150 patients
+Found 1 latent_dim(s): [20]
+Split verified against all 1 AE runs ✓
+Loading image data (tensor format for AE encoding)...
+special_split = split100
+Split: split100 | train=200 | test=60
+  latent_dim=20 | encoded train=(200, 20) eval(val)=(40, 20)
+  latent_dim= 20 | acc=0.425  prec_macro=0.402
