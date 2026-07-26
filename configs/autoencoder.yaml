@@ -15,6 +15,8 @@ mask_ys: false                   # apply ground-truth mask
 mask_bin: false                  # use binary mask
 recalculate_x: false
 cache_folder: "X_vectors"        # subfolder in processed_images/ for cached .npy arrays
+recalculate_y: false
+y_cache_folder: "Y_vectors"
 
 # ── Split ────────────────────────────────────────────────────────────────
 n_train: 100

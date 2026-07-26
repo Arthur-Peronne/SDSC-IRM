@@ -276,6 +276,8 @@ def _run_pca_source(cfg, Y_full, client, args):
         frame_type=frame_type,
         image_roi_only=pca_params.get("image_roi_only", "True") == "True",
         recalculate=False,
+        recalculate_y=cfg.get("recalculate_y", True), 
+        y_cache_folder=cfg.get("y_cache_folder", "Y_vectors"), 
     )
     print(f"Split: {split_name} | train={len(X_train)} | test={len(X_test)}")
 
@@ -437,6 +439,8 @@ def _run_ae_source(cfg, Y_full, client, args):
         frame_type=frame_type,
         image_roi_only=image_roi_only,
         recalculate=False,
+        recalculate_y=cfg.get("recalculate_y", True),
+        y_cache_folder=cfg.get("y_cache_folder", "Y_vectors"),
     )
     print(f"Split: {split_name} | train={len(train_ds)} | test={len(test_ds)}")
 
