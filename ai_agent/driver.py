@@ -420,9 +420,16 @@ def write_record(md_path: Path, trial_id: str, status: str, verdict: str | None,
             f"- **{cfg['eval']['primary_metric_name']}:** {aggregate:.6f}",
             f"- **delta_vs_champion** (display only): {delta:+.6f}",
         ]
+
         for name in also:
             vals = [r[name] for r in runs]
             lines.append(f"- **{name}** (mean, non-decisional): {sum(vals) / len(vals):.6f}")
+
+        also_ae = cfg["eval"].get("also_log_ae", []) or []     
+        for name in also_ae:                        
+            vals = [r[name] for r in ae_runs] if ae_runs else []
+            if vals:
+                lines.append(f"- **{name}** (mean, AE phase, non-decisional): {sum(vals) / len(vals):.6f}")
 
         #  two separate lines instead of one combined "MLflow Run IDs"
         ae_ids = " ".join(r["run_id"] for r in ae_runs) if ae_runs else "(unavailable)"
@@ -493,7 +500,9 @@ def run_trial() -> tuple[str, str | None]:
         # 3a. train the AE(s) (N runs, all-or-nothing)
         overrides = _repeat_values(cfg)
         run_eval(cfg, trial_id + "_ae", overrides, log_path)
-        ae_runs = read_trial_runs(trial_id + "_ae", per, also, _repeat_axis(cfg))  
+        also_ae = cfg["eval"].get("also_log_ae", []) or [] 
+        ae_metric = also_ae[0] if also_ae else per   
+        ae_runs = read_trial_runs(trial_id + "_ae", ae_metric, also_ae[1:], _repeat_axis(cfg)) # CHANGED
 
         # 3b. classify each AE run produced above (N runs, all-or-nothing)
         run_eval_clf(cfg, trial_id + "_clf", trial_id + "_ae", overrides, log_path)

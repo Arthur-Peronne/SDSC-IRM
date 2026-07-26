@@ -377,6 +377,7 @@ def _run_ae_source(cfg, Y_full, client, args):
         raise ValueError("eval_on='val' requires n_val > 0 in regression.yaml")
 
     # ── Search AE runs ────────────────────────────────────────────────────────
+    ae_filter_params = {}  
     if args.ae_trial_tag:
         # Mode Agent : find AE run with tag
         conditions = [f"tags.trial_id = '{args.ae_trial_tag}'"]
@@ -385,6 +386,7 @@ def _run_ae_source(cfg, Y_full, client, args):
                 raise SystemExit(f"--ae-filter expects KEY=VALUE, got: {kv!r}")
             k, v = kv.split("=", 1)
             conditions.append(f"params.{k} = '{v}'")
+            ae_filter_params[k] = v 
         filter_str = " AND ".join(conditions)
     else:
         # Manual (default) mode
@@ -473,7 +475,7 @@ def _run_ae_source(cfg, Y_full, client, args):
 
     tags = {"trial_id": args.trial_id} if args.trial_id else None   
     with tracking.start_run("regression", _run_name(cfg, split_name), tags=tags):   
-        tracking.log_params({**_build_params(cfg, split_name, args), "eval_on": eval_on})
+        tracking.log_params({**_build_params(cfg, split_name, args), "eval_on": eval_on}, **ae_filter_params)
         tracking.log_artifact(CONFIG_PATH)
 
         for latdim in sorted_latdims:
