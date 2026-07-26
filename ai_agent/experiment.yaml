@@ -46,12 +46,12 @@ training:
 # NOTE: validation_R2_mean / validation_MSE_mean are only logged when n_val > 0
 # and compute_metrics: true in autoencoder.yaml — keep both for these campaigns.
 eval:
-  per_run_metric:      "validation_R2_mean"      # final scalar logged per run
+  per_run_metric:      "accuracy_test"      # final scalar logged per run: "validation_R2_mean" or "accuracy_test"
   aggregation:         "identity"                     # "identity" (N=1) | "mean" (N>1)
-  primary_metric_name: "avg_validation_R2_mean"   # label for the aggregate
+  primary_metric_name: "classification_accuracy_val"   # label for the aggregate
   direction:           "maximize"                 # "maximize" | "minimize"
   also_log:                                       # recorded for context, NON-decisional
-    - "validation_MSE_mean"
+    - "validation_R2_mean"
 
 # -- 4. Verdict: deterministic keep / revert (NO LLM) -------------------------
 # Compared against the current champion's aggregate (best BASELINE/CHAMPION row

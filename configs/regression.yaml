@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "valset_tests" 
+experiment_tag: "AIagent_classification_debug" 
 
 # ── Target variable ───────────────────────────────────────────────────────────
 recalculate_y: false 
@@ -19,7 +19,7 @@ n_val: 20
 special_split: "split100" # "split100"     # null = sequential "splitdefault"; "split42" = seeded random
 
 # ── Evaluation set (AE source only) ───────────────────────────────────────────
-eval_on: "test"             # "test" (défaut) |  # "val" requires  n_val > 0 and  n_val == n_val from the AE model
+eval_on: "val"             # "test" (défaut) |  # "val" requires  n_val > 0 and  n_val == n_val from the AE model
 
 # ── Classifier ────────────────────────────────────────────────────────────────
 classifier_type: "logistic" # "logistic" | "random_forest" | "xgboost"

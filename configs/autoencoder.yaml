@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "sepv2_dim20_variousseeds" # "baseline_aiarchi"
+experiment_tag: "AIagent_classification_debug" # "baseline_aiarchi"
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
@@ -26,7 +26,7 @@ special_split: "split100"              # null = sequential "splitdefault"; e.g. 
 stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
 
 # ── Reproducibility ─────────────────────────────────────────────────────────
-seed: 5  # global RNG seed (torch/numpy/random), logged to MLflow. Set to null for a non-reproducible (random) run.
+seed: 0  # global RNG seed (torch/numpy/random), logged to MLflow. Set to null for a non-reproducible (random) run.
 deterministic: false  # force deterministic GPU algos (cuDNN + use_deterministic_algorithms). Slower training — set false for speed, true to verify reproducibility.
 
 # ── Model ─────────────────────────────────────────────────────────────────────
