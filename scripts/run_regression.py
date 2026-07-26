@@ -475,7 +475,7 @@ def _run_ae_source(cfg, Y_full, client, args):
 
     tags = {"trial_id": args.trial_id} if args.trial_id else None   
     with tracking.start_run("regression", _run_name(cfg, split_name), tags=tags):   
-        tracking.log_params({**_build_params(cfg, split_name, args), "eval_on": eval_on}, **ae_filter_params)
+        tracking.log_params({**_build_params(cfg, split_name, args), "eval_on": eval_on, **ae_filter_params})
         tracking.log_artifact(CONFIG_PATH)
 
         for latdim in sorted_latdims:
