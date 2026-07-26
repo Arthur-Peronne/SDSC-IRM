@@ -1,9 +1,9 @@
 ======================================================================
 PROJECT ARBORESCENCE WITH MODULE DESCRIPTIONS
-Root : /home/renku/work/SDSC-arthur-project-1
+Root : /home/renku/work/SDSC-IRM
 ======================================================================
 
-SDSC-arthur-project-1/
+SDSC-IRM/
 ├── ai_agent/
 │   ├── ai_agent_structure_obsolete/
 │   │   ├── old_compaigns/
@@ -325,7 +325,6 @@ SDSC-arthur-project-1/
 │   ├── context_code.txt
 │   ├── context_yaml.txt
 │   └── dump_context.py
-├── archive_todelete/
 ├── configs/
 │   ├── ae_HPforarchis.yaml
 │   ├── ae_optuna.yaml
@@ -362,6 +361,11 @@ SDSC-arthur-project-1/
 │   ├── run_regression.py  # Regression pipeline on PCA or AE latent representations.
 │   ├── run_visualize.py  # Visualize MRI NIfTI images (raw ACDC or processed).
 │   └── run_visualize_latent.py  # Visualize the latent space of a trained AE or VAE model.
+├── sdsc_arthur_project.egg-info/
+│   ├── PKG-INFO
+│   ├── SOURCES.txt
+│   ├── dependency_links.txt
+│   └── top_level.txt
 ├── src/
 │   ├── data/
 │   │   ├── __init__.py
@@ -400,11 +404,8 @@ SDSC-arthur-project-1/
 │   └── tracking.py  # MLflow utilities. All tracking interactions must go through this module.
 ├── CLAUDE.md
 ├── README.md
-├── alldims_sepv2_HPaiagentA.txt
-├── alldims_sepv2_HPaiagentAbis.txt
 ├── pyproject.toml
-├── requirements_locked.txt
-└── shortcut_AP.txt
+└── requirements_locked.txt
 
 ======================================================================
 DETAILED DOCSTRINGS PER FILE
@@ -584,6 +585,11 @@ Source AE   : finds all autoencoder MLflow runs matching model_name /
 One MLflow run is created in the "regression" experiment per script execution.
 Metrics are logged with step = n_dims (n_pc for PCA, latent_dim for AE).
 Classifiers / regressors are saved as joblib artifacts inside that run.
+
+classifier_type (set in configs/regression.yaml):
+    "logistic"      → LogisticRegression (default, existing behaviour)
+    "random_forest" → RandomForestClassifier
+    "xgboost"       → XGBClassifier
 
 Usage:
     python scripts/run_regression.py

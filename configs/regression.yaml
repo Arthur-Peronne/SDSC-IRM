@@ -4,16 +4,22 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "ae_seeds_variance" 
+experiment_tag: "valset_tests" 
 
 # ── Target variable ───────────────────────────────────────────────────────────
+recalculate_y: true 
+y_cache_folder: "Y_vectors"
 y_name: "group"                  # "group", "height", "weight"
 group_binary: false              # true = binary (one class vs rest); only if y_name = "group"
 group_bin_value: "NOR"           # used only if group_binary = true; "DCM", "HCM", "MINF", "NOR", "RV"
 
 # ── Data split ────────────────────────────────────────────────────────────────
 n_train: 100                     # number of training patients (n_test = 150 - n_train)
-special_split: null              # null = sequential "splitdefault"; "split42" = seeded random
+n_val: 20                   
+special_split: null     # null = sequential "splitdefault"; "split42" = seeded random
+
+# ── Evaluation set (AE source only) ───────────────────────────────────────────
+eval_on: "val"             # "test" (défaut) |  # "val" requires  n_val > 0 and  n_val == n_val from the AE model
 
 # ── Classifier ────────────────────────────────────────────────────────────────
 classifier_type: "logistic" # "logistic" | "random_forest" | "xgboost"
@@ -62,11 +68,11 @@ latent_dims_list:                # one regression per n_pc
 # search_runs() selects all AE runs matching these criteria, grouped by latent_dimensions
 ae_source:
   model_name: "AE3dAsymResSeparableV2"       # model architecture name logged in MLflow
-  experiment_tag: "sepv2_dim20_variousseeds"     # experiment_tag param logged in MLflow
+  experiment_tag: "baseline_aiarchi"     # experiment_tag param logged in MLflow
   split_name: "splitdefault"     # split_name param logged in MLflow
-  params_filter: {
-                  seed: 5
-                  }              # optional extra MLflow param filters (e.g. frame_tag: "ED")
+  # params_filter: {
+  #                 seed: 5
+  #                 }              # optional extra MLflow param filters (e.g. frame_tag: "ED")
 
 # ── LOAD / plot-only mode ──────────────────────────────────────────────────────
 plot_only: false                 # true = skip regression, reload metrics from load_run_id and replot
