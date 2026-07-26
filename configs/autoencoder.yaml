@@ -48,7 +48,7 @@ hyper_automatic_values: false    # if True, goes to ae_HPforarchis.yaml. If Fals
 lr: 5e-4                         # Learning rate
 weight_decay: 1e-5                # L2 regularisation
 dropout_rate: 0.1                #
-noise_std: 0.0                   # 0.0 = no denoising
+noise_std: 0.05                  # 0.0 = no denoising
 patience: 20                     # early stopping patience (used only if n_val > 0)
 
 # ── VAE parameters (AE3dFCDeep_VAE only) ──────────────────────────────────────
