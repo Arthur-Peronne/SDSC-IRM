@@ -1,0 +1,36 @@
+
+=== python -u scripts/run_autoencoder.py --trial-id 3e974148_ae ===
+special_split = split100
+Data loaded | train: 200 | val: 40 | test: 60 | split: split100
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=20 | max_epochs=2
+Epoch 1/2 | train: 0.024403 | val: 0.005917 | lr: 5.00e-04 ✓ best
+Epoch 2/2 | train: 0.004514 | val: 0.005607 | lr: 5.00e-04 ✓ best
+/home/renku/work/SDSC-arthur-project-1/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+Loss plot saved: /home/renku/work/SDSC-arthur-project-1/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_split100_20dims_sepv2_dim20_variousseeds_train_val_loss.png
+[train] R2 mean=0.6210 std=0.1572 | MSE mean=701.827820
+[validation] R2 mean=0.5808 std=0.2014 | MSE mean=949.460327
+[test] R2 mean=0.6134 std=0.1834 | MSE mean=516.268311
+
+=== python -u scripts/run_regression.py --trial-id 3e974148_clf --ae-trial-tag 3e974148_ae ===
+Regression | source=ae | y=group | classifier=logistic | n_train=100 | split=splitdefault
+Y loaded: group, 150 patients
+Found 1 latent_dim(s): [20]
+Traceback (most recent call last):
+  File "/home/renku/work/SDSC-arthur-project-1/scripts/run_regression.py", line 830, in <module>
+    main()
+    ~~~~^^
+  File "/home/renku/work/SDSC-arthur-project-1/scripts/run_regression.py", line 823, in main
+    _run_ae_source(cfg, Y_full, client, args)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/renku/work/SDSC-arthur-project-1/scripts/run_regression.py", line 426, in _run_ae_source
+    _verify_split(ae_run_id, {"split_name": split_name, "n_train": n_train, "n_val": n_val,
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                            "stratify_ongroup": stratify_ongroup}, client)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/renku/work/SDSC-arthur-project-1/scripts/run_regression.py", line 82, in _verify_split
+    raise ValueError(
+        f"Split / data mismatch with MLflow run {run_id}:\n" + "\n".join(mismatches)
+    )
+ValueError: Split / data mismatch with MLflow run 080ef2a48f8f41b48c0b01dc7e45ab26:
+  split_name: stored='split100', expected='splitdefault'
