@@ -20,7 +20,7 @@ experiment_name: "AIagent_classification_test"
 # driver aborts the trial BEFORE committing or training. Nothing is recorded;
 # revert the stray change and rerun.
 mutable:
-  # - src/models/ae_models.py       # architecture definitions + build_autoencoder factory
+  - src/models/ae_models.py       # architecture definitions + build_autoencoder factory
   - configs/autoencoder.yaml      # training config (model_name, hyperparameters, ...)
 
 # -- 2. Training: how ONE trial runs ------------------------------------------
@@ -63,7 +63,7 @@ eval:
 # Delete the whole `candidate` block for plain binary keep/revert.
 decision:
   branch: "agent-ae-opti"        # isolated branch; the driver never commits to main
-  max_trials: 3                  # driver refuses a new trial once the ledger has this many
+  max_trials: 20                  # driver refuses a new trial once the ledger has this many
   candidate:
     statistic: "max"             # over the per-run values (before aggregation)
     margin: 0.10                 # maximize: CANDIDATE if max(values) > champion + margin

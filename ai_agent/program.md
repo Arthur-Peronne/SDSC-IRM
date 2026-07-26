@@ -9,12 +9,11 @@ decides and the driver applies. Rewrite this file at the start of each campaign.
 # program.md — Research Session Intention
 
 ## Objective
-The goal of this campaign is to optimize the hyperparameters of the autoencoder "AE3dAsymResSeparableV2" at latent_dimensions = 20, by running trials in order
-to maximize the primary metric.
+The goal of this campaign is to optimize autoencoder at latent_dimensions = 20, 
+by running trials in order to maximize the primary metric.
 
 ## What to explore this session
-- Modify only the hyperparamers autoencoder.yaml (you can't change the model architecture or other parameters)
-- Only 5 hyperparameters opened to change, to optimize: lr, weight_decay, dropout_rate, noise_std, patience
+- You can modify the overall architecture or the model details (number of layers, fine structure) in ae_models.py, and the hyperparameters lr, weight_decay, dropout_rate, noise_std, patience in autoencoder?yaml (you can't change other parameters)
 - hyper_automatic_values is already set to false for this campaign (so the YAML values are the ones used). Do NOT change it, and do NOT touch any field of autoencoder.yaml other than the ones opened to change.
 - Propose deliberate, mechanistically-justified changes — not random search.
 
