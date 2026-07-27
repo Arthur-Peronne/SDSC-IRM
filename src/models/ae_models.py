@@ -1882,6 +1882,96 @@ class AutoEncoder3D_AsymResSeparableV2(nn.Module):
         return x_recon, z
 
 
+class AutoEncoder3D_AsymResSeparableBottleneckAttention(nn.Module):
+    """
+    Trial 10: Champion architecture with SE attention added to the bottleneck.
+    Encoder and decoder identical to AE3dAsymResSeparableV2. The bottleneck
+    (Conv3d×2 → 128×2×8×8) is followed by SE attention, which recalibrates
+    channel features before spatial compression to latent_dim.
+    No skip connections.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0, reduction=16):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        # Encoder: identical to champion
+        self.enc1 = ResSeparableConv3DBlock(1, 8, downsample=False)
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
+        self.enc2 = ResSeparableConv3DBlock(8, 16, downsample=True)
+        self.enc3 = ResSeparableConv3DBlock(16, 32, downsample=True)
+        self.z_pool3 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))
+        self.enc4 = SeparableConv3DBlock(32, 64, downsample=True)
+
+        # Bottleneck: Conv3d×2 + SE attention
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+        )
+        self.bottleneck_se = SEBlock3D(128, reduction)
+
+        self.final_down = nn.Conv3d(128, 128, 2, 2)
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, 2, 2)
+        self.z_up = nn.Upsample(scale_factor=(2, 1, 1), mode='trilinear', align_corners=False)
+
+        # Decoder: identical to champion
+        self.dec1 = ResUpSeparableConv3DBlock(128, 64)
+        self.dec2 = ResUpSeparableConv3DBlock(64, 32)
+        self.dec3 = ResUpSeparableConv3DBlock(32, 16)
+
+        self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
+        self.dec4_conv = ResSeparableConv3DBlock(16, 8, downsample=False)
+
+        self.final_conv = nn.Conv3d(8, 1, 3, 1, 1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.pool1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.z_pool3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.bottleneck_se(x)  # SE attention on bottleneck features
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.z_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4_up(x)
+        x = self.dec4_conv(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+
 # Building
 
 def build_autoencoder(model_name, latent_dimensions, dropout_rate=0.0):
@@ -1943,10 +2033,13 @@ def build_autoencoder(model_name, latent_dimensions, dropout_rate=0.0):
     elif model_name == "AE3dAsymResSeparable": # 0.795874 -> TO TRAIN ALL DIMS?
         return AutoEncoder3D_AsymResSeparable(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dAsymResSeparableV2": # 0.811539 -> TO TRAIN ALL DIMS?
+    elif model_name == "AE3dAsymResSeparableV2": # 0.811539 -> TO TRAIN ALL DIMS?
         return AutoEncoder3D_AsymResSeparableV2(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    # ELSE 
+    elif model_name == "AE3dAsymResSeparableBottleneckAttention":
+        return AutoEncoder3D_AsymResSeparableBottleneckAttention(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    # ELSE
 
     else:
         raise ValueError(f"Unknown model_name: {model_name}")
