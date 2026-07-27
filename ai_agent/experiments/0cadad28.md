@@ -1,16 +1,21 @@
 ---
 model_name: AE3dAsymResSeparableV2
-summary: Widen ONLY the encoder path (1/8/16/32/64 -> 1/16/32/64/128); bottleneck_conv, flattened_size (2048) and decoder unchanged, isolating capacity from the bottleneck-dilution confound of FAILED trial b606a10f
+summary: Widen ONLY the encoder path (1/8/16/32/64 -> 1/16/32/64/128); bottleneck_conv,
+  flattened_size (2048) and decoder unchanged, isolating capacity from the bottleneck-dilution
+  confound of FAILED trial b606a10f
 parent: 3aa0388f
-id: null
-status: draft
-verdict: null
-created_at: null
+id: 0cadad28
+status: completed
+verdict: FAILURE
+created_at: '2026-07-27T07:37:44+00:00'
 metric:
-  primary: {name: classification_accuracy_val, value: null, direction: maximize}
+  primary:
+    name: classification_accuracy_val
+    value: 0.525
+    direction: maximize
 ---
 
-# Trial <id> — AE3dAsymResSeparableV2 — <verdict>
+# Trial 0cadad28 — AE3dAsymResSeparableV2 — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -53,7 +58,12 @@ identical to champion, isolating the encoder-capacity change alone.
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. -->
+- **accuracy_test per run:** 0: 0.600000 | 1: 0.525000 | 2: 0.450000
+- **classification_accuracy_val:** 0.525000
+- **delta_vs_champion** (display only): -0.083333
+- **validation_R2_mean** (mean, AE phase, non-decisional): 0.690356
+- **AE MLflow Run IDs:** 6f794e0e124c4644bea29b0fe44ac7f1 2b3af037b9804b6a87f993a09ba44a26 5fc589cf21cd40c889a5aeb7d65f64c9
+- **Classification MLflow Run IDs:** 93366cd46fed4b7c958409ba92e8dba8 8ab081280011459b964a2f3fbeba6365 cf491c216de641f7ba034af389706137
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
