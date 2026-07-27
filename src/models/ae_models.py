@@ -1811,45 +1811,40 @@ class AutoEncoder3D_AsymResSeparableV2(nn.Module):
         self.latent_dim = latent_dim
         self.input_shape = input_shape
 
-        # Trial 3aa0388f->next (2026-07-26): channel widths doubled throughout
-        # (8/16/32/64/128 -> 16/32/64/128/256) to test whether added capacity, now that
-        # bottleneck dropout=0.3 is validated as an effective regularizer, captures more
-        # classification-relevant anatomical detail without overfitting the 100 training
-        # volumes. No structural change (same block types/depth/pooling), channels only.
-        self.enc1 = ResSeparableConv3DBlock(1, 16, downsample=False)              # 16×32×128×128
-        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))       # 16×32×64×64
-        self.enc2 = ResSeparableConv3DBlock(16, 32, downsample=True)              # 32×16×32×32
-        self.enc3 = ResSeparableConv3DBlock(32, 64, downsample=True)              # 64×8×16×16
-        self.z_pool3 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))    # 64×4×16×16
-        self.enc4 = SeparableConv3DBlock(64, 128, downsample=True)                # 128×2×8×8
+        self.enc1 = ResSeparableConv3DBlock(1, 8, downsample=False)               # 8×32×128×128
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))       # 8×32×64×64
+        self.enc2 = ResSeparableConv3DBlock(8, 16, downsample=True)               # 16×16×32×32
+        self.enc3 = ResSeparableConv3DBlock(16, 32, downsample=True)              # 32×8×16×16
+        self.z_pool3 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))    # 32×4×16×16
+        self.enc4 = SeparableConv3DBlock(32, 64, downsample=True)                 # 64×2×8×8
 
         self.bottleneck_conv = nn.Sequential(
-            nn.Conv3d(128, 256, 3, 1, 1),
-            nn.InstanceNorm3d(256), nn.ReLU(inplace=True),
-            nn.Conv3d(256, 256, 3, 1, 1),
-            nn.InstanceNorm3d(256), nn.ReLU(inplace=True),
+            nn.Conv3d(64, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
         )
-        self.final_down = nn.Conv3d(256, 256, 2, 2)                               # 256×1×4×4
+        self.final_down = nn.Conv3d(128, 128, 2, 2)                               # 128×1×4×4
 
-        self.feature_shape = (256, 1, 4, 4)
-        flattened_size = 256 * 1 * 4 * 4  # 4096
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
 
         self.flatten = nn.Flatten()
         self.dropout = nn.Dropout(p=dropout_rate)
         self.fc_enc = nn.Linear(flattened_size, latent_dim)
 
         self.fc_dec = nn.Linear(latent_dim, flattened_size)
-        self.initial_up = nn.ConvTranspose3d(256, 256, 2, 2)                     # 256×2×8×8
+        self.initial_up = nn.ConvTranspose3d(128, 128, 2, 2)                     # 128×2×8×8
         self.z_up = nn.Upsample(scale_factor=(2, 1, 1), mode='trilinear', align_corners=False)
 
-        self.dec1 = ResUpSeparableConv3DBlock(256, 128)                           # 128×8×16×16
-        self.dec2 = ResUpSeparableConv3DBlock(128, 64)                            # 64×16×32×32
-        self.dec3 = ResUpSeparableConv3DBlock(64, 32)                             # 32×32×64×64
+        self.dec1 = ResUpSeparableConv3DBlock(128, 64)                            # 64×8×16×16
+        self.dec2 = ResUpSeparableConv3DBlock(64, 32)                             # 32×16×32×32
+        self.dec3 = ResUpSeparableConv3DBlock(32, 16)                             # 16×32×64×64
 
         self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
-        self.dec4_conv = ResSeparableConv3DBlock(32, 16, downsample=False)        # 16×32×128×128
+        self.dec4_conv = ResSeparableConv3DBlock(16, 8, downsample=False)         # 8×32×128×128
 
-        self.final_conv = nn.Conv3d(16, 1, 3, 1, 1)
+        self.final_conv = nn.Conv3d(8, 1, 3, 1, 1)
         self.final_activation = nn.Sigmoid()
 
     def encode(self, x):
