@@ -1882,6 +1882,130 @@ class AutoEncoder3D_AsymResSeparableV2(nn.Module):
         return x_recon, z
 
 
+class ResAttentionConv3DBlock(nn.Module):
+    """
+    Residual 3D block with Squeeze-and-Excitation attention.
+    Standard convolutions + residual shortcut + SE channel attention.
+    output = ReLU(SE(Conv(x) + shortcut(x))).
+    MaxPool applied after attention.
+    """
+    def __init__(self, in_channels, out_channels, downsample=True, reduction=16):
+        super().__init__()
+        self.conv1 = nn.Conv3d(in_channels, out_channels, 3, 1, 1)
+        self.norm1 = nn.InstanceNorm3d(out_channels)
+        self.relu1 = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv3d(out_channels, out_channels, 3, 1, 1)
+        self.norm2 = nn.InstanceNorm3d(out_channels)
+        self.shortcut = nn.Conv3d(in_channels, out_channels, 1) if in_channels != out_channels else nn.Identity()
+        self.relu_out = nn.ReLU(inplace=True)
+        self.se = SEBlock3D(out_channels, reduction)
+        self.downsample = downsample
+        if self.downsample:
+            self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
+
+    def forward(self, x):
+        residual = self.shortcut(x)
+        out = self.conv1(x)
+        out = self.norm1(out)
+        out = self.relu1(out)
+        out = self.conv2(out)
+        out = self.norm2(out)
+        out = out + residual
+        out = self.relu_out(out)
+        out = self.se(out)
+        if self.downsample:
+            out = self.pool(out)
+        return out
+
+
+class AutoEncoder3D_AsymResAttention(nn.Module):
+    """
+    Trial 9: Standard conv + residual + SE attention encoder with V4 asymmetric pooling.
+    Replaces champion's ResSeparableConv3DBlock with ResAttentionConv3DBlock
+    (standard 3x3x3 conv + residual shortcut + SE attention). Preserves the
+    residual gradient flow while adding channel-wise feature recalibration.
+    Decoder identical to champion.
+    No skip connections.
+    """
+    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0, reduction=16):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.input_shape = input_shape
+
+        # Encoder: residual attention blocks
+        self.enc1 = ResAttentionConv3DBlock(1, 8, downsample=False, reduction=reduction)
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
+        self.enc2 = ResAttentionConv3DBlock(8, 16, downsample=True, reduction=reduction)
+        self.enc3 = ResAttentionConv3DBlock(16, 32, downsample=True, reduction=reduction)
+        self.z_pool3 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))
+        self.enc4 = ResAttentionConv3DBlock(32, 64, downsample=True, reduction=reduction)
+
+        self.bottleneck_conv = nn.Sequential(
+            nn.Conv3d(64, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+            nn.Conv3d(128, 128, 3, 1, 1),
+            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
+        )
+
+        self.final_down = nn.Conv3d(128, 128, 2, 2)
+
+        self.feature_shape = (128, 1, 4, 4)
+        flattened_size = 128 * 1 * 4 * 4  # 2048
+
+        self.flatten = nn.Flatten()
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.fc_enc = nn.Linear(flattened_size, latent_dim)
+
+        self.fc_dec = nn.Linear(latent_dim, flattened_size)
+        self.initial_up = nn.ConvTranspose3d(128, 128, 2, 2)
+        self.z_up = nn.Upsample(scale_factor=(2, 1, 1), mode='trilinear', align_corners=False)
+
+        # Decoder: identical to champion
+        self.dec1 = ResUpSeparableConv3DBlock(128, 64)
+        self.dec2 = ResUpSeparableConv3DBlock(64, 32)
+        self.dec3 = ResUpSeparableConv3DBlock(32, 16)
+
+        self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
+        self.dec4_conv = ResSeparableConv3DBlock(16, 8, downsample=False)
+
+        self.final_conv = nn.Conv3d(8, 1, 3, 1, 1)
+        self.final_activation = nn.Sigmoid()
+
+    def encode(self, x):
+        x = self.enc1(x)
+        x = self.pool1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
+        x = self.z_pool3(x)
+        x = self.enc4(x)
+        x = self.bottleneck_conv(x)
+        x = self.final_down(x)
+        x = self.flatten(x)
+        x = self.dropout(x)
+        z = self.fc_enc(x)
+        return z
+
+    def decode(self, z):
+        x = self.fc_dec(z)
+        x = self.dropout(x)
+        x = x.view(-1, *self.feature_shape)
+        x = self.initial_up(x)
+        x = self.z_up(x)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.dec4_up(x)
+        x = self.dec4_conv(x)
+        x = self.final_conv(x)
+        x = self.final_activation(x)
+        return x
+
+    def forward(self, x):
+        z = self.encode(x)
+        x_recon = self.decode(z)
+        return x_recon, z
+
+
 # Building
 
 def build_autoencoder(model_name, latent_dimensions, dropout_rate=0.0):
@@ -1943,10 +2067,13 @@ def build_autoencoder(model_name, latent_dimensions, dropout_rate=0.0):
     elif model_name == "AE3dAsymResSeparable": # 0.795874 -> TO TRAIN ALL DIMS?
         return AutoEncoder3D_AsymResSeparable(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    elif model_name == "AE3dAsymResSeparableV2": # 0.811539 -> TO TRAIN ALL DIMS?
+    elif model_name == "AE3dAsymResSeparableV2": # 0.811539 -> TO TRAIN ALL DIMS?
         return AutoEncoder3D_AsymResSeparableV2(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
-    # ELSE 
+    elif model_name == "AE3dAsymResAttention":
+        return AutoEncoder3D_AsymResAttention(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
+
+    # ELSE
 
     else:
         raise ValueError(f"Unknown model_name: {model_name}")
