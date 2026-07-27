@@ -66,8 +66,27 @@ identical to champion, isolating the encoder-capacity change alone.
 - **Classification MLflow Run IDs:** 93366cd46fed4b7c958409ba92e8dba8 8ab081280011459b964a2f3fbeba6365 cf491c216de641f7ba034af389706137
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+No NaNs, no divergence, but noticeably more seed-to-seed spread than champion 3aa0388f.
+Early stopping at epochs 31/57/89 (best epoch 11/37/69) — seed 0 stopped very early
+(best epoch 11, vs champion's 34/47/45 range), the other two seeds close to champion's
+range. accuracy_test per seed (0.600/0.525/0.450) is also far more spread than champion's
+tight 0.575-0.625 band. validation_R2_mean=0.6904, essentially flat vs champion's 0.682
+(nowhere near trial b606a10f's 0.7315 jump from widening everything).
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Hypothesis **rejected**, and more informatively: it falsifies my trial-b606a10f
+explanation. classification_accuracy_val fell further, to 0.5250 (-0.0833 vs champion,
+worse than b606a10f's -0.05), even though the bottleneck dimensionality and dropout ratio
+were held IDENTICAL to the champion this time — so "bottleneck regularization dilution"
+cannot be the (sole) mechanism. Two observations narrow it down: (1) validation_R2_mean
+barely moved (0.6904 vs champion 0.682) — encoder-only widening, unlike full-network
+widening, bought almost no reconstruction benefit, meaning the extra encoder parameters
+mostly added optimization noise rather than useful capacity for this data volume; (2) the
+per-seed accuracy spread ballooned (0.45-0.60) with seed 0 early-stopping very early
+(epoch 11) — a sign the wider encoder makes training more sensitive to initialization at
+n=100 training volumes, consistent with a straightforward "too many parameters for too
+little data" overfitting/variance story rather than an over-regularized-bottleneck story.
+**Two architecture trials in a row (b606a10f, 0cadad28) have now failed via two distinct
+routes to "add capacity"** — this campaign's capacity-increase direction is exhausted;
+pivoting to the opposite direction (reduce capacity) for the next trial, since a smaller
+network may fit this 100-volume regime better, consistent with both failures here.
