@@ -13,7 +13,7 @@ The goal of this campaign is to optimize autoencoder at latent_dimensions = 20,
 by running trials in order to maximize the primary metric.
 
 ## What to explore this session
-- You can modify the overall architecture or the model details (number of layers, fine structure) in ae_models.py, and the hyperparameters lr, weight_decay, dropout_rate, noise_std, patience in autoencoder?yaml (you can't change other parameters)
+- You can modify the overall architecture or the model details (number of layers, fine structure) in ae_models.py, and the hyperparameters lr, weight_decay, dropout_rate, noise_std, patience in autoencoder.yaml (you can't change other parameters). Prioritize architecture changes to hyperparameters fine-tuning.
 - hyper_automatic_values is already set to false for this campaign (so the YAML values are the ones used). Do NOT change it, and do NOT touch any field of autoencoder.yaml other than the ones opened to change.
 - Propose deliberate, mechanistically-justified changes — not random search.
 
