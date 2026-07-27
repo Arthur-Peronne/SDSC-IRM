@@ -1811,15 +1811,27 @@ class AutoEncoder3D_AsymResSeparableV2(nn.Module):
         self.latent_dim = latent_dim
         self.input_shape = input_shape
 
-        self.enc1 = ResSeparableConv3DBlock(1, 8, downsample=False)               # 8×32×128×128
-        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))       # 8×32×64×64
-        self.enc2 = ResSeparableConv3DBlock(8, 16, downsample=True)               # 16×16×32×32
-        self.enc3 = ResSeparableConv3DBlock(16, 32, downsample=True)              # 32×8×16×16
-        self.z_pool3 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))    # 32×4×16×16
-        self.enc4 = SeparableConv3DBlock(32, 64, downsample=True)                 # 64×2×8×8
+        # Trial 3aa0388f->b606a10f(FAILURE)->next (2026-07-27): b606a10f doubled EVERY
+        # width including the bottleneck (128->256, flattened 2048->4096) and failed
+        # (-0.05 vs champion) despite validation_R2_mean improving — conclusion was that
+        # the enlarged bottleneck under the SAME dropout_rate=0.3 is proportionally less
+        # regularized, letting the classifier overfit train-specific reconstruction
+        # detail. This trial isolates the capacity variable from that confound: only the
+        # ENCODER path is widened (1/8/16/32/64 -> 1/16/32/64/128), while bottleneck_conv,
+        # final_down, feature_shape/flattened_size (2048, unchanged) and the entire
+        # decoder stay EXACTLY as in the champion — so dropout_rate=0.3 regularizes the
+        # identical 2048-d bottleneck it was validated on. Tests whether under-capacity
+        # in the encoder specifically (not the bottleneck) limited classification-
+        # relevant feature extraction, without repeating the bottleneck-dilution failure.
+        self.enc1 = ResSeparableConv3DBlock(1, 16, downsample=False)              # 16×32×128×128
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))       # 16×32×64×64
+        self.enc2 = ResSeparableConv3DBlock(16, 32, downsample=True)              # 32×16×32×32
+        self.enc3 = ResSeparableConv3DBlock(32, 64, downsample=True)              # 64×8×16×16
+        self.z_pool3 = nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1))    # 64×4×16×16
+        self.enc4 = SeparableConv3DBlock(64, 128, downsample=True)                # 128×2×8×8
 
         self.bottleneck_conv = nn.Sequential(
-            nn.Conv3d(64, 128, 3, 1, 1),
+            nn.Conv3d(128, 128, 3, 1, 1),
             nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
             nn.Conv3d(128, 128, 3, 1, 1),
             nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
