@@ -12,6 +12,17 @@ decides and the driver applies. Rewrite this file at the start of each campaign.
 The goal of this campaign is to optimize autoencoder at latent_dimensions = 20, 
 by running trials in order to maximize the primary metric.
 
+## Architectural constraint (hard rule, still in force)
+- **No skip connections (no U-Net):** no architecture proposed in this campaign may let spatial
+  information bypass the bottleneck via an encoder-to-decoder skip connection. Every path from input
+  to reconstruction must pass through the bottleneck vector.
+- Rationale: preserves an independent, fully-compressed latent space, required for future work (VAE
+  regularization, disentanglement, heart tissue deformation studies) that must act on the *entire*
+  representation, not on residual spatial detail leaking around it.
+- This does NOT ban same-stage residual blocks (e.g. `x + Conv(x)` within an encoder/decoder stage,
+  as already used in `AE3dAsymResSeparableV2`'s `Res*Conv3DBlock`s) — those don't cross the
+  bottleneck. It bans only long-range encoder-stage -> decoder-stage connections that skip it.
+
 ## What to explore this session
 - You can modify the overall architecture or the model details (number of layers, fine structure) in ae_models.py, and the hyperparameters lr, weight_decay, dropout_rate, noise_std, patience in autoencoder.yaml (you can't change other parameters). Prioritize architecture changes to hyperparameters fine-tuning.
 - hyper_automatic_values is already set to false for this campaign (so the YAML values are the ones used). Do NOT change it, and do NOT touch any field of autoencoder.yaml other than the ones opened to change.
