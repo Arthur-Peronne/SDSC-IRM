@@ -1,25 +1,20 @@
 ---
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
-model_name: AE3dAsymResSeparableV2SELateStrided      # the AE architecture trained (e.g. AE3dDilatedAttention). Descriptive, NOT the id.
-summary: "Replace champion's 2 explicit anisotropic MaxPools with learnable depthwise strided convs"         # one-line description of the change (becomes the CSV modification_description)
-parent: 761cab78         # lineage: `id` of the trial whose CODE this one branched FROM. null for roots.
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null              # short sha of commit 1 == the frozen input == this trial's identity
-status: draft         # draft -> completed | failed          (lifecycle, lowercase)
-verdict: null         # BASELINE | CHAMPION | CANDIDATE | FAILURE   (judgement, UPPERCASE)
-created_at: null
+model_name: AE3dAsymResSeparableV2SELateStrided
+summary: Replace champion's 2 explicit anisotropic MaxPools with learnable depthwise
+  strided convs
+parent: 761cab78
+id: 2dd4cd5f
+status: completed
+verdict: FAILURE
+created_at: '2026-07-28T15:35:38+00:00'
 metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+  primary:
+    name: classification_accuracy_val
+    value: 0.616667
+    direction: maximize
 ---
 
-# Trial <id> — <model_name> — <verdict>
+# Trial 2dd4cd5f — AE3dAsymResSeparableV2SELateStrided — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -52,10 +47,12 @@ and produces a (1,20) latent before launching the trial.
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **accuracy_test per run:** 0: 0.575000 | 1: 0.725000 | 2: 0.550000
+- **classification_accuracy_val:** 0.616667
+- **delta_vs_champion** (display only): -0.083333
+- **validation_R2_mean** (mean, AE phase, non-decisional): 0.731634
+- **AE MLflow Run IDs:** 9d572574d96249409f87fac3c92b669f b27b6b3dbf4e4cfc9dc32b6aa65242b4 2edd656d7a7b4ca88c27eb915ea0d870
+- **Classification MLflow Run IDs:** c772dd8ef55442ee8ef7d4a9dd0c3337 c22b44442c8b47388bed80ced5775611 5f831208f93b4f288307ed0961bc43d3
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->

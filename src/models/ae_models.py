@@ -2068,103 +2068,6 @@ class AutoEncoder3D_AsymResSeparableV2_SELate(nn.Module):
         return x_recon, z
 
 
-class AutoEncoder3D_AsymResSeparableV2_SELateStrided(nn.Module):
-    """
-    Champion `AE3dAsymResSeparableV2SELate` (trial 761cab78) with its two explicit anisotropic
-    MaxPool3d downsamplers (`pool1`, `z_pool3`) replaced by learnable depthwise strided
-    convolutions of the same kernel/stride (channel count unchanged, `groups=channels` keeps the
-    parameter count tiny). New architectural family, not an SE-placement variant: MaxPool always
-    keeps the single strongest activation per window and discards the rest, a fixed, non-learnable
-    rule; a strided depthwise conv learns *which combination* of values in that window to keep,
-    which can retain more of the fine structural detail (e.g. wall thickness gradients) that a hard
-    max operation would throw away — detail that may matter for downstream classification even where
-    it wouldn't shift the max-pooled activation. The per-encoder-block internal downsampling (still
-    MaxPool, inside `ResSeparableConv3DBlock`/`SeparableConv3DBlock`) is left untouched — this trial
-    isolates only the two standalone anisotropic pooling ops unique to this model's forward pass, to
-    keep the change contained and not touch shared block classes used by other architectures.
-    SE placement (se3, se4) kept identical to the champion. No encoder-to-decoder path — respects
-    the no-skip-connections rule.
-    """
-    def __init__(self, latent_dim=20, input_shape=(1, 32, 128, 128), dropout_rate=0.0):
-        super().__init__()
-        self.latent_dim = latent_dim
-        self.input_shape = input_shape
-
-        self.enc1 = ResSeparableConv3DBlock(1, 8, downsample=False)               # 8×32×128×128
-        self.pool1 = nn.Conv3d(8, 8, kernel_size=(1, 2, 2), stride=(1, 2, 2), groups=8)  # 8×32×64×64, learnable
-        self.enc2 = ResSeparableConv3DBlock(8, 16, downsample=True)               # 16×16×32×32
-        self.enc3 = ResSeparableConv3DBlock(16, 32, downsample=True)              # 32×8×16×16
-        self.se3 = SEBlock3D(32)
-        self.z_pool3 = nn.Conv3d(32, 32, kernel_size=(2, 1, 1), stride=(2, 1, 1), groups=32)  # 32×4×16×16, learnable
-        self.enc4 = SeparableConv3DBlock(32, 64, downsample=True)                 # 64×2×8×8
-        self.se4 = SEBlock3D(64)
-
-        self.bottleneck_conv = nn.Sequential(
-            nn.Conv3d(64, 128, 3, 1, 1),
-            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
-            nn.Conv3d(128, 128, 3, 1, 1),
-            nn.InstanceNorm3d(128), nn.ReLU(inplace=True),
-        )
-        self.final_down = nn.Conv3d(128, 128, 2, 2)                               # 128×1×4×4
-
-        self.feature_shape = (128, 1, 4, 4)
-        flattened_size = 128 * 1 * 4 * 4  # 2048
-
-        self.flatten = nn.Flatten()
-        self.dropout = nn.Dropout(p=dropout_rate)
-        self.fc_enc = nn.Linear(flattened_size, latent_dim)
-
-        self.fc_dec = nn.Linear(latent_dim, flattened_size)
-        self.initial_up = nn.ConvTranspose3d(128, 128, 2, 2)                     # 128×2×8×8
-        self.z_up = nn.Upsample(scale_factor=(2, 1, 1), mode='trilinear', align_corners=False)
-
-        self.dec1 = ResUpSeparableConv3DBlock(128, 64)                            # 64×8×16×16
-        self.dec2 = ResUpSeparableConv3DBlock(64, 32)                             # 32×16×32×32
-        self.dec3 = ResUpSeparableConv3DBlock(32, 16)                             # 16×32×64×64
-
-        self.dec4_up = nn.Upsample(scale_factor=(1, 2, 2), mode='trilinear', align_corners=False)
-        self.dec4_conv = ResSeparableConv3DBlock(16, 8, downsample=False)         # 8×32×128×128
-
-        self.final_conv = nn.Conv3d(8, 1, 3, 1, 1)
-        self.final_activation = nn.Sigmoid()
-
-    def encode(self, x):
-        x = self.enc1(x)
-        x = self.pool1(x)
-        x = self.enc2(x)
-        x = self.enc3(x)
-        x = self.se3(x)
-        x = self.z_pool3(x)
-        x = self.enc4(x)
-        x = self.se4(x)
-        x = self.bottleneck_conv(x)
-        x = self.final_down(x)
-        x = self.flatten(x)
-        x = self.dropout(x)
-        z = self.fc_enc(x)
-        return z
-
-    def decode(self, z):
-        x = self.fc_dec(z)
-        x = self.dropout(x)
-        x = x.view(-1, *self.feature_shape)
-        x = self.initial_up(x)
-        x = self.z_up(x)
-        x = self.dec1(x)
-        x = self.dec2(x)
-        x = self.dec3(x)
-        x = self.dec4_up(x)
-        x = self.dec4_conv(x)
-        x = self.final_conv(x)
-        x = self.final_activation(x)
-        return x
-
-    def forward(self, x):
-        z = self.encode(x)
-        x_recon = self.decode(z)
-        return x_recon, z
-
-
 # Building
 
 def build_autoencoder(model_name, latent_dimensions, dropout_rate=0.0):
@@ -2236,9 +2139,6 @@ def build_autoencoder(model_name, latent_dimensions, dropout_rate=0.0):
 
     elif model_name == "AE3dAsymResSeparableV2SELate":
         return AutoEncoder3D_AsymResSeparableV2_SELate(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
-
-    elif model_name == "AE3dAsymResSeparableV2SELateStrided":
-        return AutoEncoder3D_AsymResSeparableV2_SELateStrided(latent_dim=latent_dimensions, dropout_rate=dropout_rate)
 
     # ELSE
 

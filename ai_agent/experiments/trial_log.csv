@@ -5,3 +5,4 @@ timestamp,id,parent,model_name,modification_description,metric_name,metric_value
 2026-07-28T12:59:16+00:00,00c71333,a581f44e,AE3dAsymResSeparableV2SECBAM,"Add CBAM spatial attention at the bottleneck (128x2x8x8), on top of champion's SE",classification_accuracy_val,0.666667,-0.025000,completed,FAILURE
 2026-07-28T13:34:08+00:00,761cab78,a581f44e,AE3dAsymResSeparableV2SELate,Ablation: keep champion's SE only on enc3/enc4 (remove se1/se2),classification_accuracy_val,0.700000,+0.008333,completed,CHAMPION
 2026-07-28T14:18:07+00:00,09415e52,761cab78,AE3dAsymResSeparableV2SE4Only,Further ablation: keep champion's SE only on enc4 (remove se3 too),classification_accuracy_val,0.675000,-0.025000,completed,FAILURE
+2026-07-28T15:35:38+00:00,2dd4cd5f,761cab78,AE3dAsymResSeparableV2SELateStrided,Replace champion's 2 explicit anisotropic MaxPools with learnable depthwise strided convs,classification_accuracy_val,0.616667,-0.083333,completed,FAILURE
