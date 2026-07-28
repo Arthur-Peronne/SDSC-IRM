@@ -1,25 +1,20 @@
 ---
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
-model_name: AE3dAsymResSeparableV2SELateDeepFC      # the AE architecture trained (e.g. AE3dDilatedAttention). Descriptive, NOT the id.
-summary: "Nonlinear FC bottleneck: fc_enc/fc_dec through a 128-d ReLU hidden layer instead of one Linear"         # one-line description of the change (becomes the CSV modification_description)
-parent: 761cab78         # lineage: `id` of the trial whose CODE this one branched FROM. null for roots.
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null              # short sha of commit 1 == the frozen input == this trial's identity
-status: draft         # draft -> completed | failed          (lifecycle, lowercase)
-verdict: null         # BASELINE | CHAMPION | CANDIDATE | FAILURE   (judgement, UPPERCASE)
-created_at: null
+model_name: AE3dAsymResSeparableV2SELateDeepFC
+summary: 'Nonlinear FC bottleneck: fc_enc/fc_dec through a 128-d ReLU hidden layer
+  instead of one Linear'
+parent: 761cab78
+id: c0a7bad4
+status: completed
+verdict: FAILURE
+created_at: '2026-07-28T16:24:15+00:00'
 metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+  primary:
+    name: classification_accuracy_val
+    value: 0.641667
+    direction: maximize
 ---
 
-# Trial <id> — <model_name> — <verdict>
+# Trial c0a7bad4 — AE3dAsymResSeparableV2SELateDeepFC — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -52,10 +47,12 @@ task).
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **accuracy_test per run:** 0: 0.675000 | 1: 0.650000 | 2: 0.600000
+- **classification_accuracy_val:** 0.641667
+- **delta_vs_champion** (display only): -0.058333
+- **validation_R2_mean** (mean, AE phase, non-decisional): 0.701616
+- **AE MLflow Run IDs:** 45837f70ee4c4b6881f0edeaa200abe7 ee3b79ffc77c489b9a7788b4ea53c482 88382e00f51f475bb906b828b115ff80
+- **Classification MLflow Run IDs:** b49de773723a421182e30e760673a26a e125fc13f9714b109fec230a8afd28f8 b63cd2f88fd64ef392de7fff11dac5ad
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
