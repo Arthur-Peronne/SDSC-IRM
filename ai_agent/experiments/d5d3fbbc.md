@@ -1,25 +1,20 @@
 ---
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
 model_name: AE3dAsymResSeparableV2
-summary: Increase patience 20->40 on champion (lr=8e-4, dropout=0.3, weight_decay=1e-5), testing if higher early stopping patience allows fuller convergence
+summary: Increase patience 20->40 on champion (lr=8e-4, dropout=0.3, weight_decay=1e-5),
+  testing if higher early stopping patience allows fuller convergence
 parent: a2a3d9d1
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null              # short sha of commit 1 == the frozen input == this trial's identity
-status: draft         # draft -> completed | failed          (lifecycle, lowercase)
-verdict: null         # BASELINE | CHAMPION | CANDIDATE | FAILURE   (judgement, UPPERCASE)
-created_at: null
+id: d5d3fbbc
+status: completed
+verdict: FAILURE
+created_at: '2026-07-28T02:18:49+00:00'
 metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+  primary:
+    name: classification_accuracy_val
+    value: 0.525
+    direction: maximize
 ---
 
-# Trial <id> — <model_name> — <verdict>
+# Trial d5d3fbbc — AE3dAsymResSeparableV2 — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -34,10 +29,12 @@ In `configs/autoencoder.yaml` (only mutable file), branching from champion a2a3d
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **accuracy_test per run:** 0: 0.550000 | 1: 0.450000 | 2: 0.575000
+- **classification_accuracy_val:** 0.525000
+- **delta_vs_champion** (display only): -0.100000
+- **validation_R2_mean** (mean, AE phase, non-decisional): 0.740447
+- **AE MLflow Run IDs:** 74d1df7e795a4f3ea692ecc27fbce551 996891b77c0f4d14b1a4ed9336854824 7550ede295f742238c8dfb88881328e7
+- **Classification MLflow Run IDs:** bb942484140e465d914cf8b5e2e9842c 348301526d4b459d987b63783d56efba 7377a9b05afa48279c3062565f766575
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
