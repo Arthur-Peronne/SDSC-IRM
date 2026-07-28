@@ -1,0 +1,15 @@
+artifact_uri: mlruns/269771982328891039/18c3a42422f549a48c0262955e587ee5/artifacts
+end_time: 1785189926611
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: 18c3a42422f549a48c0262955e587ee5
+run_name: AE_AE3dAsymResSeparableV2_200patients_split100_20dims_AIagent_classification_test
+run_uuid: 18c3a42422f549a48c0262955e587ee5
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785188882639
+status: 3
+tags: []
+user_id: renku

@@ -90,6 +90,8 @@ def load_numpy_splits(
     binary_mask: bool = False,
     recalculate: bool = False,
     n_jobs: int = -1,
+    recalculate_y: bool = True,            
+    y_cache_folder: str = "Y_vectors",      
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, str]:
     """
     Load flat numpy arrays and return train / val / test splits.
@@ -153,7 +155,10 @@ def load_numpy_splits(
         X_ED = _load_frame(frame_type=frame_type, **kwargs)
 
     strat_array = (
-        load_patient_metadata("group", len(X_ED)) if stratify_ongroup else None
+        load_patient_metadata(
+            "group", len(X_ED),
+            recalculate=recalculate_y, cache_folder=y_cache_folder, 
+        ) if stratify_ongroup else None
     )
 
     train_idx, val_idx, test_idx, split_name = splt.get_split_indices(
@@ -182,6 +187,8 @@ def load_tensor_datasets(
     percentile_max: float = 99.9,
     recalculate: bool = False,
     n_jobs: int = 1,
+    recalculate_y: bool = True, 
+    y_cache_folder: str = "Y_vectors", 
 ) -> tuple[TensorDataset, TensorDataset | None, TensorDataset, float, str]:
     """
     Load 3D arrays, normalize, split, and wrap into TensorDatasets.
@@ -244,7 +251,9 @@ def load_tensor_datasets(
 
     print(f"special_split = {special_split}")
     strat_array = (
-        load_patient_metadata("group", len(X_ED)) if (stratify_ongroup and special_split is not None) else None
+        load_patient_metadata("group", len(X_ED), 
+                                                            recalculate=recalculate_y, cache_folder=y_cache_folder) 
+        if (stratify_ongroup and special_split is not None) else None
     )
 
     train_idx, val_idx, test_idx, split_name = splt.get_split_indices(

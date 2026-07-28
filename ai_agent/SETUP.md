@@ -10,7 +10,11 @@ live in experiment.yaml.
 ## What this project does
 3D cardiac-MRI representation learning: preprocess images, reduce dimensionality
 (spatial PCA, 3D autoencoders), then regress patient metadata on the latent
-codes. The autonomous loop currently refines autoencoders to maximize validation R².
+codes. 
+The autonomous loop currently refines autoencoders to maximize downstream
+classification accuracy (patient group, logistic regression on the AE latent codes)
+— not autoencoder R² directly, which is still logged for context but no longer
+the judge.
 
 ## Environment
 - Local: `.venv/`, `pip install -e .`. On Renku: Docker, no venv (pre-activated shell).
@@ -26,6 +30,14 @@ mlflow ui --backend-store-uri mlruns/    # inspect at http://127.0.0.1:5000
 ```
 Run by hand, the script ignores the driver-only flags (`--set`, `--trial-id`) and
 produces an untagged run — exactly the classic behaviour.
+
+To sanity-check the classification phase alone:
+```bash
+python scripts/run_regression.py         # reads configs/regression.yaml
+```
+Run by hand, the script ignores the driver-only flags (`--trial-id`, `--ae-trial-tag`,
+`--ae-filter`) and finds its AE run via the manual filters in `regression.yaml`
+(`model_name`/`experiment_tag`/`split_name`) instead of by tag.
 
 ## The autonomous loop (what the agent operates)
 - `ai_agent/program.md` — this session's research intent (human-written).
@@ -43,9 +55,16 @@ python ai_agent/driver.py run
 ```
 No arguments: lineage (`parent`) is declared in the draft's frontmatter, not on the
 command line. The driver commits the input (its short sha becomes the trial `id`),
-renames the draft to `<id>.md`, runs N trainings (per `repeat_over`, each tagged
-`trial_id=<id>` in MLflow), reads those runs back BY TAG, aggregates, decides the
-verdict, and commits the result.
+renames the draft to `<id>.md`, then runs two phases per `repeat_over` value:
+1. N autoencoder trainings (`scripts/run_autoencoder.py`), each tagged `trial_id=<id>_ae`.
+2. N classification runs (`scripts/run_regression.py`), each tagged `trial_id=<id>_clf`
+   and pointing back at its matching AE run via `--ae-trial-tag`/`--ae-filter` (the
+   driver never touches configs/regression.yaml — it passes these as CLI flags, same
+   spirit as `--set` for the AE phase).
+
+The driver reads the `_clf` runs back BY TAG, aggregates, decides the verdict, and
+commits the result. `_ae` and `_clf` run IDs are both recorded in the trial's `.md`,
+kept separate.
 
 ## Two axes on each record (kept separate)
 - `status`  — lifecycle, lowercase:  `draft` → `completed` | `failed`.
@@ -63,10 +82,18 @@ writable area outside `mutable` is the trial-record dir (`experiments/`). Everyt
 frozen is the immutable judge that keeps results comparable.
 
 ## Config prerequisites for a campaign (avoid a silent `failed`)
-The metric the driver reads depends on how `configs/autoencoder.yaml` is set:
-- **`validation_R2_mean` / `validation_MSE_mean` require `n_val > 0` AND
-  `compute_metrics: true`** — they are computed on the validation set. With `n_val: 0`
-  they are never logged and the trial fails when the driver cannot find the metric.
+The metric the driver reads now comes from the classification phase
+(`configs/regression.yaml`), not directly from the autoencoder:
+- **`configs/autoencoder.yaml` and `configs/regression.yaml` must have IDENTICAL
+  `n_train` / `n_val` / `n_test` / `special_split` / `stratify_ongroup`.** A mismatch
+  is caught by `_verify_split` and fails the trial cleanly — not silently wrong, but
+  the two files are never synced automatically; check both by hand before a new
+  campaign.
+- **`regression.yaml`'s `eval_on: "val"` is what makes the judge use the validation
+  set** — the 30-patient test set is never touched by the agent, reserved for a
+  one-time final AE-vs-PCA comparison at the end of the campaign (`eval_on: "test"`).
+- `n_val > 0` in both files (needed for AE early stopping AND as the classifier's
+  judge set when `eval_on: "val"`).
 - **Manual hyperparameter tuning requires `hyper_automatic_values: false`**, otherwise
   the hyperparameters the agent writes in the YAML are ignored and re-resolved from
   `configs/ae_HPforarchis.yaml`.

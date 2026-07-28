@@ -29,6 +29,7 @@ import numpy as np
 import mlflow
 import torch
 from pathlib import Path
+import argparse
 
 from src.config import RESULTS_FOLDER
 from src.data import loader, splits as splt
@@ -47,6 +48,21 @@ N_PATIENTS = 150
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def _parse_args():
+    p = argparse.ArgumentParser(
+        description="Encode AE/PCA latents and evaluate a downstream classifier/regressor."
+    )
+    p.add_argument("--trial-id", default=None,
+                   help="Tag the MLflow run of this invocation with trial_id=<id> "
+                        "(used by ai_agent/driver.py to read back exactly its runs).")
+    p.add_argument("--ae-trial-tag", default=None,
+                   help="[not yet used] Trouver le run AE par tags.trial_id=<tag> "
+                        "au lieu des filtres model_name/experiment_tag/split_name habituels.")
+    p.add_argument("--ae-filter", action="append", default=[], metavar="KEY=VALUE",
+                   help="[not yet used] Condition(s) params.KEY='VALUE' supplémentaire(s) "
+                        "pour désambiguïser plusieurs runs AE partageant le même --ae-trial-tag.")
+    return p.parse_args()
+    
 def _derive_split_name(special_split):
     return splt.DEFAULT_SPLIT_NAME if special_split is None else special_split
 
@@ -67,18 +83,18 @@ def _verify_split(run_id, expected: dict, client):
             f"Split / data mismatch with MLflow run {run_id}:\n" + "\n".join(mismatches)
         )
 
-
-def _apply_split_to_Y(Y_full, n_train, n_test, special_split, stratify_ongroup=False):
-    """Return Y_train, Y_test using the same split logic as get_split_indices."""
-    strat = load_patient_metadata("group", N_PATIENTS) if stratify_ongroup else None
-    train_idx, _, test_idx, _ = splt.get_split_indices(
-        n_train=n_train, n_val=0, n_test=n_test,
+def _apply_split_to_Y(Y_full, n_train, n_val, n_test, special_split, stratify_ongroup=False, 
+                                                 recalculate_y=False, y_cache_folder="Y_vectors"):
+    """Return Y_train, Y_val, Y_test using the same split logic as get_split_indices.
+    Y_val is an empty array when n_val=0 (unchanged behaviour for existing callers)."""
+    strat = load_patient_metadata("group", N_PATIENTS, recalculate=recalculate_y, cache_folder=y_cache_folder) if stratify_ongroup else None
+    train_idx, val_idx, test_idx, _ = splt.get_split_indices(
+        n_train=n_train, n_val=n_val, n_test=n_test,
         special_split=special_split,
         stratify=strat,
         n_patients=N_PATIENTS,
     )
-    return Y_full[train_idx], Y_full[test_idx]
-
+    return Y_full[train_idx], Y_full[val_idx], Y_full[test_idx]
 
 def _build_ae_filter(model_name, experiment_tag, split_name, params_filter):
     parts = [
@@ -232,7 +248,7 @@ def _log_step_metrics(r_train, r_test, step, is_logistic, binary):
 
 # ── PCA source ────────────────────────────────────────────────────────────────
 
-def _run_pca_source(cfg, Y_full, client):
+def _run_pca_source(cfg, Y_full, client, args):
     n_train       = cfg["n_train"]
     n_test        = N_PATIENTS - n_train
     special_split = cfg.get("special_split")
@@ -260,6 +276,8 @@ def _run_pca_source(cfg, Y_full, client):
         frame_type=frame_type,
         image_roi_only=pca_params.get("image_roi_only", "True") == "True",
         recalculate=False,
+        recalculate_y=cfg.get("recalculate_y", True), 
+        y_cache_folder=cfg.get("y_cache_folder", "Y_vectors"), 
     )
     print(f"Split: {split_name} | train={len(X_train)} | test={len(X_test)}")
 
@@ -280,13 +298,14 @@ def _run_pca_source(cfg, Y_full, client):
     X_test_pca  = pca.transform(X_test  - row_means_test)
 
     # ── Y (duplicate if both frames) ─────────────────────────────────────────
-    Y_train, Y_test = _apply_split_to_Y(Y_full, n_train, n_test, special_split, stratify_ongroup)
+    Y_train, _, Y_test = _apply_split_to_Y(Y_full, n_train, 0, n_test, special_split, stratify_ongroup,  
+                                                                                      recalculate_y=cfg.get("recalculate_y", True), y_cache_folder=cfg.get("y_cache_folder", "Y_vectors"))
     if use_both_frames:
         Y_train = np.concatenate([Y_train, Y_train])
         Y_test  = np.concatenate([Y_test,  Y_test])
     if binary:
         bin_val = cfg["group_bin_value"]
-        Y_train = (Y_train == bin_val).astype(int)
+        Y_train = (Y_train == bin_val).astype(int)    
         Y_test  = (Y_test  == bin_val).astype(int)
 
     # ── Classifier kwargs (dispatch logistic / RF / XGB) ─────────────────────
@@ -301,7 +320,8 @@ def _run_pca_source(cfg, Y_full, client):
     results_test_all  = []
     results_train_all = []
 
-    with tracking.start_run("regression", _run_name(cfg, split_name)):
+    tags = {"trial_id": args.trial_id} if args.trial_id else None 
+    with tracking.start_run("regression", _run_name(cfg, split_name), tags=tags): 
         tracking.log_params(_build_params(cfg, split_name))
         tracking.log_artifact(CONFIG_PATH)
 
@@ -338,22 +358,43 @@ def _run_pca_source(cfg, Y_full, client):
 
 # ── AE source ─────────────────────────────────────────────────────────────────
 
-def _run_ae_source(cfg, Y_full, client):
+def _run_ae_source(cfg, Y_full, client, args):
+
     n_train       = cfg["n_train"]
-    n_test        = N_PATIENTS - n_train
+    n_val         = cfg.get("n_val", 0)                    
+    n_test        = N_PATIENTS - n_train - n_val            
+    eval_on       = cfg.get("eval_on", "test")              
     special_split = cfg.get("special_split")
     split_name    = _derive_split_name(special_split)
     y_name        = cfg["y_name"]
     binary        = cfg.get("group_binary", False) and y_name == "group"
     is_logistic   = y_name == "group"
-    ae_cfg        = cfg["ae_source"]
+    ae_cfg        = cfg["ae_source"] or {}
+
+    if eval_on not in ("test", "val"):
+        raise ValueError(f"eval_on must be 'test' or 'val', got {eval_on!r}")
+    if eval_on == "val" and n_val == 0:
+        raise ValueError("eval_on='val' requires n_val > 0 in regression.yaml")
 
     # ── Search AE runs ────────────────────────────────────────────────────────
-    filter_str = _build_ae_filter(
-        ae_cfg["model_name"], ae_cfg["experiment_tag"],
-        ae_cfg.get("split_name", split_name),
-        ae_cfg.get("params_filter"),
-    )
+    ae_filter_params = {}  
+    if args.ae_trial_tag:
+        # Mode Agent : find AE run with tag
+        conditions = [f"tags.trial_id = '{args.ae_trial_tag}'"]
+        for kv in args.ae_filter:
+            if "=" not in kv:
+                raise SystemExit(f"--ae-filter expects KEY=VALUE, got: {kv!r}")
+            k, v = kv.split("=", 1)
+            conditions.append(f"params.{k} = '{v}'")
+            ae_filter_params[k] = v 
+        filter_str = " AND ".join(conditions)
+    else:
+        # Manual (default) mode
+        filter_str = _build_ae_filter(
+            ae_cfg["model_name"], ae_cfg["experiment_tag"],
+            ae_cfg.get("split_name", split_name),
+            ae_cfg.get("params_filter"),
+        )
     df = tracking.search_runs("autoencoder", filter_string=filter_str)
     if df.empty:
         raise ValueError(f"No autoencoder runs found matching: {filter_str}")
@@ -383,35 +424,44 @@ def _run_ae_source(cfg, Y_full, client):
 
     # Verify all AE runs share the same split
     for latdim in sorted_latdims:
-        ae_run_id = runs_by_latdim[latdim][0]["run_id"]
-        _verify_split(ae_run_id, {"split_name": split_name, "n_train": n_train,
-                                  "stratify_ongroup": stratify_ongroup}, client)
+            ae_run_id = runs_by_latdim[latdim][0]["run_id"]
+            _verify_split(ae_run_id, {"split_name": split_name, "n_train": n_train, "n_val": n_val, 
+                                    "stratify_ongroup": stratify_ongroup}, client)
     print(f"Split verified against all {len(sorted_latdims)} AE runs ✓")
 
     # ── Load tensor datasets (same split as AE training) ─────────────────────
     print("Loading image data (tensor format for AE encoding)...")
-    train_ds, _, test_ds, _, _ = loader.load_tensor_datasets(
+    train_ds, val_ds, test_ds, _, _ = loader.load_tensor_datasets(
         source_folder=source_folder,
         cache_folder="X_vectors",
-        n_train=n_train, n_val=0, n_test=n_test,
+        n_train=n_train, n_val=n_val, n_test=n_test,   
         special_split=special_split,
         stratify_ongroup=stratify_ongroup,
         use_both_frames=use_both,
         frame_type=frame_type,
         image_roi_only=image_roi_only,
         recalculate=False,
+        recalculate_y=cfg.get("recalculate_y", True),
+        y_cache_folder=cfg.get("y_cache_folder", "Y_vectors"),
     )
     print(f"Split: {split_name} | train={len(train_ds)} | test={len(test_ds)}")
 
     # ── Y (duplicate if both frames) ─────────────────────────────────────────
-    Y_train_base, Y_test_base = _apply_split_to_Y(Y_full, n_train, n_test, special_split, stratify_ongroup)
+    Y_train_base, Y_val_base, Y_test_base = _apply_split_to_Y(Y_full, n_train, n_val, n_test, special_split, stratify_ongroup,
+                                                                                          recalculate_y=cfg.get("recalculate_y", True), y_cache_folder=cfg.get("y_cache_folder", "Y_vectors"))
     if use_both:
         Y_train_base = np.concatenate([Y_train_base, Y_train_base])
+        Y_val_base   = np.concatenate([Y_val_base,   Y_val_base]) if n_val > 0 else Y_val_base
         Y_test_base  = np.concatenate([Y_test_base,  Y_test_base])
     if binary:
         bin_val = cfg["group_bin_value"]
         Y_train_base = (Y_train_base == bin_val).astype(int)
-        Y_test_base  = (Y_test_base  == bin_val).astype(int)
+        if n_val > 0:
+            Y_val_base = (Y_val_base == bin_val).astype(int)
+        Y_test_base = (Y_test_base == bin_val).astype(int)
+
+    eval_ds     = val_ds if eval_on == "val" else test_ds
+    Y_eval_base = Y_val_base if eval_on == "val" else Y_test_base
 
     # ── Classifier kwargs (dispatch logistic / RF / XGB) ─────────────────────
     clf_kwargs = _get_classifier_kwargs(cfg, use_both_frames=use_both)
@@ -423,8 +473,9 @@ def _run_ae_source(cfg, Y_full, client):
     results_train_all = []
     results_test_all  = []
 
-    with tracking.start_run("regression", _run_name(cfg, split_name)):
-        tracking.log_params(_build_params(cfg, split_name))
+    tags = {"trial_id": args.trial_id} if args.trial_id else None   
+    with tracking.start_run("regression", _run_name(cfg, split_name), tags=tags):   
+        tracking.log_params({**_build_params(cfg, split_name, args), "eval_on": eval_on, **ae_filter_params})
         tracking.log_artifact(CONFIG_PATH)
 
         for latdim in sorted_latdims:
@@ -438,11 +489,11 @@ def _run_ae_source(cfg, Y_full, client):
 
             model   = _load_ae_model(ae_run_id, model_name, latdim, dropout, best_epoch, device, client)
             Z_train = _encode_dataset(model, train_ds, device)
-            Z_test  = _encode_dataset(model, test_ds,  device)
-            print(f"  latent_dim={latdim} | encoded train={Z_train.shape} test={Z_test.shape}")
+            Z_eval  = _encode_dataset(model, eval_ds,  device)         
+            print(f"  latent_dim={latdim} | encoded train={Z_train.shape} eval({eval_on})={Z_eval.shape}")
 
             _, _, r_train, r_test = _run_one_step(
-                Z_train, Z_test, Y_train_base, Y_test_base,
+                Z_train, Z_eval, Y_train_base, Y_eval_base,
                 latdim, None, is_logistic, binary,
                 **clf_kwargs,
             )
@@ -553,7 +604,7 @@ def _run_name(cfg, split_name):
     return f"regression_{src}_{cfg['n_train']}patients_{split_name}_{y}_{classifier_type}_{tag}"
 
 
-def _build_params(cfg, split_name):
+def _build_params(cfg, split_name, args):
     classifier_type = cfg.get("classifier_type", "logistic")
     params = {
         "source_type":     cfg["source_type"],
@@ -586,7 +637,10 @@ def _build_params(cfg, split_name):
 
     if cfg["source_type"] == "pca":
         params["pca_run_id"] = cfg["pca_run_id"]
-    else:
+    elif args and args.ae_trial_tag:      # Agent mode         
+        params["ae_trial_tag"] = args.ae_trial_tag
+        params["ae_filter"]    = ";".join(args.ae_filter) if args.ae_filter else ""
+    else:                                           
         ae = cfg["ae_source"]
         params["ae_model_name"]     = ae["model_name"]
         params["ae_experiment_tag"] = ae["experiment_tag"]
@@ -716,8 +770,14 @@ def _plot_compare(cfg, client):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    args = _parse_args()
     with open(CONFIG_PATH) as f:
         cfg = yaml.safe_load(f)
+
+    if args.ae_trial_tag and cfg["source_type"] != "ae":  
+        raise SystemExit(
+            f"--ae-trial-tag only applies to source_type='ae' (got {cfg['source_type']!r}).  Regression cancelled because regression.yaml inconsistent with tag"
+        )
 
     tracking._setup()
     client = mlflow.MlflowClient()
@@ -744,18 +804,25 @@ def main():
           f"classifier={classifier_type} | n_train={n_train} | split={split_name}")
 
     # ── Load Y (all patients, split applied inside each source function) ──────
-    Y_full = load_patient_metadata(y_name, N_PATIENTS)
+    Y_full = load_patient_metadata(
+                                                                        y_name, N_PATIENTS,
+                                                                        recalculate=cfg.get("recalculate_y", True),
+                                                                        cache_folder=cfg.get("y_cache_folder", "Y_vectors"),
+                                                                        )
     print(f"Y loaded: {y_name}, {len(Y_full)} patients")
 
     if cfg["source_type"] == "pca":
         if not cfg.get("pca_run_id"):
             raise ValueError("pca_run_id must be set in regression.yaml for source_type='pca'")
-        _run_pca_source(cfg, Y_full, client)
+        _run_pca_source(cfg, Y_full, client, args)
 
     elif cfg["source_type"] == "ae":
-        if not cfg.get("ae_source"):
-            raise ValueError("ae_source must be set in regression.yaml for source_type='ae'")
-        _run_ae_source(cfg, Y_full, client)
+        if not args.ae_trial_tag and not cfg.get("ae_source"):  
+            raise ValueError(
+                "ae_source must be set in regression.yaml for source_type='ae' "
+                "unless --ae-trial-tag is provided (agent mode)."
+            )
+        _run_ae_source(cfg, Y_full, client, args)
 
     else:
         raise ValueError(f"Unknown source_type: {cfg['source_type']!r}. Use 'pca' or 'ae'.")

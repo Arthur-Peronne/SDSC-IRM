@@ -1,0 +1,138 @@
+
+=== python -u scripts/run_autoencoder.py --trial-id f826eedd_ae --set seed=0 ===
+special_split = split100
+Data loaded | train: 200 | val: 40 | test: 60 | split: split100
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=20 | max_epochs=200
+Epoch 1/200 | train: 0.014251 | val: 0.006665 | lr: 5.00e-04 ✓ best
+Epoch 2/200 | train: 0.004557 | val: 0.005491 | lr: 5.00e-04 ✓ best
+Epoch 3/200 | train: 0.003698 | val: 0.006511 | lr: 5.00e-04 (no improvement for 1 epochs)
+Epoch 4/200 | train: 0.003146 | val: 0.009399 | lr: 5.00e-04 (no improvement for 2 epochs)
+Epoch 5/200 | train: 0.003056 | val: 0.014584 | lr: 5.00e-04 (no improvement for 3 epochs)
+Epoch 6/200 | train: 0.003009 | val: 0.008923 | lr: 5.00e-04 (no improvement for 4 epochs)
+Epoch 7/200 | train: 0.002884 | val: 0.007067 | lr: 2.50e-04 (no improvement for 5 epochs)
+Epoch 8/200 | train: 0.002619 | val: 0.010523 | lr: 2.50e-04 (no improvement for 6 epochs)
+Epoch 9/200 | train: 0.002587 | val: 0.009910 | lr: 2.50e-04 (no improvement for 7 epochs)
+Epoch 10/200 | train: 0.002563 | val: 0.011270 | lr: 2.50e-04 (no improvement for 8 epochs)
+Epoch 11/200 | train: 0.002530 | val: 0.010520 | lr: 2.50e-04 (no improvement for 9 epochs)
+Epoch 12/200 | train: 0.002492 | val: 0.010680 | lr: 1.25e-04 (no improvement for 10 epochs)
+Epoch 13/200 | train: 0.002312 | val: 0.009057 | lr: 1.25e-04 (no improvement for 11 epochs)
+Epoch 14/200 | train: 0.002309 | val: 0.009817 | lr: 1.25e-04 (no improvement for 12 epochs)
+Epoch 15/200 | train: 0.002220 | val: 0.010523 | lr: 1.25e-04 (no improvement for 13 epochs)
+Epoch 16/200 | train: 0.002171 | val: 0.010657 | lr: 1.25e-04 (no improvement for 14 epochs)
+Epoch 17/200 | train: 0.002123 | val: 0.008609 | lr: 6.25e-05 (no improvement for 15 epochs)
+Epoch 18/200 | train: 0.002017 | val: 0.009062 | lr: 6.25e-05 (no improvement for 16 epochs)
+Epoch 19/200 | train: 0.002000 | val: 0.010071 | lr: 6.25e-05 (no improvement for 17 epochs)
+Epoch 20/200 | train: 0.001959 | val: 0.010006 | lr: 6.25e-05 (no improvement for 18 epochs)
+Epoch 21/200 | train: 0.001956 | val: 0.010417 | lr: 6.25e-05 (no improvement for 19 epochs)
+Epoch 22/200 | train: 0.001952 | val: 0.010156 | lr: 3.13e-05 (no improvement for 20 epochs)
+
+Early stopping at epoch 22. Best epoch: 2 (val loss: 0.005491).
+/home/renku/work/SDSC-arthur-project-1/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+Loss plot saved: /home/renku/work/SDSC-arthur-project-1/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_split100_20dims_AIagent_classification_test_train_val_loss.png
+[train] R2 mean=0.5130 std=0.4270 | MSE mean=699.561279
+[validation] R2 mean=0.4273 std=0.4384 | MSE mean=929.912292
+[test] R2 mean=0.4698 std=0.5114 | MSE mean=535.582825
+
+=== python -u scripts/run_autoencoder.py --trial-id f826eedd_ae --set seed=1 ===
+special_split = split100
+Data loaded | train: 200 | val: 40 | test: 60 | split: split100
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=20 | max_epochs=200
+Epoch 1/200 | train: 0.015104 | val: 0.007103 | lr: 5.00e-04 ✓ best
+Epoch 2/200 | train: 0.004530 | val: 0.005495 | lr: 5.00e-04 ✓ best
+Epoch 3/200 | train: 0.003806 | val: 0.005708 | lr: 5.00e-04 (no improvement for 1 epochs)
+Epoch 4/200 | train: 0.003468 | val: 0.007291 | lr: 5.00e-04 (no improvement for 2 epochs)
+Epoch 5/200 | train: 0.003053 | val: 0.008372 | lr: 5.00e-04 (no improvement for 3 epochs)
+Epoch 6/200 | train: 0.002824 | val: 0.008778 | lr: 5.00e-04 (no improvement for 4 epochs)
+Epoch 7/200 | train: 0.002889 | val: 0.006340 | lr: 2.50e-04 (no improvement for 5 epochs)
+Epoch 8/200 | train: 0.002565 | val: 0.009276 | lr: 2.50e-04 (no improvement for 6 epochs)
+Epoch 9/200 | train: 0.002393 | val: 0.009957 | lr: 2.50e-04 (no improvement for 7 epochs)
+Epoch 10/200 | train: 0.002340 | val: 0.009585 | lr: 2.50e-04 (no improvement for 8 epochs)
+Epoch 11/200 | train: 0.002260 | val: 0.009344 | lr: 2.50e-04 (no improvement for 9 epochs)
+Epoch 12/200 | train: 0.002334 | val: 0.008981 | lr: 1.25e-04 (no improvement for 10 epochs)
+Epoch 13/200 | train: 0.002140 | val: 0.010351 | lr: 1.25e-04 (no improvement for 11 epochs)
+Epoch 14/200 | train: 0.002073 | val: 0.009215 | lr: 1.25e-04 (no improvement for 12 epochs)
+Epoch 15/200 | train: 0.002047 | val: 0.010610 | lr: 1.25e-04 (no improvement for 13 epochs)
+Epoch 16/200 | train: 0.002050 | val: 0.009646 | lr: 1.25e-04 (no improvement for 14 epochs)
+Epoch 17/200 | train: 0.002004 | val: 0.009747 | lr: 6.25e-05 (no improvement for 15 epochs)
+Epoch 18/200 | train: 0.001927 | val: 0.010158 | lr: 6.25e-05 (no improvement for 16 epochs)
+Epoch 19/200 | train: 0.001894 | val: 0.010893 | lr: 6.25e-05 (no improvement for 17 epochs)
+Epoch 20/200 | train: 0.001891 | val: 0.009445 | lr: 6.25e-05 (no improvement for 18 epochs)
+Epoch 21/200 | train: 0.001887 | val: 0.010625 | lr: 6.25e-05 (no improvement for 19 epochs)
+Epoch 22/200 | train: 0.001835 | val: 0.010729 | lr: 3.13e-05 (no improvement for 20 epochs)
+
+Early stopping at epoch 22. Best epoch: 2 (val loss: 0.005495).
+/home/renku/work/SDSC-arthur-project-1/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+Loss plot saved: /home/renku/work/SDSC-arthur-project-1/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_split100_20dims_AIagent_classification_test_train_val_loss.png
+[train] R2 mean=0.5039 std=0.4602 | MSE mean=692.087891
+[validation] R2 mean=0.4054 std=0.4824 | MSE mean=930.551086
+[test] R2 mean=0.4583 std=0.5498 | MSE mean=529.520142
+
+=== python -u scripts/run_autoencoder.py --trial-id f826eedd_ae --set seed=2 ===
+special_split = split100
+Data loaded | train: 200 | val: 40 | test: 60 | split: split100
+Training AE3dAsymResSeparableV2 | device=cuda | batch_size=1 | patience=20 | max_epochs=200
+Epoch 1/200 | train: 0.025861 | val: 0.005855 | lr: 5.00e-04 ✓ best
+Epoch 2/200 | train: 0.004353 | val: 0.005478 | lr: 5.00e-04 ✓ best
+Epoch 3/200 | train: 0.003610 | val: 0.006091 | lr: 5.00e-04 (no improvement for 1 epochs)
+Epoch 4/200 | train: 0.003484 | val: 0.009279 | lr: 5.00e-04 (no improvement for 2 epochs)
+Epoch 5/200 | train: 0.002992 | val: 0.014280 | lr: 5.00e-04 (no improvement for 3 epochs)
+Epoch 6/200 | train: 0.002854 | val: 0.008210 | lr: 5.00e-04 (no improvement for 4 epochs)
+Epoch 7/200 | train: 0.002850 | val: 0.015471 | lr: 2.50e-04 (no improvement for 5 epochs)
+Epoch 8/200 | train: 0.002592 | val: 0.010400 | lr: 2.50e-04 (no improvement for 6 epochs)
+Epoch 9/200 | train: 0.002527 | val: 0.009253 | lr: 2.50e-04 (no improvement for 7 epochs)
+Epoch 10/200 | train: 0.002606 | val: 0.012055 | lr: 2.50e-04 (no improvement for 8 epochs)
+Epoch 11/200 | train: 0.002541 | val: 0.010180 | lr: 2.50e-04 (no improvement for 9 epochs)
+Epoch 12/200 | train: 0.002639 | val: 0.014289 | lr: 1.25e-04 (no improvement for 10 epochs)
+Epoch 13/200 | train: 0.002406 | val: 0.012194 | lr: 1.25e-04 (no improvement for 11 epochs)
+Epoch 14/200 | train: 0.002285 | val: 0.011261 | lr: 1.25e-04 (no improvement for 12 epochs)
+Epoch 15/200 | train: 0.002241 | val: 0.011613 | lr: 1.25e-04 (no improvement for 13 epochs)
+Epoch 16/200 | train: 0.002215 | val: 0.011045 | lr: 1.25e-04 (no improvement for 14 epochs)
+Epoch 17/200 | train: 0.002189 | val: 0.014571 | lr: 6.25e-05 (no improvement for 15 epochs)
+Epoch 18/200 | train: 0.002105 | val: 0.011163 | lr: 6.25e-05 (no improvement for 16 epochs)
+Epoch 19/200 | train: 0.002038 | val: 0.011076 | lr: 6.25e-05 (no improvement for 17 epochs)
+Epoch 20/200 | train: 0.002024 | val: 0.011467 | lr: 6.25e-05 (no improvement for 18 epochs)
+Epoch 21/200 | train: 0.002008 | val: 0.010484 | lr: 6.25e-05 (no improvement for 19 epochs)
+Epoch 22/200 | train: 0.001989 | val: 0.011346 | lr: 3.13e-05 (no improvement for 20 epochs)
+
+Early stopping at epoch 22. Best epoch: 2 (val loss: 0.005478).
+/home/renku/work/SDSC-arthur-project-1/src/visualization/ae_plots.py:1115: UserWarning: Data has no positive values, and therefore cannot be log-scaled.
+  ax2.set_yscale("log")
+Loss plot saved: /home/renku/work/SDSC-arthur-project-1/results/0_tempo/AE_AE3dAsymResSeparableV2_200patients_split100_20dims_AIagent_classification_test_train_val_loss.png
+[train] R2 mean=0.5078 std=0.4328 | MSE mean=680.128357
+[validation] R2 mean=0.4008 std=0.4738 | MSE mean=927.702515
+[test] R2 mean=0.4700 std=0.5139 | MSE mean=520.509155
+
+=== python -u scripts/run_regression.py --trial-id f826eedd_clf --ae-trial-tag f826eedd_ae --ae-filter seed=0 ===
+Regression | source=ae | y=group | classifier=logistic | n_train=100 | split=split100
+Y loaded: group, 150 patients
+Found 1 latent_dim(s): [20]
+Split verified against all 1 AE runs ✓
+Loading image data (tensor format for AE encoding)...
+special_split = split100
+Split: split100 | train=200 | test=60
+  latent_dim=20 | encoded train=(200, 20) eval(val)=(40, 20)
+  latent_dim= 20 | acc=0.425  prec_macro=0.401
+
+=== python -u scripts/run_regression.py --trial-id f826eedd_clf --ae-trial-tag f826eedd_ae --ae-filter seed=1 ===
+Regression | source=ae | y=group | classifier=logistic | n_train=100 | split=split100
+Y loaded: group, 150 patients
+Found 1 latent_dim(s): [20]
+Split verified against all 1 AE runs ✓
+Loading image data (tensor format for AE encoding)...
+special_split = split100
+Split: split100 | train=200 | test=60
+  latent_dim=20 | encoded train=(200, 20) eval(val)=(40, 20)
+  latent_dim= 20 | acc=0.400  prec_macro=0.313
+
+=== python -u scripts/run_regression.py --trial-id f826eedd_clf --ae-trial-tag f826eedd_ae --ae-filter seed=2 ===
+Regression | source=ae | y=group | classifier=logistic | n_train=100 | split=split100
+Y loaded: group, 150 patients
+Found 1 latent_dim(s): [20]
+Split verified against all 1 AE runs ✓
+Loading image data (tensor format for AE encoding)...
+special_split = split100
+Split: split100 | train=200 | test=60
+  latent_dim=20 | encoded train=(200, 20) eval(val)=(40, 20)
+  latent_dim= 20 | acc=0.425  prec_macro=0.413

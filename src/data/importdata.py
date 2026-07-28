@@ -10,7 +10,6 @@ from pathlib import Path
 
 from src.config import DATADIR, PROCESSED_IMAGES_FOLDER
 
-
 def extract_nii_file(datatype_tochoose, patient_name, file_name, print_infos=False):
     """
     Find the nii.gz file to extract, and return the nii object
@@ -297,7 +296,9 @@ def get_patient_modified_path(patient_id, folder, file_type="frame", frame_type=
 
     return full_path
 
-def load_patient_metadata(y_name: str, n_patients: int = 150) -> np.ndarray:
+def load_patient_metadata(y_name: str, n_patients: int = 150,
+                          recalculate: bool = True,
+                          cache_folder: str = "Y_vectors") -> np.ndarray:
     """
     Load patient metadata for one target variable.
 
@@ -315,10 +316,26 @@ def load_patient_metadata(y_name: str, n_patients: int = 150) -> np.ndarray:
     -------
     np.ndarray, shape (n_patients,)
         String dtype for "group", float64 for "height" / "weight".
+    ..
+    recalculate : bool
+        True -> read Info.cfg depuis DATADIR and save result in file 
+        False → load existing file without accessing DATADIR
+    cache_folder : str
+        subfolder of PROCESSED_IMAGES_FOLDER where the .npy is saved/loaded
     """
     key_map = {"group": "Group", "height": "Height", "weight": "Weight"}
     if y_name not in key_map:
         raise ValueError(f"y_name must be 'group', 'height', or 'weight'. Got: {y_name!r}")
+
+    out_path = PROCESSED_IMAGES_FOLDER / cache_folder / f"Y_{y_name}_{n_patients}.npy"
+
+    if not recalculate:
+        if not out_path.exists():
+            raise FileNotFoundError(
+                f"No cached Y at {out_path}. Generate it once with recalculate=True "
+                f"on a session with DATADIR access, then copy {cache_folder}/ here."
+            )
+        return np.load(out_path, allow_pickle=True)
 
     cfg_key = key_map[y_name]
     values = []
@@ -328,8 +345,10 @@ def load_patient_metadata(y_name: str, n_patients: int = 150) -> np.ndarray:
         info = read_info_cfg(cfg_path)
         values.append(info[cfg_key])
 
-    return np.asarray(values)
-
+    array = np.asarray(values)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    np.save(out_path, array)
+    return array
 
 def load_acdc_groups(n_patients: int) -> list[str]:
     """

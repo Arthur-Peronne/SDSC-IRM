@@ -13,14 +13,14 @@
 #     Never change the metric mid-campaign.
 # =============================================================================
 
-experiment_name: "ai_hpopti_sepv2_dim8"
+experiment_name: "AIagent_classification_test"
 
 # -- 1. Scope: what the agent may modify (ALLOWLIST) --------------------------
 # Any change to a file outside this list (and outside the trial record dir) => the
 # driver aborts the trial BEFORE committing or training. Nothing is recorded;
 # revert the stray change and rerun.
 mutable:
-  # - src/models/ae_models.py       # architecture definitions + build_autoencoder factory
+  - src/models/ae_models.py       # architecture definitions + build_autoencoder factory
   - configs/autoencoder.yaml      # training config (model_name, hyperparameters, ...)
 
 # -- 2. Training: how ONE trial runs ------------------------------------------
@@ -35,7 +35,8 @@ mutable:
 #     {seed: [0, 1, 2]}                   -> seed averaging  (N=3, same config)
 training:
   command: "python -u scripts/run_autoencoder.py"
-  repeat_over: null # {latent_dimensions: [8, 40, 200]}
+  command_clf: "python -u scripts/run_regression.py"
+  repeat_over: {seed: [0, 1, 2]}   # {latent_dimensions: [8, 40, 200]}
 
 # -- 3. Eval: how the N runs collapse into ONE decisional number --------------
 # At launch the driver tags each run with the trial id, then reads back exactly
@@ -45,12 +46,12 @@ training:
 # NOTE: validation_R2_mean / validation_MSE_mean are only logged when n_val > 0
 # and compute_metrics: true in autoencoder.yaml — keep both for these campaigns.
 eval:
-  per_run_metric:      "validation_R2_mean"      # final scalar logged per run
-  aggregation:         "identity"                     # "identity" (N=1) | "mean" (N>1)
-  primary_metric_name: "avg_validation_R2_mean"   # label for the aggregate
-  direction:           "maximize"                 # "maximize" | "minimize"
-  also_log:                                       # recorded for context, NON-decisional
-    - "validation_MSE_mean"
+  per_run_metric: "accuracy_test"      # final scalar logged per run: "validation_R2_mean" or "accuracy_test"
+  aggregation: "mean"                     # "identity" (N=1) | "mean" (N>1)
+  primary_metric_name: "classification_accuracy_val"   # label for the aggregate
+  direction: "maximize"                 # "maximize" | "minimize"
+  also_log: []                                    # NON-decisional, recorded for context, from the _clf runs
+  also_log_ae: ["validation_R2_mean"]       #  NON-decisional, recorded for context, sourced from the _ae runs
 
 # -- 4. Verdict: deterministic keep / revert (NO LLM) -------------------------
 # Compared against the current champion's aggregate (best BASELINE/CHAMPION row
@@ -62,11 +63,11 @@ eval:
 # Delete the whole `candidate` block for plain binary keep/revert.
 decision:
   branch: "agent-ae-opti"        # isolated branch; the driver never commits to main
-  max_trials: 40                  # driver refuses a new trial once the ledger has this many
-  # candidate:
-  #   statistic: "max"             # over the per-run values (before aggregation)
-  #   margin: 0.03                 # maximize: CANDIDATE if max(values) > champion + margin
-  #                                # minimize: CANDIDATE if min(values) < champion - margin
+  max_trials: 25                  # driver refuses a new trial once the ledger has this many
+  candidate:
+    statistic: "max"             # over the per-run values (before aggregation)
+    margin: 0.10                 # maximize: CANDIDATE if max(values) > champion + margin
+                                 # minimize: CANDIDATE if min(values) < champion - margin
 
 # -- 5. Logging / storage -----------------------------------------------------
 # All configs are captured by the input commit (commit 1) and reachable via the

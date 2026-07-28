@@ -1,0 +1,15 @@
+artifact_uri: /home/renku/work/SDSC-arthur-project-1/mlruns/518515524431964609/d283131387d64b1ab7782c7a585c69fb/artifacts
+end_time: 1785191532423
+entry_point_name: ''
+experiment_id: '518515524431964609'
+lifecycle_stage: active
+run_id: d283131387d64b1ab7782c7a585c69fb
+run_name: regression_ae_100patients_split100_group_logistic_AIagent_classification_test
+run_uuid: d283131387d64b1ab7782c7a585c69fb
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785191526824
+status: 3
+tags: []
+user_id: renku

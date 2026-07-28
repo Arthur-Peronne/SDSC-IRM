@@ -417,6 +417,8 @@ def main():
         mask=cfg["mask_ys"],
         binary_mask=cfg["mask_bin"],
         recalculate=cfg["recalculate_x"],
+        recalculate_y=cfg.get("recalculate_y", True),   
+        y_cache_folder=cfg.get("y_cache_folder", "Y_vectors"), 
     )
     print(
         f"Data loaded | train: {len(train_dataset)} | "

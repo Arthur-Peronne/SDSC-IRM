@@ -205,7 +205,35 @@ def run_eval(cfg: dict, trial_id: str, overrides: list[dict], log_path: Path) ->
                     f"See {log_path}."
                 )
 
+def _ae_filter_args(overrides: dict) -> list[str]:
+    """Convert one repeat_over override dict into --ae-filter flags,
+    e.g. {"seed": 0} -> ["--ae-filter", "seed=0"]."""
+    args = []
+    for k, v in overrides.items():
+        args += ["--ae-filter", f"{k}={v}"]
+    return args
 
+def run_eval_clf(cfg: dict, clf_trial_id: str, ae_trial_tag: str,
+                 overrides: list[dict], log_path: Path) -> None:
+    """Launch the N classification runs, one per AE run produced by run_eval().
+    Mirrors run_eval() but targets command_clf, and appends to the same log
+    file (log_path was already created+truncated by run_eval() for the AE
+    phase, so this is opened in append mode)."""
+    base = cfg["training"]["command_clf"].split()
+    with open(log_path, "a") as logf:
+        for ov in overrides:
+            cmd = list(base)
+            cmd += ["--trial-id", clf_trial_id]
+            cmd += ["--ae-trial-tag", ae_trial_tag]
+            cmd += _ae_filter_args(ov)
+            logf.write(f"\n=== {' '.join(cmd)} ===\n"); logf.flush()
+            proc = subprocess.run(cmd, stdout=logf, stderr=subprocess.STDOUT)
+            if proc.returncode != 0:
+                raise EvalFailed(
+                    f"Classification failed (exit {proc.returncode}) for override={ov}. "
+                    f"See {log_path}."
+                )
+    
 # -----------------------------------------------------------------------------
 # 4. Read the trial's runs BY TAG, then aggregate
 # -----------------------------------------------------------------------------
@@ -354,7 +382,8 @@ def _update_title(body: str, trial_id: str, model_name: str, label: str) -> str:
 def write_record(md_path: Path, trial_id: str, status: str, verdict: str | None,
                  aggregate: float | None, runs: list[dict] | None,
                  cfg: dict, created_at: str, delta: float | None,
-                 error: str | None = None) -> None:
+                 error: str | None = None, 
+                 ae_runs: list[dict] | None = None) -> None:
     """Fill the frontmatter + ## Results. Numbers by the driver; the agent adds
     ## Training Dynamics and ## Conclusion afterwards."""
     text = md_path.read_text()
@@ -391,10 +420,22 @@ def write_record(md_path: Path, trial_id: str, status: str, verdict: str | None,
             f"- **{cfg['eval']['primary_metric_name']}:** {aggregate:.6f}",
             f"- **delta_vs_champion** (display only): {delta:+.6f}",
         ]
+
         for name in also:
             vals = [r[name] for r in runs]
             lines.append(f"- **{name}** (mean, non-decisional): {sum(vals) / len(vals):.6f}")
-        lines.append("- **MLflow Run IDs:** " + " ".join(r["run_id"] for r in runs))
+
+        also_ae = cfg["eval"].get("also_log_ae", []) or []     
+        for name in also_ae:                        
+            vals = [r[name] for r in ae_runs] if ae_runs else []
+            if vals:
+                lines.append(f"- **{name}** (mean, AE phase, non-decisional): {sum(vals) / len(vals):.6f}")
+
+        #  two separate lines instead of one combined "MLflow Run IDs"
+        ae_ids = " ".join(r["run_id"] for r in ae_runs) if ae_runs else "(unavailable)"
+        lines.append(f"- **AE MLflow Run IDs:** {ae_ids}")
+        lines.append(f"- **Classification MLflow Run IDs:** " + " ".join(r["run_id"] for r in runs))
+
         results = "\n".join(lines)
         label = verdict
 
@@ -453,14 +494,21 @@ def run_trial() -> tuple[str, str | None]:
     log_path = exp_dir / f"{trial_id}.console.log"
 
     try:
-        # 3. train (N runs, all-or-nothing)
-        overrides = _repeat_values(cfg)
-        run_eval(cfg, trial_id, overrides, log_path)
+        per = cfg["eval"]["per_run_metric"]    
+        also = cfg["eval"].get("also_log", []) or []         
 
-        # 4. read the N runs by tag + aggregate
-        per = cfg["eval"]["per_run_metric"]
-        also = cfg["eval"].get("also_log", []) or []
-        runs = read_trial_runs(trial_id, per, also, _repeat_axis(cfg))
+        # 3a. train the AE(s) (N runs, all-or-nothing)
+        overrides = _repeat_values(cfg)
+        run_eval(cfg, trial_id + "_ae", overrides, log_path)
+        also_ae = cfg["eval"].get("also_log_ae", []) or [] 
+        ae_metric = also_ae[0] if also_ae else per   
+        ae_runs = read_trial_runs(trial_id + "_ae", ae_metric, also_ae[1:], _repeat_axis(cfg)) # CHANGED
+
+        # 3b. classify each AE run produced above (N runs, all-or-nothing)
+        run_eval_clf(cfg, trial_id + "_clf", trial_id + "_ae", overrides, log_path)
+
+        # 4. read the N classification runs by tag + aggregate
+        runs = read_trial_runs(trial_id + "_clf", per, also, _repeat_axis(cfg))
         if len(runs) != len(overrides):
             raise EvalFailed(f"Expected {len(overrides)} runs tagged {trial_id}, found {len(runs)}.")
         values = [r[per] for r in runs]
@@ -474,11 +522,12 @@ def run_trial() -> tuple[str, str | None]:
         verdict = decide_verdict(aggregate, values, champion, cfg)
         if verdict == "FAILURE":
             _revert_mutable_to(parent_sha, mutable)
-            _purge_trial_runs(trial_id)      # a FAILURE keeps its record + log, not its models
+            _purge_trial_runs(trial_id + "_ae")    
+            _purge_trial_runs(trial_id + "_clf")
 
         # 6. record + ledger
         write_record(md_path, trial_id, "completed", verdict, aggregate, runs,
-                     cfg, created_at, delta)
+                     cfg, created_at, delta, ae_runs=ae_runs)
         append_ledger_row(ledger, {
             "timestamp": created_at, "id": trial_id, "parent": parent,
             "model_name": model_name, "modification_description": summary,
@@ -496,7 +545,8 @@ def run_trial() -> tuple[str, str | None]:
     except Exception as e:
         # mechanical failure: revert code, purge any tagged runs, still record + commit
         _revert_mutable_to(parent_sha, mutable)
-        _purge_trial_runs(trial_id)          # drop partial models; keep the <id>.md + console.log
+        _purge_trial_runs(trial_id + "_ae")      
+        _purge_trial_runs(trial_id + "_clf")
         write_record(md_path, trial_id, "failed", None, None, None,
                      cfg, created_at, None, error=f"{type(e).__name__}: {e}")
         append_ledger_row(ledger, {
