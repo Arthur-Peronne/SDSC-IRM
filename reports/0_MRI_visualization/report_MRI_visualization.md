@@ -54,9 +54,9 @@ Output PNGs land in `RESULTS_FOLDER` with a self-describing name:
 **Image + ground-truth overlay (processed, registered, ED).** The overlay
 confirms the mask still matches the anatomy after registration.
 
-![Image, ED](figures/patient001_frame01_raw_ED)
-![Mask, ED](figures/patient001_frame01_raw_ED_mask)
-![Image, ROI only, ED](figures/patient001_frame01_raw_ED_onlyheart)
+![Image, ED](figures/patient001_frame01_raw_ED.png)
+![Mask, ED](figures/patient001_frame01_raw_ED_mask.png)
+![Image, ROI only, ED](figures/patient001_frame01_raw_ED_onlyheart.png)
 ![Superposition Image + Mask, ED](figures/patient001_frame01_raw_ED_superposition.png)
 
 (Raw image, heart (ROI) mask, image (ROI only), superposed image+mask)

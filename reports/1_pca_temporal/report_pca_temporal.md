@@ -87,9 +87,9 @@ will reuse.
 
 ## 5. Reproduce
 
-- Take the chosen pca_temporal.yaml in config_files/ from this folder, and put it in the configs/ general folder.
-- Then run the script run_pca_temporal.py 
-- Expected outputs: the figures in figures/
+- Take `pca_temporal.yaml` in `config_files/` from this folder, and put it in the `configs/` general folder.
+- Then run the script `run_pca_temporal.py` 
+- Expected outputs: the figures in `figures/`
 
 ## 6. Notes & limitations
 
