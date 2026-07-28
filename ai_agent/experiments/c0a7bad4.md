@@ -55,8 +55,29 @@ task).
 - **Classification MLflow Run IDs:** b49de773723a421182e30e760673a26a e125fc13f9714b109fec230a8afd28f8 b63cd2f88fd64ef392de7fff11dac5ad
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Early stopping at epoch 70/40/69 (seeds 0/1/2), best epoch 50/20/49 (val loss 0.004186/0.003340/
+0.004162) — noticeably longer and more variable than the champion's 29/38/32: two of three seeds
+took ~20 epochs longer to plateau. No NaNs or divergence, but the optimization landscape is visibly
+harder/slower with the added nonlinear FC depth.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Hypothesis did not hold. Both metrics dropped together this time: `classification_accuracy_val`
+0.700000 -> 0.641667 (-0.058, FAILURE, per-seed 0.675/0.65/0.60 — no seed reached the champion's
+range), and `validation_R2_mean` 0.7321 -> 0.7016 (also down, unlike the pooling trial where R2 was
+unaffected). Both drops exceed the noise floor.
+
+Mechanistic read: this trial added real capacity (~1.13M -> ~1.58M params) with zero regularization
+(`weight_decay=0`, `dropout_rate=0`, unchanged across all architecture trials to isolate the
+architecture variable) on a small dataset (100 training patients, batch_size=1). The slower,
+more variable convergence supports an optimization-difficulty / mild-overfitting story rather than a
+capacity-is-fundamentally-wrong one: extra unregularized parameters have more room to fit
+idiosyncrasies of the training set that don't generalize, for both reconstruction and classification.
+
+Pattern across the last 3 architecture trials worth flagging explicitly: the two that *added*
+complexity/capacity without regularization (CBAM spatial attention, this nonlinear FC) both failed
+on classification accuracy (one with R2 preserved, one with R2 also down); the one that *removed*
+redundant capacity (SE late-only ablation) is the campaign's best result on both metrics. This
+suggests the champion may currently be regularization-starved rather than capacity-starved — a
+legitimate hypothesis to test directly next via a small, targeted regularization check on the
+existing champion architecture (no new model code), before proposing further architecture growth.
+Champion remains 761cab78. Code reverted by the driver.
