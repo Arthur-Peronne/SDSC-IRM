@@ -7,10 +7,10 @@
 experiment_tag: "baseline"
 
 # ── Data ──────────────────────────────────────────────────────────────────────
-patient_id: 27
+patient_id: 1
 
 # ── PCA ───────────────────────────────────────────────────────────────────────
-recalculate_pca: false
+recalculate_pca: true
 load_run_id: "33332a9f10ba405b88edbf1c2b9a4952"   # required only when recalculate_pca: false
 max_pc_calc: 100
 
