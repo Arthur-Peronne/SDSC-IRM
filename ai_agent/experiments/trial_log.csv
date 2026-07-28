@@ -1,3 +1,4 @@
 timestamp,id,parent,model_name,modification_description,metric_name,metric_value,metric_delta,status,verdict
 2026-07-28T11:04:00+00:00,8b7f72bd,,AE3dAsymResSeparableV2,"Campaign baseline: AE3dAsymResSeparableV2, lr=1e-4, patience=20, weight_decay=dropout_rate=noise_std=0",classification_accuracy_val,,,failed,
 2026-07-28T11:29:00+00:00,ff5882ad,,AE3dAsymResSeparableV2,"Campaign baseline: AE3dAsymResSeparableV2, lr=1e-4, patience=20, weight_decay=dropout_rate=noise_std=0",classification_accuracy_val,0.666667,+0.000000,completed,BASELINE
+2026-07-28T12:22:50+00:00,a581f44e,ff5882ad,AE3dAsymResSeparableV2SE,Add SE channel recalibration (SEBlock3D) after every encoder stage of the champion AsymResSeparableV2,classification_accuracy_val,0.691667,+0.025000,completed,CHAMPION
