@@ -37,8 +37,7 @@ In `configs/autoencoder.yaml` (only mutable file), branching from champion a2a3d
 - **Classification MLflow Run IDs:** bb942484140e465d914cf8b5e2e9842c 348301526d4b459d987b63783d56efba 7377a9b05afa48279c3062565f766575
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Moderate failure across all 3 seeds. R² = 0.7404 is close to champion's 0.7567, suggesting the network still learns reasonable reconstructions with more epochs. However, the accuracy drop (0.5250 vs 0.6250) shows that more training epochs don't help the classifier.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Hypothesis **rejected**. `patience=40` + `lr=8e-4` + `dropout=0.3` gives 0.5250, worse than the champion's 0.6250. The higher patience doesn't help — the network with `patience=20` was already converging to the same or better solution. This suggests the network reaches its optimal point within the original patience window, and extra epochs don't provide additional benefit. **Important**: patience is not a lever worth exploring. The champion's `patience=20` is already well-calibrated. From now on, I should focus on architectural changes, as HPs are now well-explored (lr=8e-4, dropout=0.3, weight_decay=1e-5, patience=20 are all near-optimal).
