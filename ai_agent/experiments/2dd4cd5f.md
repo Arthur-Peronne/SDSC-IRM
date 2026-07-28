@@ -55,8 +55,26 @@ and produces a (1,20) latent before launching the trial.
 - **Classification MLflow Run IDs:** c772dd8ef55442ee8ef7d4a9dd0c3337 c22b44442c8b47388bed80ced5775611 5f831208f93b4f288307ed0961bc43d3
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Early stopping at epoch 56/57/46 (seeds 0/1/2), best epoch 36/37/26 (val loss 0.003911/0.002858/
+0.003744) — similar range to prior trials, no NaNs, spikes, or divergence. Convergence itself looks
+completely ordinary; the effect below only shows up downstream, in the classifier.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Hypothesis did not hold, and the failure is informative rather than ambiguous. `validation_R2_mean`
+is essentially unchanged from the champion (0.7316 vs 0.7321) — the learnable strided downsampling
+reconstructs just as well, exactly as expected. But `classification_accuracy_val` dropped sharply,
+0.700000 -> 0.616667 (-0.083, FAILURE) — clearly larger than the campaign's ~0.03-0.04 noise floor,
+so this reads as a real effect, not noise. Per-seed accuracy (0.575/0.725/0.550) is also far more
+scattered than the champion's (0.725/0.65/0.725).
+
+This cleanly *dissociates* reconstruction quality from classification accuracy, unlike every SE
+trial where the two metrics moved together. Plausible mechanism: the loss that trains this network
+is purely reconstruction MSE — classification is a separate downstream step the AE never sees. A
+learnable strided conv has every incentive to optimize its combination of window values for
+reconstruction only, and nothing constrains that solution to also preserve group-discriminative
+structure. `MaxPool`'s crude, fixed, non-learnable "keep the single strongest activation" rule
+apparently happens to preferentially retain sharp local extrema (e.g. tissue-boundary contrast) that
+correlate with anatomically salient, group-relevant structure — an inductive bias the learnable
+conv is free to discard as long as reconstruction doesn't suffer. This is a real, not marginal,
+negative result for this direction; not repeating variants of it. Champion remains 761cab78
+(`AE3dAsymResSeparableV2SELate`, acc=0.700000, R2=0.7321). Code reverted by the driver.
