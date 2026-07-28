@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "AIagent_classification_test" # "baseline_aiarchi"
+experiment_tag: "AIagent_classification_testClaude" # "baseline_aiarchi"
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
