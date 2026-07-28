@@ -1,0 +1,6 @@
+
+=== python -u scripts/run_autoencoder.py --trial-id 8b7f72bd_ae --set seed=0 ===
+Traceback (most recent call last):
+  File "/home/renku/work/SDSC-IRM/scripts/run_autoencoder.py", line 46, in <module>
+    from src.config import RESULTS_FOLDER
+ModuleNotFoundError: No module named 'src'
