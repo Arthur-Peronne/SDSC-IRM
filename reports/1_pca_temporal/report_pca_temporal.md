@@ -1,19 +1,19 @@
 # 01 — Temporal PCA
 
 > Per-patient PCA. Each patient has a 4D (3D+time) MRI, and the various frames 
-> are the sample: the principal components describe how voxel intensities co-vary in
+> are the samples: the principal components describe how voxel intensities co-vary in
 > time. A first dimensionality-reduction baseline before starting across-patient 
 > (spatial) analysis.
 
 ## 1. Objective
 
 A cine-MRI acquisition gives, for one patient, a 4D volume `(x, y, z, t)`: the
-same 3D heart imaged at `t ≈ 30` timeframes spanning accross approximatively one 
+same 3D heart imaged at `t ≈ 30` timeframes spanning accross approximately one 
 cardiac cycle. Temporal PCA treats **each timeframe as a sample** and 
 **each voxel as a feature**. The maximum number of principal components required 
-here to fully reconstruct the image correspond to the number of sample (`t ≈ 30`).
-The goal is to checkhow many degrees of freedom does the cardiac motion actually have, 
-how many components we need to fairly reconstruction the IRM images, and what the 
+here to fully reconstruct the image corresponds to the number of samples minus one (`t ≈ 30`).
+The goal is to check how many degrees of freedom does the cardiac motion actually have, 
+how many components we need to fairly reconstruct the MRI images, and what the 
 latent space representations can teach us.
 
 ## 2. Method — what the code does
@@ -38,11 +38,11 @@ Key parameters (from `configs/pca_temporal.yaml`):
 
 | Parameter | Value | Meaning |
 |-----------|-------|---------|
-| `patient_id` | `27` | which ACDC patient (→ `patient027`) |
+| `patient_id` | `1` | which ACDC patient (→ `patient027`) |
 | `max_pc_calc` | `100` | cap on components computed (actual = `min(t, 100)`) |
 | `pc_max` | `10` | eigenbase scatter for PC pairs up to 10 (must be even) |
 | `eigenvectors_to_plot` | `[1, 2, 3]` | which components to render as 3D images |
-| `n_pc_to_reconstruct` | `1` | components used in the reconstruction |
+| `n_pc_to_reconstruct` | `10` | components used in the reconstruction |
 | `frames_to_reconstruct` | `[0]` | which timeframe(s) to reconstruct (or `"all"`) |
 
 ## 3. Results
@@ -67,13 +67,13 @@ localize where in the heart the intensity varies most over the cycle.
 
 ![Eigenvector PC1](figures/patient001_eigenvector_pc1.png)
 
-**Reconstruction.** The variations of the IRM images along the cardiac cycle for 
+**Reconstruction.** The variations of the MRI images along the cardiac cycle for 
 a single patient are light compared to the mean image (0 PC): this mean image over 
 all the epochs for this patient is already close to the original image, and adding 
 PCs helps to get closer to the exact match.
 
-![Original image](TO BE ADDED)
-![Reconstruction, mean image (O PC)](figures/patient001_frame00_reconstructed_0pc.png)
+![Original image](figures/patient001_frame00_original.png)
+![Reconstruction, mean image (O PC)](figures/patient001_mean_image_0pc.png)
 ![Reconstruction, 10 PC](figures/patient001_frame00_reconstructed_10pc.png)
 
 ## 4. Conclusion
@@ -87,10 +87,9 @@ will reuse.
 
 ## 5. Reproduce
 
-Take the chosen .yaml in configs_files/ from this folder, rename it as pca_temporal.yaml 
-and put it the configs/ general folder.
-Then run the script run_pca_temporal.py 
-Expected outputs: the figures in figures/
+- Take the chosen pca_temporal.yaml in config_files/ from this folder, and put it in the configs/ general folder.
+- Then run the script run_pca_temporal.py 
+- Expected outputs: the figures in figures/
 
 ## 6. Notes & limitations
 
