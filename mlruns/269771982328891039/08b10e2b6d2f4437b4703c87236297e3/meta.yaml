@@ -1,0 +1,15 @@
+artifact_uri: mlruns/269771982328891039/08b10e2b6d2f4437b4703c87236297e3/artifacts
+end_time: 1785263574369
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: 08b10e2b6d2f4437b4703c87236297e3
+run_name: AE_AE3dAsymResSeparableV2SELateDilatedEnc4_200patients_split100_20dims_AIagent_classification_testClaude
+run_uuid: 08b10e2b6d2f4437b4703c87236297e3
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785262781882
+status: 3
+tags: []
+user_id: renku
