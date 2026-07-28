@@ -27,5 +27,5 @@ eigenvectors_to_plot: [1, 2, 3]
 
 # ── Plots : reconstruction ────────────────────────────────────────────────────
 plot_reconstruction: true
-n_pc_to_reconstruct: 0
+n_pc_to_reconstruct: 10
 frames_to_reconstruct: [0]   # list of timeframe indices, or "all"

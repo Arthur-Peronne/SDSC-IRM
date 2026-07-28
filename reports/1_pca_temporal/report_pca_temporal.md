@@ -47,28 +47,34 @@ Key parameters (from `configs/pca_temporal.yaml`):
 
 ## 3. Results
 
-**Explained variance — the cycle is low-rank.** A handful of components already
-capture ~90% of the variance: the cardiac motion has very few effective degrees
-of freedom.
-
-![Explained variance](figures/patient027_PCA_explainedvariance.png)
+**Explained variance — the cycle is low-rank.** A handful of components - typically 5 
+to 10, depending on the patient - already capture ~90% of the variance, the last 20 
+to 25 are mostly noise.
+![Explained variance](figures/patient001_PCA_explainedvariance.png)
 
 **PC scores in the eigenbase — the cardiac cycle.** Plotting PC1 against PC2
 traces out a closed loop: consecutive timeframes follow one another around the
-cycle and return to the start. Higher pairs (PC3–PC4, …) show harmonics of this
+cycle and return to the start -> the cyclic nature of the cardiac cycle is visible in
+the latent space. Higher pairs (PC3–PC4, …) show harmonics of this
 fundamental motion.
 
-![PC1 vs PC2](figures/patient027_pc_in_eigenbase_1and2.png)
+![PC1 vs PC2](figures/patient001_pc_in_eigenbase_1and2.png)
+![PC3 vs PC4](figures/patient001_pc_in_eigenbase_3and4.png)
+![PC5 vs PC6](figures/patient001_pc_in_eigenbase_5and6.png)
 
 **Eigenvectors as images.** The leading components, reshaped to the volume,
 localize where in the heart the intensity varies most over the cycle.
 
-![Eigenvector PC1](figures/patient027_eigenvector_pc1.png)
+![Eigenvector PC1](figures/patient001_eigenvector_pc1.png)
 
-**Reconstruction.** Starting from the mean image (0 PC), adding a single
-component already recovers the dominant motion for the reconstructed frame.
+**Reconstruction.** The variations of the IRM images along the cardiac cycle for 
+a single patient are light compared to the mean image (0 PC): this mean image over 
+all the epochs for this patient is already close to the original image, and adding 
+PCs helps to get closer to the exact match.
 
-![Reconstruction, 1 PC](figures/patient027_frame00_reconstructed_1pc.png)
+![Original image](TO BE ADDED)
+![Reconstruction, mean image (O PC)](figures/patient001_frame00_reconstructed_0pc.png)
+![Reconstruction, 10 PC](figures/patient001_frame00_reconstructed_10pc.png)
 
 ## 4. Conclusion
 
@@ -77,7 +83,14 @@ cardiac cycle: a few components explain most of the variance, and their scores
 trace the cycle (with harmonics) in the eigenbase. Beyond the physiological
 read, this stage validated the PCA fit, the eigenvector-to-NIfTI mapping and the
 reconstruction path that the **spatial** PCA (report 03) and the AE comparisons
-reuse.
+will reuse.
+
+## 5. Reproduce
+
+Take the chosen .yaml in configs_files/ from this folder, rename it as pca_temporal.yaml 
+and put it the configs/ general folder.
+Then run the script run_pca_temporal.py 
+Expected outputs: the figures in figures/
 
 ## 6. Notes & limitations
 

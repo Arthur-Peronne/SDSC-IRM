@@ -1,0 +1,14 @@
+artifact_uri: file:///home/renku/work/SDSC-IRM/mlruns/630986741799423978/0ba3cfa975cc400baf05a6fcb39b06a4/artifacts
+end_time: 1785243868591
+entry_point_name: ''
+experiment_id: '630986741799423978'
+lifecycle_stage: active
+run_id: 0ba3cfa975cc400baf05a6fcb39b06a4
+run_name: PCA_temporal_patient001_report
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785243861160
+status: 3
+tags: []
+user_id: renku
