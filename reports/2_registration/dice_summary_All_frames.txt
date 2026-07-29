@@ -1,0 +1,12 @@
+n_patients: 300
+mean_dice_before: 0.698199139302034
+mean_dice_after: 0.7230442224344309
+mean_dice_gain: 0.02484508313239678
+median_dice_before: 0.7127362875472647
+median_dice_after: 0.739124492828028
+median_dice_gain: 0.0097805904878287
+min_dice_gain: -0.0038384220126052027
+max_dice_gain: 0.17172919674975584
+n_improved: 282
+n_equal: 1
+n_worse: 17

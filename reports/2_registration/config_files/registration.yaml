@@ -1,0 +1,49 @@
+# configs/registration.yaml
+# Parameters for run_registration.py
+# Modify this file, then run: python scripts/run_registration.py
+# No MLflow tracking for preprocessing — outputs go to processed_images/.
+
+# ── Steps to run ──────────────────────────────────────────────────────────────
+resample_all: true
+crop_all: true
+register_all: true
+
+# ── Shared options ────────────────────────────────────────────────────────────
+only_01: false                   # true = process only frame01/frame04 (ED frames, debug)
+limit: 1000                      # max number of frames to process (set to 2 for quick debug)
+
+# ── Resampling ────────────────────────────────────────────────────────────────
+target_spacing: [1.5, 1.5, 3.15]  # mm/voxel (x, y, z)
+
+# ── Cropping ──────────────────────────────────────────────────────────────────
+crop_shape: [128, 128, 32]       # voxels (x, y, z) around cardiac centroid
+
+# ── Registration ──────────────────────────────────────────────────────────────
+reference_patient: patient001    # fixed reference for all registrations
+reference_frame: frame01         # ED frame of the reference patient
+crop_after_registration: true    # crop output to reference window shape
+n_iterations: 200                # optimizer iterations for rigid registration
+
+# ── Pipeline checks ───────────────────────────────────────────────────────────
+# To run checks only: set resample_all, crop_all, register_all to false.
+run_pipelinechecks: false
+check_ED: true                   # plot ED sample frames
+check_ES: true                   # plot ES sample frames
+check_resampled: true            # check resampled step
+check_cropped: true              # check cropped step
+check_registered: true           # check registered step
+do_dice_checks: true             # compute Dice before/after registration
+registered_OLD: null             # folder name to compare against, or null to skip
+n_worst_to_print: 5
+patients_ED:
+  patient001: frame01
+  patient050: frame01
+  patient090: frame04
+  patient110: frame01
+  patient140: frame01
+patients_ES:
+  patient001: frame12
+  patient050: frame12
+  patient090: frame11
+  patient110: frame12
+  patient140: frame12
