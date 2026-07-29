@@ -1,0 +1,15 @@
+artifact_uri: /home/renku/work/SDSC-IRM/mlruns/518515524431964609/7d35537978534b1bb333af3e5e2d18d1/artifacts
+end_time: 1785248171273
+entry_point_name: ''
+experiment_id: '518515524431964609'
+lifecycle_stage: active
+run_id: 7d35537978534b1bb333af3e5e2d18d1
+run_name: regression_ae_100patients_split100_group_logistic_AIagent_classification_testClaude
+run_uuid: 7d35537978534b1bb333af3e5e2d18d1
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785248164586
+status: 3
+tags: []
+user_id: renku
