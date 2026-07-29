@@ -1,0 +1,14 @@
+artifact_uri: mlruns/269771982328891039/00a3d6c60a7f47b28c1b9a082eeddb77/artifacts
+end_time: 1785331282964
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: 00a3d6c60a7f47b28c1b9a082eeddb77
+run_name: AE_AE3dFCDeep_240patients_split103_20dims_comparison_on_classification_july
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785329775443
+status: 3
+tags: []
+user_id: renku

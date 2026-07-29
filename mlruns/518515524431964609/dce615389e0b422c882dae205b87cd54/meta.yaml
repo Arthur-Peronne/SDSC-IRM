@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-IRM/mlruns/518515524431964609/dce615389e0b422c882dae205b87cd54/artifacts
+end_time: 1785332670178
+entry_point_name: ''
+experiment_id: '518515524431964609'
+lifecycle_stage: active
+run_id: dce615389e0b422c882dae205b87cd54
+run_name: regression_pca_100patients_splitdefault_group_logistic_report
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785332670162
+status: 4
+tags: []
+user_id: renku
