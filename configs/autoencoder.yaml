@@ -30,10 +30,10 @@ seed: 0  # global RNG seed (torch/numpy/random), logged to MLflow. Set to null f
 deterministic: false  # force deterministic GPU algos (cuDNN + use_deterministic_algorithms). Slower training — set false for speed, true to verify reproducibility.
 
 # ── Model ─────────────────────────────────────────────────────────────────────
-model_name: "AE3dAsymResSeparableV2SELate"
+model_name: "AE3dAsymResSeparableV2SELateDilatedEnc4"
 latent_dimensions: 20
 multiple_models_and_dims: false  # true = loop over models_list × latdim_list
-models_list: ["AE3dAsymResSeparableV2SELate"]
+models_list: ["AE3dAsymResSeparableV2SELateDilatedEnc4"]
 latdim_list: [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
 
 # ── Training ──────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ batch_size: 1
 patience_scheduler: null         # null = patience // 5
 # (optimized hyperparameters)
 hyper_automatic_values: false    # if True, goes to ae_HPforarchis.yaml. If False, takes values below:
-lr: 5e-5                         # Learning rate
+lr: 1e-4                         # Learning rate
 weight_decay: 0.0                # L2 regularisation
 dropout_rate: 0.0                #
 noise_std: 0.0                   # 0.0 = no denoising
