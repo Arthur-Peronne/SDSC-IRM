@@ -22,7 +22,7 @@ y_cache_folder: "Y_vectors"
 n_train: 120
 n_val: 0
 n_test: 30
-special_split: "split105"       # null = sequential "splitdefault"; e.g. "split42" for seeded
+special_split: "split104"       # null = sequential "splitdefault"; e.g. "split42" for seeded
 stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
 
 # ── Reproducibility ─────────────────────────────────────────────────────────

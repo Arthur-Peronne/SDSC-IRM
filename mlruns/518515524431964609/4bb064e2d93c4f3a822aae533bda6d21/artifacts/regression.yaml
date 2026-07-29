@@ -16,7 +16,7 @@ group_bin_value: "NOR"           # used only if group_binary = true; "DCM", "HCM
 # ── Data split ────────────────────────────────────────────────────────────────
 n_train: 120                     # number of training patients (n_test = 150 - n_train)
 n_val: 0                 
-special_split: "split105"      # null = sequential "splitdefault"; "split42" = seeded random
+special_split: "split103"      # null = sequential "splitdefault"; "split42" = seeded random
 
 # ── Evaluation set (AE source only) ───────────────────────────────────────────
 eval_on: "test"             # "test" (défaut) |  # "val" requires  n_val > 0 and  n_val == n_val from the AE model
@@ -69,7 +69,7 @@ latent_dims_list:                # one regression per n_pc
 ae_source:
   model_name: "AE3dFCDeep"       # model architecture name logged in MLflow
   experiment_tag: "comparison_on_classification_july"     # experiment_tag param logged in MLflow
-  split_name: "split105"     # split_name param logged in MLflow
+  split_name: "split103"     # split_name param logged in MLflow
   # params_filter: {
   #                 seed: 5
   #                 }              # optional extra MLflow param filters (e.g. frame_tag: "ED")
@@ -82,5 +82,5 @@ load_run_id: "65c6312b3ff14a9f87952109452fd7d0" # MLflow run_id of a previous re
 n_pc_confusion: 20               # n_pc (or latent_dim) for which to plot the confusion matrix
 
 # ── Compare mode (averaged confusion matrix across splits) ────────────────────
-compare_mode: true
-load_run_ids: ["77551402b6c14b91a5724e71acbeedce","2b6cb96642d147f7a32af88506ff3722","4bb064e2d93c4f3a822aae533bda6d21","489a531b191545269b440679a2406211","f327be4e74264705884890e8e67ab716"]                 # list of regression run_ids to average (must have y_name="group", non-binary)
+compare_mode: false
+load_run_ids: ["77551402b6c14b91a5724e71acbeedce","2b6cb96642d147f7a32af88506ff3722","","",""]                 # list of regression run_ids to average (must have y_name="group", non-binary)

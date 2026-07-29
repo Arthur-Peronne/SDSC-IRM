@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-IRM/mlruns/518515524431964609/f327be4e74264705884890e8e67ab716/artifacts
+end_time: 1785336751585
+entry_point_name: ''
+experiment_id: '518515524431964609'
+lifecycle_stage: active
+run_id: f327be4e74264705884890e8e67ab716
+run_name: regression_ae_120patients_split105_group_logistic_comparison_on_classification_july
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785336745989
+status: 3
+tags: []
+user_id: renku
