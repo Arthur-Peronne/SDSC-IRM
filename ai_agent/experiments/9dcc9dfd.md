@@ -1,25 +1,21 @@
 ---
-# Copy this file to draft.md, fill the AGENT-WRITTEN fields, then run:
-#   python ai_agent/driver.py run
-# The driver commits the input (that commit's short sha becomes `id`), renames
-# draft.md -> <id>.md, trains, and fills the DRIVER-WRITTEN fields + ## Results.
-# (These comments are not preserved in the final <id>.md — that's expected.)
-
-# ---- agent-written (fill BEFORE running) ----
 model_name: AE3dAsymResSeparableV2SELateDilatedEnc3
-summary: "Give champion's enc3 dilation=2 (unlike the neutral enc4 dilation trial, enc3 operates at a much larger 16x32x32 pre-downsample resolution with real receptive field to gain)"
+summary: Give champion's enc3 dilation=2 (unlike the neutral enc4 dilation trial,
+  enc3 operates at a much larger 16x32x32 pre-downsample resolution with real receptive
+  field to gain)
 parent: 761cab78
-
-# ---- driver-written (leave null; the driver overwrites at lock/result) ----
-id: null              # short sha of commit 1 == the frozen input == this trial's identity
-status: draft         # draft -> completed | failed          (lifecycle, lowercase)
-verdict: null         # BASELINE | CHAMPION | CANDIDATE | FAILURE   (judgement, UPPERCASE)
-created_at: null
+id: 9dcc9dfd
+status: completed
+verdict: FAILURE
+created_at: '2026-07-29T00:44:10+00:00'
 metric:
-  primary: {name: avg_validation_R2_mean, value: null, direction: maximize}
+  primary:
+    name: classification_accuracy_val
+    value: 0.666667
+    direction: maximize
 ---
 
-# Trial <id> — <model_name> — <verdict>
+# Trial 9dcc9dfd — AE3dAsymResSeparableV2SELateDilatedEnc3 — FAILURE
 
 <!-- ===== written BEFORE the run (agent) ===== -->
 
@@ -58,10 +54,12 @@ count).
 <!-- ===== written AFTER the run ===== -->
 
 ## Results
-<!-- Filled automatically by the driver — leave empty. It writes, for a completed trial:
-     per-run metric values (by repeat axis), the aggregated primary metric,
-     delta_vs_champion (display only), the also_log means, and the MLflow run ids.
-     For a mechanically failed trial it writes the failure reason instead. -->
+- **accuracy_test per run:** 0: 0.675000 | 1: 0.675000 | 2: 0.650000
+- **classification_accuracy_val:** 0.666667
+- **delta_vs_champion** (display only): -0.033333
+- **validation_R2_mean** (mean, AE phase, non-decisional): 0.721108
+- **AE MLflow Run IDs:** 8d90136ae5b24dcbb7eec0f725a390f1 be976bb5ed5c4a31b323fd9089c355bd 4f4a255f708c421081f481bd049ad27d
+- **Classification MLflow Run IDs:** e45e7957edd3454897e5b491c4ebe057 f168a169efe64be6ba3b6556b70146bc ae56a1065dcd401e94bd72e329653b7b
 
 ## Training Dynamics
 <!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
