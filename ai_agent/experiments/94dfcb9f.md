@@ -50,8 +50,22 @@ champion's.
 - **Classification MLflow Run IDs:** 9f83af54c3e242d8977928b07f4ae85d 1f548f60d0ec48649b65c6a2b8ad197c f8c0285af13945f4a703261a0397868e
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Early stopping at epoch 55/78/73 (seeds 0/1/2), best epoch 20/43/38 — with `patience=35`, all three
+seeds ran meaningfully longer than the champion's 32/32/38, giving each more LR-decay steps as
+predicted. No NaNs. But the extra training time shifted each seed to a *different* optimum, not
+uniformly a *better* one: seed 0 actually stopped earlier in relative terms (best epoch 20, its
+weakest R² of 0.6627) despite the longer patience budget, while seeds 1/2 used the extra room
+(best epochs 43/38) and reached slightly better R² than under `patience=20`. `validation_R2_mean`
+(0.7252) came in below the champion's 0.7432 despite more training per seed.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Hypothesis not supported. More patience did not systematically help the weaker seed catch up — seed 0
+remained the relative underperformer (per-seed accuracy 0.725/0.675/0.675, delta -0.025) despite
+having just as much room to keep improving as the other two. This suggests the "two strong, one weak"
+pattern noted across recent trials is not simply an artifact of premature early stopping — extending
+the training budget shifts *where* each seed's optimizer lands, but doesn't reliably rescue the weaker
+seed, reinforcing this campaign's working read that this variance is closer to an inherent property of
+this task's 3-seed sample at `n_train=100` than a fixable training-schedule issue. `patience` is now
+closed alongside `lr`: neither hyperparameter lever tested this campaign has beaten the champion.
+`ac5057cf` remains the campaign champion (classification_accuracy_val=0.7167,
+validation_R2_mean=0.7432) as this campaign is paused per the user's request after this trial.
