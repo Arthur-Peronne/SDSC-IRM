@@ -322,7 +322,7 @@ def _run_pca_source(cfg, Y_full, client, args):
 
     tags = {"trial_id": args.trial_id} if args.trial_id else None 
     with tracking.start_run("regression", _run_name(cfg, split_name), tags=tags): 
-        tracking.log_params(_build_params(cfg, split_name))
+        tracking.log_params(_build_params(cfg, split_name, argparse))
         tracking.log_artifact(CONFIG_PATH)
 
         for n_pc in latent_dims_list:

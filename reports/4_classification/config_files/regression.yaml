@@ -9,7 +9,7 @@ experiment_tag: "report"
 # ── Target variable ───────────────────────────────────────────────────────────
 recalculate_y: false 
 y_cache_folder: "Y_vectors"
-y_name: "height"                  # "group", "height", "weight"
+y_name: "group"                  # "group", "height", "weight"
 group_binary: false              # true = binary (one class vs rest); only if y_name = "group"
 group_bin_value: "NOR"           # used only if group_binary = true; "DCM", "HCM", "MINF", "NOR", "RV"
 
