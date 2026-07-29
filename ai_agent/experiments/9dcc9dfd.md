@@ -62,8 +62,25 @@ count).
 - **Classification MLflow Run IDs:** e45e7957edd3454897e5b491c4ebe057 f168a169efe64be6ba3b6556b70146bc ae56a1065dcd401e94bd72e329653b7b
 
 ## Training Dynamics
-<!-- Agent, after the run: stability, convergence speed, spikes, plateau, early stopping. -->
+Early stopping at epoch 42/55/56 (seeds 0/1/2), best epoch 22/35/36 — no NaNs or instability, but
+seed 0 converged notably faster/shallower than the other two (best epoch 22 vs 35-36), and also
+produced this trial's lowest val R² (0.6736) — the opposite pattern from most prior trials where a
+slower-converging seed was the outlier; here the fast one is the weak one. `validation_R2_mean=0.7211`
+— mid-pack, similar to several near-miss trials.
 
 ## Conclusion
-<!-- Agent, after the run: did the hypothesis hold? Mechanistic explanation of why it
-     worked or failed — not just the numbers. -->
+Hypothesis falsified more clearly than the `enc4` version: accuracy 0.6667 (delta -0.0333) is a
+sharper drop than the last four trials' near-misses (all within -0.01 of the champion), while R²
+(0.7211) is unremarkable — not a collapse like the failed weight_decay/CBAM trials, but not an
+improvement either. Mechanistic read: contrary to the hypothesis, giving `enc3` a wider receptive
+field via dilation did not help despite operating at a much larger spatial resolution than `enc4` —
+if anything it mildly hurt. Plausible explanation: `enc3` is a residual block
+(`ResSeparableConv3DBlock`), and its depthwise dilated convs must now learn a different local-to-wider
+tradeoff than the identity-friendly shortcut was tuned for at dilation=1; unlike `enc4` (plain
+`SeparableConv3DBlock`, no residual to disrupt), perturbing `enc3`'s receptive field may interact
+poorly with its residual shortcut, whose 1×1×1 projection has no dilation and so no longer aligns
+scale-wise with what the dilated main path now captures. This falsifies the "receptive field matters
+more away from the bottleneck" reframing — dilation now looks like a weak-to-mildly-harmful mechanism
+at both tested locations (`enc3` and `enc4`) in this architecture, not just inert at `enc4`. Do not
+pursue further dilation variants (e.g. `enc1`/`enc2`) on the strength of this campaign's two results;
+if revisited, it needs a rationale distinct from "try a different stage."
