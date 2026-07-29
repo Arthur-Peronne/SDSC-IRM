@@ -36,3 +36,23 @@ pip install -e .
 
 
 ## References
+
+
+
+## Commandes utiles
+
+```bash
+# MLflow UI en local (depuis la racine du projet, venv activé)
+mlflow ui --backend-store-uri mlruns/
+# → http://127.0.0.1:5000
+
+```bash
+# Lancer jobs
+nohup python -u scripts/run_autoencoder.py > alldims_aiarchi_claudeexp2.txt 2>&1 &
+```
+
+```bash
+# Créer des archives pour passer entre sessions Renku
+tar -czf tempdata_autoencoder.tar.gz tempodata/autoencoder/
+tar -czf ACDC.tar.gz /home/renku/work/s3-bucket/ACDC
+```
