@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-IRM/mlruns/518515524431964609/57a474f200234fcbba76da1c21d1300b/artifacts
+end_time: 1785338353796
+entry_point_name: ''
+experiment_id: '518515524431964609'
+lifecycle_stage: active
+run_id: 57a474f200234fcbba76da1c21d1300b
+run_name: regression_pca_120patients_split104_group_logistic_comparison_on_classification_july
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785338352198
+status: 3
+tags: []
+user_id: renku

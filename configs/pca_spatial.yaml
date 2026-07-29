@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "report"       # PCA has no hyperparameter regime — kept for symmetry with AE
+experiment_tag: "to_add"       # PCA has no hyperparameter regime — kept for symmetry with AE
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"

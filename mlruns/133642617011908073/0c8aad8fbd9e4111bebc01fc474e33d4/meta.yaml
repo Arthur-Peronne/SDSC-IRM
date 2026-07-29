@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-IRM/mlruns/133642617011908073/0c8aad8fbd9e4111bebc01fc474e33d4/artifacts
+end_time: 1785338458517
+entry_point_name: ''
+experiment_id: '133642617011908073'
+lifecycle_stage: active
+run_id: 0c8aad8fbd9e4111bebc01fc474e33d4
+run_name: PCA_240patients_split105_ED+ES_comparison_on_classification_july
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785338428995
+status: 3
+tags: []
+user_id: renku
