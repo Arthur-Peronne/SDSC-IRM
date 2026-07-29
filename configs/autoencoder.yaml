@@ -49,7 +49,7 @@ lr: 1e-4                         # Learning rate
 weight_decay: 0.0                # L2 regularisation
 dropout_rate: 0.0                #
 noise_std: 0.0                   # 0.0 = no denoising
-patience: 35                     # early stopping patience (used only if n_val > 0)
+patience: 20                     # early stopping patience (used only if n_val > 0)
 
 # ── VAE parameters (AE3dFCDeep_VAE only) ──────────────────────────────────────
 beta: 0.00022                    # KL weight in VAE loss, VAEoptuna: 0.00022
