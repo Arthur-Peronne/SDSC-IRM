@@ -1,0 +1,14 @@
+artifact_uri: /home/renku/work/SDSC-IRM/mlruns/133642617011908073/a627944f514d48d9a532809f800e5b48/artifacts
+end_time: 1785327929283
+entry_point_name: ''
+experiment_id: '133642617011908073'
+lifecycle_stage: active
+run_id: a627944f514d48d9a532809f800e5b48
+run_name: PCA_240patients_split100_ED+ES_report
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785326375060
+status: 3
+tags: []
+user_id: renku
