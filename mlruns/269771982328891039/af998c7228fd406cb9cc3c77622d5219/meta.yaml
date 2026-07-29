@@ -1,0 +1,14 @@
+artifact_uri: mlruns/269771982328891039/af998c7228fd406cb9cc3c77622d5219/artifacts
+end_time: 1785320648770
+entry_point_name: ''
+experiment_id: '269771982328891039'
+lifecycle_stage: active
+run_id: af998c7228fd406cb9cc3c77622d5219
+run_name: AE_AE3dAsymResSeparableV2SELateEnc3Only_240patients_split105_20dims_comparison_on_classification_july
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1785320060481
+status: 3
+tags: []
+user_id: renku

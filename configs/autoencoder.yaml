@@ -4,7 +4,7 @@
 # MLflow archives this file as artifact at each run.
 
 # ── Tracking ──────────────────────────────────────────────────────────────────
-experiment_tag: "AIagent_classification_testClaude" # "baseline_aiarchi"
+experiment_tag: "comparison_on_classification_july" # "baseline_aiarchi"
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 source_folder: "registered_frames"
@@ -19,10 +19,10 @@ recalculate_y: false
 y_cache_folder: "Y_vectors"
 
 # ── Split ────────────────────────────────────────────────────────────────
-n_train: 100
-n_val: 20
+n_train: 120
+n_val: 0
 n_test: 30
-special_split: "split100"              # null = sequential "splitdefault"; e.g. "split42" for seeded
+special_split: "split101"       # null = sequential "splitdefault"; e.g. "split42" for seeded
 stratify_ongroup: true          # true = stratify on ACDC group when special_split is set
 
 # ── Reproducibility ─────────────────────────────────────────────────────────
@@ -33,14 +33,14 @@ deterministic: false  # force deterministic GPU algos (cuDNN + use_deterministic
 model_name: "AE3dAsymResSeparableV2SELateEnc3Only"
 latent_dimensions: 20
 multiple_models_and_dims: false  # true = loop over models_list × latdim_list
-models_list: ["AE3dAsymResSeparableV2SELateEnc3Only"]
-latdim_list: [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
+models_list: []
+latdim_list: [] # [1, 2, 3, 4, 8, 12, 16, 20, 28, 40, 60, 88, 120, 160, 200, 240]
 
 # ── Training ──────────────────────────────────────────────────────────────────
 recalculate_ae: true             # false = load existing model (requires load_run_id)
 load_run_id: null                # MLflow run ID — required when recalculate_ae: false
 # (non-optimized hyperparameters)
-n_epochs: 200                    # max epochs (early stopping triggers earlier if n_val > 0)
+n_epochs: 40                    # max epochs (early stopping triggers earlier if n_val > 0)
 batch_size: 1
 patience_scheduler: null         # null = patience // 5
 # (optimized hyperparameters)
@@ -52,8 +52,8 @@ noise_std: 0.0                   # 0.0 = no denoising
 patience: 20                     # early stopping patience (used only if n_val > 0)
 
 # ── VAE parameters (AE3dFCDeep_VAE only) ──────────────────────────────────────
-beta: 0.00022                    # KL weight in VAE loss, VAEoptuna: 0.00022
-beta_warmup_epochs: 41           # epochs to linearly ramp beta from 0 to target value, VAEoptuna: 41
+beta: 0.0                    # KL weight in VAE loss, VAEoptuna: 0.00022
+beta_warmup_epochs: 10       # epochs to linearly ramp beta from 0 to target value, VAEoptuna: 41
 
 # ── Reconstruction metrics ────────────────────────────────────────────────────
 compute_metrics: true
