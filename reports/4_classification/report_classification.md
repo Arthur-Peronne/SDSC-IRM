@@ -124,9 +124,11 @@ weight is not.
 
 ## 6. Notes & limitations
 
-- **Small dataset, real variance.** With 100 training patients, split choice moves
-  accuracy by ±0.03; single-split numbers should be read as ranges (hence
-  `compare_mode` to average confusion matrices across splits).
+- **Variance.** Two sources of variance matter here. Across training seeds (same 
+  split), accuracy moves by ≈ ±0.03. Across splits (different 100/50 patient partitions) 
+  it moves much more — on a 5-split run at latent dim 20, test accuracy ranged 0.50–0.73 
+  (std ≈ 0.06–0.09). Single-split numbers should therefore be read as ranges; 
+  use `compare_mode` to average over splits.
 - **ED+ES correlation.** With `use_both_frames`, ED and ES of a patient are
   correlated, inflating the apparent sample size; logistic `C` auto-halves to
   `0.5` to compensate.
